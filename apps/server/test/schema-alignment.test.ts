@@ -3,6 +3,7 @@ import { getTableColumns } from 'drizzle-orm';
 import { createSelectSchema } from 'drizzle-zod';
 import {
   addressSchema,
+  baselineSchema,
   deviceSchema,
   interfaceSchema,
   linkSchema,
@@ -16,6 +17,7 @@ import {
 import {
   evidenceSchema,
   fieldProvenanceSchema,
+  findingDispositionSchema,
   flowSchema,
   identitySchema,
   importJobSchema,
@@ -25,9 +27,11 @@ import {
 } from '@netplan/domain';
 import {
   makeAddress,
+  makeBaseline,
   makeDevice,
   makeEvidence,
   makeFieldProvenance,
+  makeFindingDisposition,
   makeFlow,
   makeIdentity,
   makeImportJob,
@@ -46,6 +50,7 @@ import {
   entityTables,
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
+  findingDispositions as findingDispositionsTable,
   importJobs as importJobsTable,
   importProposals as importProposalsTable,
   observations as observationsTable,
@@ -73,6 +78,7 @@ const rule = makePolicyRule(network, network2);
 const flow = makeFlow(project.id, { serviceId: service.id });
 const identity = makeIdentity(project.id, { deviceId: device.id });
 const roleAssignment = makeRoleAssignment(identity, { deviceId: device.id });
+const baseline = makeBaseline(project.id, { kind: 'zone', id: zone.id });
 
 const cases = [
   ['project', projectSchema, project],
@@ -88,6 +94,7 @@ const cases = [
   ['flow', flowSchema, flow],
   ['identity', identitySchema, identity],
   ['roleAssignment', roleAssignmentSchema, roleAssignment],
+  ['baseline', baselineSchema, baseline],
 ] as const;
 
 describe('drizzle tables align with domain Zod schemas', () => {
@@ -156,6 +163,30 @@ describe('import-spine tables align with domain Zod schemas (ADR-0017, plan M1)'
   });
 });
 
+describe('findings tables align with domain Zod schemas (ADR-0023, plan M2)', () => {
+  const disposition = makeFindingDisposition(project.id, { status: 'falsePositive' });
+
+  it('finding_dispositions table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(findingDispositionsTable)).sort();
+    const schemaKeys = Object.keys(findingDispositionSchema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('a disposition fixture satisfies the drizzle select schema', () => {
+    const selectSchema = createSelectSchema(findingDispositionsTable);
+    expect(selectSchema.safeParse(disposition).success).toBe(true);
+  });
+
+  it('a disposition round-trips through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(findingDispositionsTable).values(disposition).run();
+    expect(
+      findingDispositionSchema.parse(db.select().from(findingDispositionsTable).get()),
+    ).toEqual(disposition);
+  });
+});
+
 describe('entities round-trip through SQLite unchanged', () => {
   it('inserts every fixture and reads back deep-equal rows', () => {
     const { db } = createDb(':memory:');
@@ -178,6 +209,7 @@ describe('entities round-trip through SQLite unchanged', () => {
       ['flow', flow],
       ['identity', identity],
       ['roleAssignment', roleAssignment],
+      ['baseline', baseline],
     ] as const;
 
     for (const [entityType, entity] of inserts) {

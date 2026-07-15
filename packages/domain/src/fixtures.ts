@@ -1,10 +1,15 @@
 import {
   addressIdSchema,
   addressSchema,
+  baselineIdSchema,
+  baselineSchema,
   evidenceIdSchema,
   evidenceSchema,
   fieldProvenanceIdSchema,
   fieldProvenanceSchema,
+  findingDispositionSchema,
+  findingIdSchema,
+  hostSecurityInventorySchema,
   flowIdSchema,
   flowSchema,
   identityIdSchema,
@@ -35,10 +40,14 @@ import {
   zoneIdSchema,
   zoneSchema,
   type Address,
+  type Baseline,
   type Device,
   type Evidence,
   type FieldProvenance,
+  type FindingDisposition,
   type Flow,
+  type HostSecurityInventory,
+  type DeviceId,
   type Identity,
   type ImportJob,
   type Observation,
@@ -279,6 +288,49 @@ export function makePolicyRule(
     source: { kind: 'network', id: source.id },
     destination: { kind: 'network', id: destination.id },
     action: 'allow',
+    ...overrides,
+  });
+}
+
+export function makeHostInventory(
+  deviceId: DeviceId,
+  overrides: Partial<HostSecurityInventory> = {},
+): HostSecurityInventory {
+  return hostSecurityInventorySchema.parse({
+    deviceId,
+    files: [],
+    processes: [],
+    persistence: [],
+    software: [],
+    ...overrides,
+  });
+}
+
+export function makeBaseline(
+  projectId: ProjectId,
+  scope: Baseline['scope'],
+  overrides: Partial<Baseline> = {},
+): Baseline {
+  return baselineSchema.parse({
+    id: newId(baselineIdSchema),
+    projectId,
+    name: 'Expected services',
+    scope,
+    lifecycleState: 'manuallyVerified',
+    ...overrides,
+  });
+}
+
+export function makeFindingDisposition(
+  projectId: ProjectId,
+  overrides: Partial<FindingDisposition> = {},
+): FindingDisposition {
+  return findingDispositionSchema.parse({
+    id: newId(findingIdSchema),
+    projectId,
+    fingerprint: 'fixture-fingerprint',
+    status: 'new',
+    notes: '',
     ...overrides,
   });
 }

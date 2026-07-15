@@ -12,6 +12,7 @@ import {
 } from './ids.js';
 import {
   addressSchema,
+  baselineSchema,
   deviceSchema,
   flowSchema,
   identitySchema,
@@ -24,6 +25,7 @@ import {
   siteSchema,
   zoneSchema,
 } from './entities.js';
+import { findingStatusSchema } from './findings/disposition.js';
 
 /**
  * The Operation is the atom of the mutation spine (ADR-0010): a serializable,
@@ -49,6 +51,7 @@ export const entityPayloadSchema = z.discriminatedUnion('entityType', [
   z.object({ entityType: z.literal('flow'), entity: flowSchema }),
   z.object({ entityType: z.literal('identity'), entity: identitySchema }),
   z.object({ entityType: z.literal('roleAssignment'), entity: roleAssignmentSchema }),
+  z.object({ entityType: z.literal('baseline'), entity: baselineSchema }),
 ]);
 export type EntityPayload = z.infer<typeof entityPayloadSchema>;
 export type GenericEntityType = EntityPayload['entityType'];
@@ -68,6 +71,7 @@ export const settableEntityTypeSchema = z.enum([
   'flow',
   'identity',
   'roleAssignment',
+  'baseline',
 ]);
 export type SettableEntityType = z.infer<typeof settableEntityTypeSchema>;
 
@@ -142,6 +146,28 @@ export const setContainmentOpSchema = z.object({
   previousZoneId: zoneIdSchema.nullable(),
 });
 
+/**
+ * Finding disposition (ADR-0023): the analyst workflow is mutated only through
+ * the log. Keyed by Fingerprint, not entity id — the disposition row is created
+ * on first touch. `previousStatus`/`previousNote` are enriched on apply (like
+ * SetField's `previousValue`) so inversion stays a pure function.
+ */
+export const setFindingStatusOpSchema = z.object({
+  ...opBase,
+  kind: z.literal('SetFindingStatus'),
+  fingerprint: z.string().min(1),
+  status: findingStatusSchema,
+  previousStatus: findingStatusSchema,
+});
+
+export const setFindingNoteOpSchema = z.object({
+  ...opBase,
+  kind: z.literal('SetFindingNote'),
+  fingerprint: z.string().min(1),
+  note: z.string(),
+  previousNote: z.string(),
+});
+
 export const operationSchema = z.discriminatedUnion('kind', [
   createEntityOpSchema,
   deleteEntityOpSchema,
@@ -152,6 +178,8 @@ export const operationSchema = z.discriminatedUnion('kind', [
   deletePolicyRuleOpSchema,
   setMembershipOpSchema,
   setContainmentOpSchema,
+  setFindingStatusOpSchema,
+  setFindingNoteOpSchema,
 ]);
 export type Operation = z.infer<typeof operationSchema>;
 export type OperationKind = Operation['kind'];

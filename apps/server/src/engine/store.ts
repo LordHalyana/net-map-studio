@@ -1,8 +1,12 @@
 import { and, asc, eq } from 'drizzle-orm';
 import {
   addressSchema,
+  baselineSchema,
   changeSetSchema,
   deviceSchema,
+  findingDispositionSchema,
+  findingIdSchema,
+  findingStatusSchema,
   flowEndpointSchema,
   flowSchema,
   identitySchema,
@@ -46,11 +50,13 @@ import {
 import type { Db } from '../db/index.js';
 import {
   addresses,
+  baselines,
   changeSets,
   devices,
   evidence,
   evidenceBlobs,
   fieldProvenance,
+  findingDispositions,
   flows,
   identities,
   importJobs,
@@ -128,6 +134,7 @@ const settableSchemas = {
   flow: flowSchema,
   identity: identitySchema,
   roleAssignment: roleAssignmentSchema,
+  baseline: baselineSchema,
 };
 
 /** Fields that reference another entity, checked on SetField (ADR-0012 note). */
@@ -254,6 +261,20 @@ export function createEngine(db: Db) {
         .orderBy(asc(roleAssignments.id))
         .all()
         .map((r) => roleAssignmentSchema.parse(r)),
+      findingDispositions: db
+        .select()
+        .from(findingDispositions)
+        .where(eq(findingDispositions.projectId, projectId))
+        .orderBy(asc(findingDispositions.id))
+        .all()
+        .map((r) => findingDispositionSchema.parse(r)),
+      baselines: db
+        .select()
+        .from(baselines)
+        .where(eq(baselines.projectId, projectId))
+        .orderBy(asc(baselines.id))
+        .all()
+        .map((r) => baselineSchema.parse(r)),
     };
   }
 
@@ -302,6 +323,8 @@ export function createEngine(db: Db) {
       tx.delete(evidence).where(eq(evidence.projectId, projectId)).run();
       tx.delete(importJobs).where(eq(importJobs.projectId, projectId)).run();
       tx.delete(fieldProvenance).where(eq(fieldProvenance.projectId, projectId)).run();
+      tx.delete(findingDispositions).where(eq(findingDispositions.projectId, projectId)).run();
+      tx.delete(baselines).where(eq(baselines.projectId, projectId)).run();
       tx.delete(operationLog).where(eq(operationLog.projectId, projectId)).run();
       tx.delete(changeSets).where(eq(changeSets.projectId, projectId)).run();
       tx.delete(roleAssignments).where(eq(roleAssignments.projectId, projectId)).run();
@@ -474,6 +497,14 @@ export function createEngine(db: Db) {
           'RoleAssignment',
         );
         return;
+      case 'baseline':
+        return requireRef(
+          tx,
+          payload.entity.projectId,
+          payload.entity.scope.kind,
+          payload.entity.scope.id,
+          'Baseline scope',
+        );
     }
   }
 
@@ -609,6 +640,8 @@ export function createEngine(db: Db) {
         return void tx.insert(identities).values(payload.entity).run();
       case 'roleAssignment':
         return void tx.insert(roleAssignments).values(payload.entity).run();
+      case 'baseline':
+        return void tx.insert(baselines).values(payload.entity).run();
     }
   }
 
@@ -634,6 +667,8 @@ export function createEngine(db: Db) {
         return void tx.delete(identities).where(eq(identities.id, id)).run();
       case 'roleAssignment':
         return void tx.delete(roleAssignments).where(eq(roleAssignments.id, id)).run();
+      case 'baseline':
+        return void tx.delete(baselines).where(eq(baselines.id, id)).run();
     }
   }
 
@@ -669,6 +704,8 @@ export function createEngine(db: Db) {
         return tx.select().from(identities).where(eq(identities.id, id)).get();
       case 'roleAssignment':
         return tx.select().from(roleAssignments).where(eq(roleAssignments.id, id)).get();
+      case 'baseline':
+        return tx.select().from(baselines).where(eq(baselines.id, id)).get();
     }
   }
 
@@ -741,6 +778,12 @@ export function createEngine(db: Db) {
           .update(roleAssignments)
           .set(roleAssignmentSchema.parse(candidate))
           .where(eq(roleAssignments.id, id))
+          .run();
+      case 'baseline':
+        return void tx
+          .update(baselines)
+          .set(baselineSchema.parse(candidate))
+          .where(eq(baselines.id, id))
           .run();
     }
   }
@@ -880,7 +923,64 @@ export function createEngine(db: Db) {
         tx.update(devices).set({ zoneId: op.zoneId }).where(eq(devices.id, op.deviceId)).run();
         return { ...op, previousZoneId: previous.zoneId };
       }
+      case 'SetFindingStatus': {
+        const existing = findDisposition(tx, op.projectId, op.fingerprint);
+        if (existing) {
+          const previousStatus = findingStatusSchema.parse(existing.status);
+          tx.update(findingDispositions)
+            .set({ status: op.status })
+            .where(eq(findingDispositions.id, existing.id))
+            .run();
+          return { ...op, previousStatus };
+        }
+        // First disposition of this fingerprint: create the row (started at `new`).
+        tx.insert(findingDispositions)
+          .values({
+            id: newId(findingIdSchema),
+            projectId: op.projectId,
+            fingerprint: op.fingerprint,
+            status: op.status,
+            notes: '',
+          })
+          .run();
+        return { ...op, previousStatus: 'new' };
+      }
+      case 'SetFindingNote': {
+        const existing = findDisposition(tx, op.projectId, op.fingerprint);
+        if (existing) {
+          const previousNote = existing.notes;
+          tx.update(findingDispositions)
+            .set({ notes: op.note })
+            .where(eq(findingDispositions.id, existing.id))
+            .run();
+          return { ...op, previousNote };
+        }
+        tx.insert(findingDispositions)
+          .values({
+            id: newId(findingIdSchema),
+            projectId: op.projectId,
+            fingerprint: op.fingerprint,
+            status: 'new',
+            notes: op.note,
+          })
+          .run();
+        return { ...op, previousNote: '' };
+      }
     }
+  }
+
+  /** The disposition row for a fingerprint in a project, if the operator has touched it. */
+  function findDisposition(tx: Tx, projectId: string, fingerprint: string) {
+    return tx
+      .select()
+      .from(findingDispositions)
+      .where(
+        and(
+          eq(findingDispositions.projectId, projectId),
+          eq(findingDispositions.fingerprint, fingerprint),
+        ),
+      )
+      .get();
   }
 
   function entityPayloadFromRow(
@@ -908,6 +1008,8 @@ export function createEngine(db: Db) {
         return { entityType, entity: identitySchema.parse(row) };
       case 'roleAssignment':
         return { entityType, entity: roleAssignmentSchema.parse(row) };
+      case 'baseline':
+        return { entityType, entity: baselineSchema.parse(row) };
     }
   }
 
@@ -1098,6 +1200,9 @@ export function createEngine(db: Db) {
       for (const identity of parsed.identities) tx.insert(identities).values(identity).run();
       for (const assignment of parsed.roleAssignments)
         tx.insert(roleAssignments).values(assignment).run();
+      for (const disposition of parsed.findingDispositions)
+        tx.insert(findingDispositions).values(disposition).run();
+      for (const baseline of parsed.baselines) tx.insert(baselines).values(baseline).run();
     });
     return parsed.project;
   }
@@ -1334,6 +1439,21 @@ export function createEngine(db: Db) {
             device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
           },
         };
+      }
+      case 'baseline': {
+        const entity = state.baselines.find((b) => b.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `baseline ${entityId} not found`);
+        const resolveScope = (): unknown => {
+          switch (entity.scope.kind) {
+            case 'zone':
+              return state.zones.find((z) => z.id === entity.scope.id) ?? null;
+            case 'network':
+              return state.networks.find((n) => n.id === entity.scope.id) ?? null;
+            case 'device':
+              return state.devices.find((d) => d.id === entity.scope.id) ?? null;
+          }
+        };
+        return { entity, relationships: { scope: resolveScope() } };
       }
       case 'policyRule': {
         const entity = state.policyRules.find((r) => r.id === entityId);

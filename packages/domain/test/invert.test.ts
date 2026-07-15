@@ -53,6 +53,22 @@ const ops: Operation[] = [
     zoneId: null,
     previousZoneId: null,
   },
+  {
+    id: newId(operationIdSchema),
+    projectId: project.id,
+    kind: 'SetFindingStatus',
+    fingerprint: 'fp-1',
+    status: 'falsePositive',
+    previousStatus: 'new',
+  },
+  {
+    id: newId(operationIdSchema),
+    projectId: project.id,
+    kind: 'SetFindingNote',
+    fingerprint: 'fp-1',
+    note: 'benign',
+    previousNote: '',
+  },
 ];
 
 describe('invertOperation (ADR-0010)', () => {
@@ -71,6 +87,16 @@ describe('invertOperation (ADR-0010)', () => {
     if (inverse.kind !== 'SetField') throw new Error('inverse kind mismatch');
     expect(inverse.value).toBe('before');
     expect(inverse.previousValue).toBe('after');
+  });
+
+  it('inverts SetFindingStatus by swapping status and previousStatus', () => {
+    const op = ops.find((o) => o.kind === 'SetFindingStatus');
+    if (op?.kind !== 'SetFindingStatus') throw new Error('fixture mismatch');
+    const inverse = invertOperation(op, newId(operationIdSchema));
+    if (inverse.kind !== 'SetFindingStatus') throw new Error('inverse kind mismatch');
+    expect(inverse.status).toBe('new');
+    expect(inverse.previousStatus).toBe('falsePositive');
+    expect(inverse.fingerprint).toBe('fp-1');
   });
 
   it('inverts CreateLink into DeleteLink carrying the link as snapshot', () => {

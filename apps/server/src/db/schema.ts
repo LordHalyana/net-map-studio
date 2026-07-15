@@ -1,9 +1,13 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
+  BaselineScope,
   ConfidenceContributor,
   EvidenceContentClass,
   EvidenceRetention,
+  ExpectedService,
+  ExpectedTraffic,
   FieldValue,
+  FindingStatus,
   FlowEndpoint,
   ImportConflict,
   Operation,
@@ -371,6 +375,43 @@ export const changeSets = sqliteTable('change_sets', {
   createdAt: text('created_at').notNull(),
 });
 
+/**
+ * The expected-state yardstick (ADR-0025): operator-declared expected services
+ * and traffic for a scope (Zone/Network/Device by id). A first-class entity
+ * mutated through the Operation log; Findings cite its id + version.
+ */
+export const baselines = sqliteTable('baselines', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  name: text('name').notNull(),
+  scope: text('scope', { mode: 'json' }).$type<BaselineScope>().notNull(),
+  version: integer('version').notNull(),
+  expectedServices: text('expected_services', { mode: 'json' })
+    .$type<ExpectedService[]>()
+    .notNull(),
+  expectedTraffic: text('expected_traffic', { mode: 'json' }).$type<ExpectedTraffic[]>().notNull(),
+  lifecycleState: lifecycleState(),
+  notes: text('notes').notNull(),
+});
+
+/**
+ * The persisted half of a Finding (ADR-0023): the analyst disposition, keyed by
+ * Fingerprint (unique per project). The derived detection is never stored — it
+ * is recomputed each run and joined to this row by fingerprint. Mutated only
+ * through the Operation log, so status/note changes are undoable and audited.
+ */
+export const findingDispositions = sqliteTable('finding_dispositions', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  fingerprint: text('fingerprint').notNull(),
+  status: text('status').$type<FindingStatus>().notNull(),
+  notes: text('notes').notNull(),
+});
+
 export const entityTables = {
   project: projects,
   site: sites,
@@ -385,5 +426,6 @@ export const entityTables = {
   flow: flows,
   identity: identities,
   roleAssignment: roleAssignments,
+  baseline: baselines,
 };
 export type EntityTableKey = keyof typeof entityTables;

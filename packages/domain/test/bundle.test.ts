@@ -49,6 +49,8 @@ function sampleState(): ProjectState {
     flows: [],
     identities: [],
     roleAssignments: [],
+    findingDispositions: [],
+    baselines: [],
   };
 }
 

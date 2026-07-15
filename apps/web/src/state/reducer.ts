@@ -33,6 +33,11 @@ export function applyOperationOptimistic(state: ProjectState, op: Operation): Pr
         ...state,
         devices: state.devices.map((d) => (d.id === op.deviceId ? { ...d, zoneId: op.zoneId } : d)),
       };
+    case 'SetFindingStatus':
+    case 'SetFindingNote':
+      // Finding disposition is not canvas state (ADR-0023): the findings view
+      // refetches after the authoritative response, so nothing to mirror here.
+      return state;
   }
 }
 
@@ -58,6 +63,8 @@ function addEntity(state: ProjectState, payload: EntityPayload): ProjectState {
       return { ...state, identities: [...state.identities, payload.entity] };
     case 'roleAssignment':
       return { ...state, roleAssignments: [...state.roleAssignments, payload.entity] };
+    case 'baseline':
+      return { ...state, baselines: [...state.baselines, payload.entity] };
   }
 }
 
@@ -84,6 +91,8 @@ function removeEntity(state: ProjectState, payload: EntityPayload): ProjectState
       return { ...state, identities: state.identities.filter((e) => e.id !== id) };
     case 'roleAssignment':
       return { ...state, roleAssignments: state.roleAssignments.filter((e) => e.id !== id) };
+    case 'baseline':
+      return { ...state, baselines: state.baselines.filter((e) => e.id !== id) };
   }
 }
 

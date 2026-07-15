@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   addressIdSchema,
+  baselineIdSchema,
   deviceIdSchema,
   flowIdSchema,
   identityIdSchema,
@@ -319,3 +320,50 @@ export const policyRuleSchema = z.object({
   notes: z.string().default(''),
 });
 export type PolicyRule = z.infer<typeof policyRuleSchema>;
+
+/**
+ * The scope a Baseline applies to (ADR-0025): a Zone, Network or Device by id.
+ * References real model objects, so deleting one surfaces as an orphaned
+ * reference (§3.11), the same way an orphaned PolicyRule does.
+ */
+export const baselineScopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('zone'), id: zoneIdSchema }),
+  z.object({ kind: z.literal('network'), id: networkIdSchema }),
+  z.object({ kind: z.literal('device'), id: deviceIdSchema }),
+]);
+export type BaselineScope = z.infer<typeof baselineScopeSchema>;
+
+/** One service the operator expects to be present/exposed within the scope. */
+export const expectedServiceSchema = z.object({
+  protocol: protocolSchema,
+  port: z.number().int().min(0).max(65535).nullable().default(null),
+  description: z.string().default(''),
+});
+export type ExpectedService = z.infer<typeof expectedServiceSchema>;
+
+/** One destination the operator expects traffic to/from within the scope. */
+export const expectedTrafficSchema = z.object({
+  /** An address, CIDR or hostname the scope is expected to communicate with. */
+  destination: z.string().min(1),
+  description: z.string().default(''),
+});
+export type ExpectedTraffic = z.infer<typeof expectedTrafficSchema>;
+
+/**
+ * An operator-declared statement of expected services / traffic for a scope
+ * (ADR-0025) — the yardstick a Finding measures deviation against. A first-class
+ * entity edited through the Operation log; Findings cite its id + version.
+ */
+export const baselineSchema = z.object({
+  id: baselineIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().min(1),
+  scope: baselineScopeSchema,
+  /** Bumped by the operator on material change; cited by Findings for reproducibility. */
+  version: z.number().int().min(1).default(1),
+  expectedServices: z.array(expectedServiceSchema).default([]),
+  expectedTraffic: z.array(expectedTrafficSchema).default([]),
+  lifecycleState: lifecycleStateSchema,
+  notes: z.string().default(''),
+});
+export type Baseline = z.infer<typeof baselineSchema>;
