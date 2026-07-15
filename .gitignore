@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.local
+.env
+.env.*
+
+# databases
+*.db
+*.db-journal
+*.sqlite
+
+# playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# editor/os
+.DS_Store
+Thumbs.db
