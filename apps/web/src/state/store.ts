@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import type {
-  ChangeSet,
-  Operation,
-  Project,
-  ProjectState,
-  UndoRedoAvailability,
+import {
+  netplanBundleSchema,
+  projectSchema,
+  type ChangeSet,
+  type Operation,
+  type Project,
+  type ProjectState,
+  type UndoRedoAvailability,
 } from '@netplan/domain';
 import {
   createProject,
@@ -63,6 +65,7 @@ interface AppState {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   select: (selection: Selection | null) => void;
+  importBundle: (bundleText: string) => Promise<void>;
   toggleLogicalLayer: () => void;
   toggleSiteCollapsed: (siteId: string) => void;
   toggleConnectMode: () => void;
@@ -160,6 +163,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   select: (selection) => set({ selection }),
+
+  /** Restore a .netplan bundle (ADR-0016) and switch to the imported project. */
+  importBundle: async (bundleText) => {
+    const bundle = netplanBundleSchema.parse(JSON.parse(bundleText));
+    const response = await fetch('/api/projects/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(bundle),
+    });
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      const message =
+        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+          ? body.error
+          : `Import failed: ${response.status}`;
+      throw new Error(message);
+    }
+    const project = projectSchema.parse(await response.json());
+    const [graph, availability] = await Promise.all([
+      getGraph(project.id),
+      getAvailability(project.id),
+    ]);
+    set({ project, graph, availability, selection: null });
+  },
 
   toggleLogicalLayer: () => set({ layers: { logical: !get().layers.logical } }),
 

@@ -5,5 +5,6 @@ export * from './entities.js';
 export * from './operations.js';
 export * from './state.js';
 export * from './rule-validation.js';
+export * from './bundle.js';
 export * from './invert.js';
 export * from './seams.js';

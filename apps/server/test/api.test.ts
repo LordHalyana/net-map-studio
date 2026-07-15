@@ -212,6 +212,7 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
     const sanctioned = new Set([
       'POST /projects', // project CRUD (workspace bootstrap, ADR-0010 scope)
       'DELETE /projects/:id', // project CRUD
+      'POST /projects/import', // bundle restore (workspace bootstrap, ADR-0016)
       'POST /projects/:id/operations', // the single mutation surface
       'POST /projects/:id/undo', // engine-mediated
       'POST /projects/:id/redo', // engine-mediated

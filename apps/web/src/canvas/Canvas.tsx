@@ -226,6 +226,32 @@ function CanvasInner() {
     [dispatch],
   );
 
+  // PNG/SVG topology export (design §3.12) — listens for command-bar requests.
+  useEffect(() => {
+    async function onExportImage(event: Event) {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      const format = detail && typeof detail === 'object' ? detail.format : null;
+      const element = document.querySelector('.react-flow');
+      if (!(element instanceof HTMLElement)) return;
+      const { toPng, toSvg } = await import('html-to-image');
+      const options = { backgroundColor: '#0f1115', filter: excludeChrome };
+      const dataUrl =
+        format === 'svg' ? await toSvg(element, options) : await toPng(element, options);
+      const anchor = document.createElement('a');
+      anchor.href = dataUrl;
+      anchor.download = `topology.${format === 'svg' ? 'svg' : 'png'}`;
+      anchor.click();
+    }
+    function excludeChrome(node: HTMLElement): boolean {
+      return !(
+        node.classList?.contains('react-flow__minimap') ||
+        node.classList?.contains('react-flow__controls')
+      );
+    }
+    window.addEventListener('netplan:export-image', onExportImage);
+    return () => window.removeEventListener('netplan:export-image', onExportImage);
+  }, []);
+
   const onDragOver = useCallback((event: DragEvent) => {
     if (event.dataTransfer.types.includes(DND_MIME)) {
       event.preventDefault();

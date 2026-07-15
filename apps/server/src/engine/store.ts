@@ -11,6 +11,7 @@ import {
   operationSchema,
   policyRuleSchema,
   projectSchema,
+  projectStateSchema,
   serviceSchema,
   siteSchema,
   zoneSchema,
@@ -865,6 +866,32 @@ export function createEngine(db: Db) {
     return result.data;
   }
 
+  /**
+   * Restore a full project (ADR-0016 bundle import): every entity keeps its
+   * UUIDv7 and relationships. Like createProject this is workspace bootstrap,
+   * not a model mutation — the restored project starts with an empty
+   * operation log, exactly as the original did after its own creation.
+   */
+  function importState(state: ProjectState): Project {
+    const parsed = projectStateSchema.parse(state);
+    if (getProject(parsed.project.id)) {
+      throw new OperationError('CONFLICT', `Project ${parsed.project.id} already exists`);
+    }
+    db.transaction((tx) => {
+      tx.insert(projects).values(parsed.project).run();
+      for (const site of parsed.sites) tx.insert(sites).values(site).run();
+      for (const zone of parsed.zones) tx.insert(zones).values(zone).run();
+      for (const network of parsed.networks) tx.insert(networks).values(network).run();
+      for (const device of parsed.devices) tx.insert(devices).values(device).run();
+      for (const iface of parsed.interfaces) tx.insert(interfaces).values(iface).run();
+      for (const address of parsed.addresses) tx.insert(addresses).values(address).run();
+      for (const service of parsed.services) tx.insert(services).values(service).run();
+      for (const link of parsed.links) tx.insert(links).values(link).run();
+      for (const rule of parsed.policyRules) tx.insert(policyRules).values(rule).run();
+    });
+    return parsed.project;
+  }
+
   // ---------- reads: search & relationships ----------
 
   function search(projectId: string, query: string): SearchResult[] {
@@ -1073,6 +1100,7 @@ export function createEngine(db: Db) {
     listProjects,
     getProject,
     deleteProject,
+    importState,
     getState,
     getLog,
     applyOperation,

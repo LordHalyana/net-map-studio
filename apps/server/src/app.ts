@@ -1,13 +1,18 @@
 import Fastify from 'fastify';
 import { z } from 'zod';
 import {
+  applyRedaction,
   changeSetSchema,
+  makeBundle,
+  netplanBundleSchema,
   newId,
   operationSchema,
   projectIdSchema,
   projectSchema,
   settableEntityTypeSchema,
 } from '@netplan/domain';
+import { toCsv } from './export/csv.js';
+import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
 
@@ -144,6 +149,61 @@ export async function buildApp(options: AppOptions = {}) {
     const result = engine.redo(id);
     if (!result) throw new OperationError('CONFLICT', 'Nothing to redo');
     return { ...result, state: engine.getState(id) };
+  });
+
+  // ---------- Export / import (ADR-0016, design §3.12) ----------
+
+  app.get('/projects/:id/export', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const query = z.object({ redact: z.string().default('') }).parse(request.query);
+    let state = engine.getState(id);
+    const fields = query.redact
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    if (fields.length > 0) {
+      state = applyRedaction(state, { name: 'query', fields });
+    }
+    return makeBundle(state, new Date().toISOString());
+  });
+
+  app.post('/projects/import', async (request, reply) => {
+    const parsed = netplanBundleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new OperationError('INVALID', `Invalid .netplan bundle: ${parsed.error.message}`);
+    }
+    const project = engine.importState(parsed.data.project);
+    return reply.status(201).send(project);
+  });
+
+  const csvEntityTypes = z.enum([
+    'devices',
+    'interfaces',
+    'addresses',
+    'networks',
+    'services',
+    'links',
+    'policyRules',
+  ]);
+
+  app.get('/projects/:id/export/csv/:entityType', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const params = z.object({ entityType: csvEntityTypes }).safeParse(request.params);
+    if (!params.success) {
+      throw new OperationError('INVALID', 'Unknown entity type for CSV export');
+    }
+    const state = engine.getState(id);
+    const csv = toCsv(state[params.data.entityType]);
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${params.data.entityType}.csv"`)
+      .send(csv);
+  });
+
+  app.get('/projects/:id/report', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const html = buildHtmlReport(engine.getState(id), new Date().toISOString());
+    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 
   // ---------- Reads ----------

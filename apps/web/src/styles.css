@@ -755,6 +755,51 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* ---------- export menu (§3.12) ---------- */
+
+.export-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.export-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+.export-menu__list button {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.export-menu__list button:hover {
+  background: var(--bg-panel);
+}
+
+.export-menu__file {
+  display: none;
+}
+
+.export-menu__notice {
+  color: var(--warn);
+  font-size: 12px;
+}
+
 /* ---------- boot screens ---------- */
 
 .boot-error,
