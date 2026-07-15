@@ -65,6 +65,9 @@ declare module 'fastify' {
 export async function buildApp(options: AppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
+    // Evidence uploads (ADR-0019) can be tens of MB; the import worker's own
+    // file-size limits are the real gate, this just lets requests reach them.
+    bodyLimit: 128 * 1024 * 1024,
     // Runs before routing; injected/test requests use bare paths and pass through.
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });

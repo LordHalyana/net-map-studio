@@ -55,6 +55,7 @@ import {
 import { fixtureAdapter } from './adapters/fixture.js';
 import { deviceStateAdapter } from './adapters/device-state.js';
 import { nmapXmlAdapter } from './adapters/nmap-xml.js';
+import { tsharkFlowsAdapter } from './adapters/tshark-flows.js';
 import type { Adapter } from './adapters/types.js';
 
 /** Wire input of POST /projects/:id/imports. */
@@ -93,10 +94,9 @@ export function createImportStore(
 ) {
   const limits: ParseLimits = { ...DEFAULT_PARSE_LIMITS, ...options.limits };
   const adapters = new Map<string, Adapter>(
-    (options.adapters ?? [fixtureAdapter, deviceStateAdapter, nmapXmlAdapter]).map((a) => [
-      a.name,
-      a,
-    ]),
+    (
+      options.adapters ?? [fixtureAdapter, deviceStateAdapter, nmapXmlAdapter, tsharkFlowsAdapter]
+    ).map((a) => [a.name, a]),
   );
   /** In-flight parse jobs, so tests and shutdown can await quiescence. */
   const inFlight = new Set<Promise<void>>();
