@@ -93,6 +93,19 @@ export const rollbackImport = (projectId: string, jobId: string): Promise<Import
     body: '{}',
   });
 
+// Worker control (P4-M5): cancel a queued/running parse, resume a cancelled one.
+export const cancelImport = (projectId: string, jobId: string): Promise<ImportJob> =>
+  api(`/projects/${projectId}/imports/${jobId}/cancel`, importJobSchema, {
+    method: 'POST',
+    body: '{}',
+  });
+
+export const resumeImport = (projectId: string, jobId: string): Promise<ImportJob> =>
+  api(`/projects/${projectId}/imports/${jobId}/resume`, importJobSchema, {
+    method: 'POST',
+    body: '{}',
+  });
+
 export const listProjectProvenance = (projectId: string): Promise<FieldProvenance[]> =>
   api(`/projects/${projectId}/provenance`, z.array(fieldProvenanceSchema));
 

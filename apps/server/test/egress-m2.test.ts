@@ -236,6 +236,32 @@ describe('M2: local-feed enrichment is collection, not detection', () => {
   });
 });
 
+describe('M2: project deletion cleans the Phase-4 sidecars', () => {
+  it('a project with egress settings, a feed, enrichments and audit rows deletes cleanly', async () => {
+    const app = await createApp();
+    const projectId = await createProject(app);
+    await app.inject({
+      method: 'PUT',
+      url: `/projects/${projectId}/egress/settings`,
+      payload: { enabled: true, acknowledgeDisclosure: true },
+    });
+    await putFeed(app, projectId, [
+      { indicatorType: 'fileHash', indicator: HASH, verdict: 'malicious' },
+    ]);
+    await fetchEnrichment(app, projectId, { indicatorType: 'fileHash', query: HASH });
+    await fetchEnrichment(app, projectId, {
+      providerId: 'stub',
+      indicatorType: 'fileHash',
+      query: HASH,
+    });
+
+    const del = await app.inject({ method: 'DELETE', url: `/projects/${projectId}` });
+    expect(del.statusCode).toBe(204);
+    const gone = await app.inject({ method: 'GET', url: `/projects/${projectId}` });
+    expect(gone.statusCode).toBe(404);
+  });
+});
+
 describe('M2: hash-first — IP/domain egress lookups are gated per type', () => {
   it('an ip lookup through an egress provider is impossible without the ip opt-in', async () => {
     const app = await createApp();

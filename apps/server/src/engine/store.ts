@@ -56,6 +56,8 @@ import {
   baselines,
   changeSets,
   devices,
+  egressAuditRecords,
+  egressSettings,
   evidence,
   evidenceBlobs,
   fieldProvenance,
@@ -74,6 +76,7 @@ import {
   roleAssignments,
   services,
   sites,
+  threatIntelLocalFeeds,
   zones,
 } from '../db/schema.js';
 
@@ -342,6 +345,10 @@ export function createEngine(db: Db) {
       tx.delete(networks).where(eq(networks.projectId, projectId)).run();
       tx.delete(zones).where(eq(zones.projectId, projectId)).run();
       tx.delete(sites).where(eq(sites.projectId, projectId)).run();
+      // Phase-4 sidecars: egress door state, audit trail, local threat-intel feed
+      tx.delete(egressAuditRecords).where(eq(egressAuditRecords.projectId, projectId)).run();
+      tx.delete(egressSettings).where(eq(egressSettings.projectId, projectId)).run();
+      tx.delete(threatIntelLocalFeeds).where(eq(threatIntelLocalFeeds.projectId, projectId)).run();
       tx.delete(projects).where(eq(projects.id, projectId)).run();
     });
   }
