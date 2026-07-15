@@ -6,7 +6,7 @@ import { flowEndpointDevice, policyAllows } from './helpers.js';
 /**
  * M9 — segmentation, identity-anomaly & collection-quality families (design
  * §3.8, §3.11). Cross-zone flows unsanctioned by policy, service accounts with
- * admin across hosts, and coverage-aware "incomplete collection" findings.
+ * admin across devices, and coverage-aware "incomplete collection" findings.
  * These emit Findings (not §3.11 RuleWarnings).
  */
 
@@ -65,15 +65,15 @@ export const serviceAccountAdminRule: Rule = {
       if (adminDevices.size < 2) continue;
 
       drafts.push({
-        affected: null, // spans multiple hosts — a project-scoped principal concern
+        affected: null, // spans multiple devices — a project-scoped principal concern
         salientKey: `svcAdminSpread:${identity.id}`,
-        title: `Service account with admin across ${adminDevices.size} hosts: ${identity.name}`,
+        title: `Service account with admin across ${adminDevices.size} devices: ${identity.name}`,
         evidenceRefs: [],
         contributingProvenanceRows: [],
         baseConfidence: 0.75,
-        explanation: `Service account "${identity.name}" holds local administrator on ${adminDevices.size} hosts — broad lateral-movement potential if compromised.`,
+        explanation: `Service account "${identity.name}" holds local administrator on ${adminDevices.size} devices — broad lateral-movement potential if compromised.`,
         verificationSteps: [
-          'Confirm the service account requires admin on every host it is assigned to.',
+          'Confirm the service account requires admin on every device it is assigned to.',
           'Reduce the privilege footprint to least privilege where possible.',
         ],
       });
@@ -117,7 +117,7 @@ export const collectionQualityRule: Rule = {
         baseConfidence: 0.9,
         explanation: `${cov.deviceName} was imported without the data these rule families need, so they could not be evaluated (not passed): ${unevaluable.join(', ')}.`,
         verificationSteps: [
-          'Re-run the device-state collector on this host to gather the missing data.',
+          'Re-run the device-state collector on this device to gather the missing data.',
           'Treat the un-evaluated families as unknown, not clean.',
         ],
       });

@@ -18,14 +18,20 @@ export function isFindingsRedactionProfile(value: string): value is FindingsReda
 const SHA_LIKE = /\b[0-9a-f]{40,64}\b/gi;
 const WINDOWS_PATH = /[a-zA-Z]:\\[^\s"']+/g;
 const UNIX_PATH = /(?:\/[A-Za-z0-9._-]+){2,}/g;
+const IPV6 = /\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}\b/gi;
 const IPV4 = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 
-/** Mask sensitive specifics in free text. Paths first, so an IP inside a path is not partially masked. */
+/**
+ * Mask sensitive specifics in free text. Paths first, so an IP inside a path is
+ * not partially masked. IP masking is deliberately broad — a client-safe export
+ * errs toward hiding an internal address rather than leaking an external one.
+ */
 export function maskSensitiveText(text: string, usernames: readonly string[] = []): string {
   let out = text
     .replace(SHA_LIKE, '[hash]')
     .replace(WINDOWS_PATH, '[path]')
     .replace(UNIX_PATH, '[path]')
+    .replace(IPV6, '[ip]')
     .replace(IPV4, '[ip]');
   for (const name of usernames) {
     if (name.length < 2) continue;

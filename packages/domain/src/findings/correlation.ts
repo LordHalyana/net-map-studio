@@ -12,7 +12,7 @@ import { flowEndpointDevice, numberParam } from './rules/helpers.js';
 
 const CORRELATION_MIN_HOSTS = 3;
 
-/** Categories whose recurrence across hosts is high-signal enough to correlate. */
+/** Categories whose recurrence across devices is high-signal enough to correlate. */
 const CORRELATABLE_CATEGORIES = new Set([
   'known indicator match',
   'masquerading or double-extension',
@@ -40,7 +40,7 @@ function unionEvidence(detections: readonly DetectionRecord[]): EvidenceId[] {
 }
 
 /**
- * The same known-bad external destination reached by several unrelated hosts —
+ * The same known-bad external destination reached by several unrelated devices —
  * the §3.8 "same suspicious destination contacted by several unrelated devices"
  * pattern. Reads the local IoC destination list (no egress) and the Flow graph.
  */
@@ -81,14 +81,14 @@ export const sharedIndicatorDestinationRule: CorrelationRule = {
       drafts.push({
         affected: null,
         salientKey: `sharedIndicatorDest:${dest}`,
-        title: `Network may be compromised: ${perHost.size} hosts contacted known-bad ${dest}`,
+        title: `Network may be compromised: ${perHost.size} devices contacted known-bad ${dest}`,
         evidenceRefs: [],
         contributingProvenanceRows: [],
         baseConfidence: combineConfidence([...perHost.values()]),
-        explanation: `Correlation logic: a destination on the local indicator list (${dest}) was contacted by ${perHost.size} unrelated hosts (${names.join(', ')}). The network MAY be compromised — this is not a confirmed verdict. Evidence chain: one Flow per host to ${dest}.`,
+        explanation: `Correlation logic: a destination on the local indicator list (${dest}) was contacted by ${perHost.size} unrelated devices (${names.join(', ')}). The network MAY be compromised — this is not a confirmed verdict. Evidence chain: one Flow per device to ${dest}.`,
         verificationSteps: [
           'Review each host-to-destination Flow and correlate timing.',
-          'Contain and triage the affected hosts; confirm the indicator against threat intel (Phase 4).',
+          'Contain and triage the affected devices; confirm the indicator against threat intel (Phase 4).',
         ],
       });
     }
@@ -97,8 +97,8 @@ export const sharedIndicatorDestinationRule: CorrelationRule = {
 };
 
 /**
- * The same high-signal per-object finding recurring across many hosts — the
- * §3.8 "similar persistence / executable indicators across hosts" pattern.
+ * The same high-signal per-object finding recurring across many devices — the
+ * §3.8 "similar persistence / executable indicators across devices" pattern.
  * A finding about findings.
  */
 export const widespreadIndicatorRule: CorrelationRule = {
@@ -129,13 +129,13 @@ export const widespreadIndicatorRule: CorrelationRule = {
       drafts.push({
         affected: null,
         salientKey: `widespread:${category}`,
-        title: `Network may be compromised: "${category}" seen on ${deviceIds.size} hosts`,
+        title: `Network may be compromised: "${category}" seen on ${deviceIds.size} devices`,
         evidenceRefs: unionEvidence(group),
         contributingProvenanceRows: [],
         baseConfidence: combineConfidence(group.map((d) => d.confidence)),
-        explanation: `Correlation logic: the same high-signal indicator ("${category}") was independently detected on ${deviceIds.size} hosts. The network MAY be compromised — not a confirmed verdict. Evidence chain: the ${group.length} contributing per-host findings.`,
+        explanation: `Correlation logic: the same high-signal indicator ("${category}") was independently detected on ${deviceIds.size} devices. The network MAY be compromised — not a confirmed verdict. Evidence chain: the ${group.length} contributing per-device findings.`,
         verificationSteps: [
-          'Compare the per-host findings for a common root cause or delivery vector.',
+          'Compare the per-device findings for a common root cause or delivery vector.',
           'Treat as a possible coordinated compromise until ruled out.',
         ],
       });

@@ -66,7 +66,9 @@ export function hostInventoryFromReport(
   // Coverage reflects which classes the collector actually reported (present,
   // even if empty), so M9 can distinguish "collected, none found" from "not collected".
   const collectedClasses: InputClass[] = [];
-  if (host.listeningPorts.length >= 0) collectedClasses.push('listeningServices');
+  // listeningPorts is a required device-state field (ADR-0018), so listening
+  // services are always collected from this source.
+  collectedClasses.push('listeningServices');
   if (host.processes !== undefined) collectedClasses.push('processes');
   if (
     host.persistence !== undefined ||

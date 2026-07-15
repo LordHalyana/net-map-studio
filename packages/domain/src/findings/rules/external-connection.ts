@@ -48,6 +48,9 @@ export const unexpectedExternalDestinationRule: Rule = {
         title: `Unexpected external destination: ${dest}`,
         evidenceRefs: [],
         contributingProvenanceRows: [],
+        // Cite the expected-traffic Baseline this deviates from (ADR-0025).
+        citedBaselineId: baselines[0]?.id ?? null,
+        citedBaselineVersion: baselines[0]?.version ?? null,
         baseConfidence: flow.confidence,
         explanation: `${source.name} communicates with external destination ${dest}, which is outside the expected-traffic Baseline for its scope.`,
         verificationSteps: [
@@ -94,7 +97,7 @@ export const beaconLikeRule: Rule = {
         explanation: `${flow.observationCount} connections over ~${Math.round(spanMinutes)} min (≈ every ${Math.round(interval)} min) resemble automated beaconing.`,
         verificationSteps: [
           'Inspect the raw flow timing for regular intervals characteristic of C2 beaconing.',
-          'Correlate the destination with known-indicator lists and other hosts (M10).',
+          'Correlate the destination with known-indicator lists and other devices (M10).',
         ],
       });
     }

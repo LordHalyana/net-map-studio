@@ -2,6 +2,7 @@ import type { Baseline, Device, Service } from '../../entities.js';
 import type { FieldProvenance } from '../../imports.js';
 import type { ProjectState } from '../../state.js';
 import type { DetectionDraft, Rule } from '../rule.js';
+import { applicableBaselines } from './helpers.js';
 
 /**
  * M7 — exposed-service family (design §3.8, ADR-0025): high-risk exposed
@@ -38,30 +39,6 @@ const CLEARTEXT_PORTS: Record<number, string> = {
 
 function deviceOf(state: ProjectState, service: Service): Device | undefined {
   return service.deviceId ? state.devices.find((d) => d.id === service.deviceId) : undefined;
-}
-
-/** Networks a device's interfaces are members of. */
-function deviceNetworkIds(state: ProjectState, device: Device): Set<string> {
-  const ids = new Set<string>();
-  for (const iface of state.interfaces) {
-    if (iface.deviceId === device.id && iface.networkId) ids.add(iface.networkId);
-  }
-  return ids;
-}
-
-/** Baselines whose scope governs this device (device, its zone, or its networks). */
-function applicableBaselines(state: ProjectState, device: Device): Baseline[] {
-  const networkIds = deviceNetworkIds(state, device);
-  return state.baselines.filter((b) => {
-    switch (b.scope.kind) {
-      case 'device':
-        return b.scope.id === device.id;
-      case 'zone':
-        return device.zoneId != null && b.scope.id === device.zoneId;
-      case 'network':
-        return networkIds.has(b.scope.id);
-    }
-  });
 }
 
 function baselineExpects(baseline: Baseline, service: Service): boolean {
@@ -105,6 +82,9 @@ export const exposedManagementServiceRule: Rule = {
         title: `Exposed management service: ${MANAGEMENT_PORTS[port]} on ${device.name}`,
         evidenceRefs: [],
         contributingProvenanceRows: serviceProvenance(ctx.provenance, service),
+        // Machine-traceable Baseline citation (ADR-0025), alongside the prose above.
+        citedBaselineId: cited?.id ?? null,
+        citedBaselineVersion: cited?.version ?? null,
         baseConfidence: 0.6,
         explanation: `${MANAGEMENT_PORTS[port]} (${service.protocol}/${port}) is exposed on ${device.name}.${citation}`,
         verificationSteps: [

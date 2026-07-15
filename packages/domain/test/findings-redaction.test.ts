@@ -18,6 +18,8 @@ function view(): FindingView {
       affected: null,
       evidenceRefs: [],
       contributingProvenanceRows: [],
+      citedBaselineId: null,
+      citedBaselineVersion: null,
       severity: 'high',
       confidence: 0.6,
       explanation:

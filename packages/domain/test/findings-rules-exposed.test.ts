@@ -69,6 +69,9 @@ describe('M7 exposed-service family (§3.8, ADR-0025)', () => {
     expect(finding?.severity).toBe('high');
     expect(finding?.explanation).toContain('Zone services');
     expect(finding?.explanation).toContain('v3');
+    // Machine-traceable citation (ADR-0025): the Baseline id + version, not just prose.
+    expect(finding?.citedBaselineId).toBe(baseline.id);
+    expect(finding?.citedBaselineVersion).toBe(3);
   });
 
   it('does not flag a management service that the Baseline expects', () => {

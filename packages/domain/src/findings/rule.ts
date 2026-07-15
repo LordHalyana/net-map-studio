@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { policyEndpointSchema, type PolicyEndpoint } from '../endpoints.js';
 import { confidenceSchema, type Confidence } from '../confidence.js';
 import { severitySchema, type Severity } from '../seams.js';
+import { baselineIdSchema, type BaselineId } from '../ids.js';
 import { evidenceIdSchema, fieldProvenanceIdSchema } from '../imports.js';
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
@@ -30,6 +31,9 @@ export const detectionRecordSchema = z.object({
   evidenceRefs: z.array(evidenceIdSchema),
   /** The provenance rows this detection rests on — makes Confidence recomputable. */
   contributingProvenanceRows: z.array(fieldProvenanceIdSchema),
+  /** The Baseline this finding measures deviation against (ADR-0025) — a machine-traceable citation. */
+  citedBaselineId: baselineIdSchema.nullable().default(null),
+  citedBaselineVersion: z.number().int().nullable().default(null),
   severity: severitySchema,
   confidence: confidenceSchema,
   explanation: z.string(),
@@ -52,6 +56,9 @@ export interface DetectionDraft {
   title: string;
   evidenceRefs: readonly Evidence['id'][];
   contributingProvenanceRows: readonly FieldProvenance['id'][];
+  /** The Baseline this finding measures deviation against (ADR-0025). */
+  citedBaselineId?: BaselineId | null;
+  citedBaselineVersion?: number | null;
   /**
    * Confidence for findings that do not rest on FieldProvenance rows (e.g.
    * flow-based, where a Flow carries its own confidence, or coverage findings).

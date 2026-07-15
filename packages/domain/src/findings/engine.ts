@@ -68,6 +68,8 @@ function assemble(
     affected: draft.affected,
     evidenceRefs: [...draft.evidenceRefs],
     contributingProvenanceRows: [...draft.contributingProvenanceRows],
+    citedBaselineId: draft.citedBaselineId ?? null,
+    citedBaselineVersion: draft.citedBaselineVersion ?? null,
     severity,
     confidence: deriveConfidence(draft, provenance),
     explanation: draft.explanation,

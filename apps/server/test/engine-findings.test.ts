@@ -62,6 +62,8 @@ describe('M2 finding disposition through the Operation log (ADR-0023)', () => {
         affected: null,
         evidenceRefs: [],
         contributingProvenanceRows: [],
+        citedBaselineId: null,
+        citedBaselineVersion: null,
         severity: 'high' as const,
         confidence: 0.5,
         explanation: 'e',

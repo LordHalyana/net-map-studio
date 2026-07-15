@@ -115,7 +115,7 @@ export const suspiciousFilenameRule: Rule = {
             candidate,
             `Suspicious ${candidate.source}: ${candidate.filename}`,
             `"${candidate.path}" matches an operator suspicious-filename / path indicator.`,
-            ['Confirm the file is expected on this host and check its origin.'],
+            ['Confirm the file is expected on this device and check its origin.'],
             0.5,
           ),
         );
@@ -211,7 +211,7 @@ export const knownIndicatorRule: Rule = {
             candidate,
             `Known indicator match: ${basename(candidate.path)}`,
             `"${candidate.path}" matches a hash on the local operator indicator (IoC) list.`,
-            ['Isolate and triage the host; correlate the indicator across other hosts (M10).'],
+            ['Isolate and triage the device; correlate the indicator across other devices (M10).'],
             0.9,
           ),
         );
