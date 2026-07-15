@@ -18,6 +18,7 @@ import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
 import { createImportBodySchema, createImportStore } from './imports/store.js';
 import { createProvenanceStore, overrideFieldBodySchema } from './imports/provenance.js';
+import { createFindingsService } from './findings/analysis-service.js';
 import { ParseLimitError } from './imports/guards.js';
 import { importResolutionActionSchema } from '@netplan/domain';
 
@@ -75,6 +76,7 @@ export async function buildApp(options: AppOptions = {}) {
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
+  const findingsService = createFindingsService(db, engine, importStore, provenanceStore);
   app.decorate('importStore', importStore);
 
   const registeredRoutes: string[] = [];
@@ -273,6 +275,15 @@ export async function buildApp(options: AppOptions = {}) {
     const body = overrideFieldBodySchema.parse(request.body ?? {});
     const result = provenanceStore.overrideField(id, body);
     return { ...result, state: engine.getState(id) };
+  });
+
+  // Security findings (ADR-0023, Phase 3): a pure recomputation over the
+  // committed graph — detection never touches the Operation log. Findings are
+  // always current, so there is no server-side run to trigger; disposition
+  // changes go through POST /projects/:id/operations (SetFindingStatus/Note).
+  app.get('/projects/:id/findings', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return findingsService.analyze(id);
   });
 
   app.get('/projects/:id/evidence', async (request) => {
