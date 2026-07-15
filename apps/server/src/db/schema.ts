@@ -17,6 +17,7 @@ import type {
   ImportJobStatus,
   IndicatorType,
   LifecycleState,
+  LocalFeedEntry,
   LinkEndpoint,
   ObservationClaim,
   PolicyEndpoint,
@@ -446,6 +447,19 @@ export const egressAuditRecords = sqliteTable('egress_audit_records', {
   query: text('query').notNull(),
   outcome: text('outcome').$type<EgressCallOutcome>().notNull(),
   detail: text('detail').notNull(),
+});
+
+/**
+ * The operator-supplied local/offline threat-intel feed (P4-M2, ADR-0028):
+ * the zero-egress IoC set the local-feed provider consults. One row per
+ * project, replaced wholesale on PUT.
+ */
+export const threatIntelLocalFeeds = sqliteTable('threat_intel_local_feeds', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id),
+  entries: text('entries', { mode: 'json' }).$type<LocalFeedEntry[]>().notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 export const entityTables = {

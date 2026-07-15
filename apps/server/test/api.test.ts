@@ -234,6 +234,11 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       // state — no entity table is touched. Guarded by the disclosure gate;
       // every call through the door writes an append-only audit record.
       'PUT /projects/:id/egress/settings',
+      // Threat-intel (P4-M2, ADR-0028): the feed is tool configuration; an
+      // enrichment fetch writes the import spine only (a synthetic committed
+      // job + read-only Evidence) — entity tables are untouched.
+      'PUT /projects/:id/threat-intel/feed',
+      'POST /projects/:id/enrichments',
     ]);
 
     const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

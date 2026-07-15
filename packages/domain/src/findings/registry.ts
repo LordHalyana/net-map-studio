@@ -1,6 +1,7 @@
 import { runAnalysis, type AnalysisContext } from './engine.js';
 import type { AnalysisRun, CorrelationRule, Rule } from './rule.js';
 import { correlationRules } from './correlation.js';
+import { enrichmentRules } from './rules/enrichment.js';
 import { filenamePathRules } from './rules/filename-path.js';
 import { processPersistenceRules } from './rules/process-persistence.js';
 import { exposedServiceRules } from './rules/exposed-service.js';
@@ -17,6 +18,7 @@ export const builtInRules: readonly Rule[] = [
   ...exposedServiceRules,
   ...externalConnectionRules,
   ...segmentationIdentityRules,
+  ...enrichmentRules,
 ];
 
 /** The built-in correlation registry (second pass, M10). */

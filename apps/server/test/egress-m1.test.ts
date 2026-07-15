@@ -140,10 +140,11 @@ describe('M1: the door blocks, audits and executes', () => {
     let executed = 0;
     const spyProvider: EgressProvider = {
       id: 'stub',
+      version: '0.0.0',
       requiresEgress: true,
       execute: async () => {
         executed += 1;
-        return { raw: '{}' };
+        return { raw: '{}', response: { verdict: 'unknown', score: null, detail: '' } };
       },
     };
     const { door, project } = createDoor([spyProvider]);
@@ -206,6 +207,7 @@ describe('M1: the door blocks, audits and executes', () => {
   it('a provider failure is audited as an error', async () => {
     const failing: EgressProvider = {
       id: 'stub',
+      version: '0.0.0',
       requiresEgress: true,
       execute: async () => {
         throw new Error('provider exploded');
@@ -324,7 +326,9 @@ describe('M1 DoD: no network client exists in server code outside the door modul
   const SERVER_SRC = join(__dirname, '..', 'src');
   const DOOR_DIR = ['egress'];
   const FORBIDDEN: Array<[string, RegExp]> = [
-    ['global fetch call', /\bfetch\s*\(/],
+    // bare fetch( only — a method named .fetch( is not a network client
+    ['global fetch call', /(?<![.\w])fetch\s*\(/],
+    ['globalThis.fetch call', /globalThis\.fetch/],
     ['node:http(s) import', /from ['"]node:https?['"]/],
     ['node:net import', /from ['"]node:net['"]/],
     ['node:tls import', /from ['"]node:tls['"]/],

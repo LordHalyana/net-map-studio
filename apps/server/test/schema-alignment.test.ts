@@ -17,6 +17,7 @@ import {
 import {
   egressAuditRecordSchema,
   egressSettingsSchema,
+  threatIntelLocalFeedSchema,
   evidenceSchema,
   fieldProvenanceSchema,
   findingDispositionSchema,
@@ -53,6 +54,7 @@ import {
 import {
   egressAuditRecords as egressAuditRecordsTable,
   egressSettings as egressSettingsTable,
+  threatIntelLocalFeeds as threatIntelLocalFeedsTable,
   entityTables,
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
@@ -197,9 +199,18 @@ describe('egress tables align with domain Zod schemas (ADR-0027, plan P4-M1)', (
   const settings = makeEgressSettings(project.id);
   const auditRecord = makeEgressAuditRecord(project.id, { outcome: 'blocked', detail: 'shut' });
 
+  const feed = threatIntelLocalFeedSchema.parse({
+    projectId: project.id,
+    entries: [
+      { indicatorType: 'fileHash', indicator: 'a'.repeat(64), verdict: 'malicious', score: 0.9 },
+    ],
+    updatedAt: '2026-07-15T00:00:00.000Z',
+  });
+
   const egressCases = [
     ['egressSettings', egressSettingsTable, egressSettingsSchema, settings],
     ['egressAuditRecord', egressAuditRecordsTable, egressAuditRecordSchema, auditRecord],
+    ['threatIntelLocalFeed', threatIntelLocalFeedsTable, threatIntelLocalFeedSchema, feed],
   ] as const;
 
   it.each(egressCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
@@ -221,12 +232,16 @@ describe('egress tables align with domain Zod schemas (ADR-0027, plan P4-M1)', (
     db.insert(entityTables.project).values(project).run();
     db.insert(egressSettingsTable).values(settings).run();
     db.insert(egressAuditRecordsTable).values(auditRecord).run();
+    db.insert(threatIntelLocalFeedsTable).values(feed).run();
     expect(egressSettingsSchema.parse(db.select().from(egressSettingsTable).get())).toEqual(
       settings,
     );
     expect(egressAuditRecordSchema.parse(db.select().from(egressAuditRecordsTable).get())).toEqual(
       auditRecord,
     );
+    expect(
+      threatIntelLocalFeedSchema.parse(db.select().from(threatIntelLocalFeedsTable).get()),
+    ).toEqual(feed);
   });
 });
 

@@ -19,6 +19,7 @@ import { observations as observationsTable } from '../db/schema.js';
 import type { Engine } from '../engine/store.js';
 import type { ImportStore } from '../imports/store.js';
 import type { ProvenanceStore } from '../imports/provenance.js';
+import type { EnrichmentService } from '../egress/enrichment.js';
 import { hostInventoryFromReport } from './host-inventory.js';
 
 const DEVICE_STATE_PARSER = 'device-state';
@@ -42,6 +43,7 @@ export function createFindingsService(
   engine: Engine,
   importStore: ImportStore,
   provenanceStore: ProvenanceStore,
+  enrichmentService: EnrichmentService,
 ) {
   /**
    * Map each device-state host's stable id to its committed Device id, via the
@@ -129,6 +131,9 @@ export function createFindingsService(
       provenance,
       evidence: [],
       hostInventories: inventories,
+      // Stored enrichment payloads only (ADR-0028) — never a live lookup, so
+      // this recomputation stays pure and reproducible.
+      enrichments: enrichmentService.loadEnrichments(projectId),
       config: DEFAULT_ENGINE_CONFIG,
       opSeq,
     });

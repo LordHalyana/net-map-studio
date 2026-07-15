@@ -57,6 +57,13 @@
       "when": 1784152558777,
       "tag": "0007_dusty_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784153424152,
+      "tag": "0008_rapid_psynapse",
+      "breakpoints": true
     }
   ]
 }

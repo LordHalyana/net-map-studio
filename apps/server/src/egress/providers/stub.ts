@@ -1,3 +1,4 @@
+import { threatIntelResponseSchema } from '@netplan/domain';
 import type { EgressLookupRequest, EgressProvider, EgressProviderResult } from '../door.js';
 
 /**
@@ -8,16 +9,22 @@ import type { EgressLookupRequest, EgressProvider, EgressProviderResult } from '
  */
 export const stubProvider: EgressProvider = {
   id: 'stub',
+  version: '1.0.0',
   requiresEgress: true,
   execute(request: EgressLookupRequest): Promise<EgressProviderResult> {
+    const response = threatIntelResponseSchema.parse({
+      verdict: 'unknown',
+      score: null,
+      detail: 'stub provider — canned response',
+    });
     return Promise.resolve({
       raw: JSON.stringify({
         provider: 'stub',
         indicatorType: request.indicatorType,
         indicator: request.query,
-        verdict: 'unknown',
-        score: 0,
+        ...response,
       }),
+      response,
     });
   },
 };

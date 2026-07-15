@@ -12,6 +12,7 @@ import {
   type EgressCallOutcome,
   type EgressSettings,
   type IndicatorType,
+  type ThreatIntelResponse,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
 import { egressAuditRecords, egressSettings, projects } from '../db/schema.js';
@@ -39,17 +40,23 @@ export type EgressLookupRequest = z.infer<typeof egressLookupRequestSchema>;
 export interface EgressProviderResult {
   /** The raw response body, verbatim — stored as Evidence by callers (ADR-0028). */
   raw: string;
+  /** The provider's answer in the canonical ThreatIntelResponse shape (P4-M2). */
+  response: ThreatIntelResponse;
 }
 
 /**
- * A provider behind the door. `requiresEgress: true` means execute() would
- * leave the machine and is gated by the per-project opt-in; the M1 stub is
- * canned but declares itself egress-requiring so the gate is exercised.
+ * A provider behind the door — the ThreatIntelProvider seam (ADR-0027).
+ * `requiresEgress: true` means execute() would leave the machine and is gated
+ * by the per-project opt-in; the M1 stub is canned but declares itself
+ * egress-requiring so the gate is exercised. Online providers
+ * (VirusTotal-style, self-hosted MISP) are future implementations of this
+ * interface — do not build them in Phase 4 (plan §4).
  */
 export interface EgressProvider {
   id: string;
+  version: string;
   requiresEgress: boolean;
-  execute(request: EgressLookupRequest): Promise<EgressProviderResult>;
+  execute(request: EgressLookupRequest, ctx: { projectId: string }): Promise<EgressProviderResult>;
 }
 
 /** A call the door refused: egress off, or the indicator type not opted in. */
@@ -77,8 +84,10 @@ export type UpdateEgressSettingsBody = z.input<typeof updateEgressSettingsBodySc
 
 export interface EgressCallResult {
   providerId: string;
+  providerVersion: string;
   request: EgressLookupRequest;
   raw: string;
+  response: ThreatIntelResponse;
   fetchedAt: string;
   /** Null for zero-egress (local/offline) providers — nothing left the machine. */
   auditRecordId: EgressAuditRecord['id'] | null;
@@ -199,7 +208,7 @@ export function createEgressDoor(db: Db, options: { providers?: EgressProvider[]
     }
 
     try {
-      const result = await provider.execute(request);
+      const result = await provider.execute(request, { projectId });
       const fetchedAt = new Date().toISOString();
       const audit = provider.requiresEgress
         ? writeAudit(projectId, providerId, request, 'success', '')
@@ -208,8 +217,10 @@ export function createEgressDoor(db: Db, options: { providers?: EgressProvider[]
           null;
       return {
         providerId,
+        providerVersion: provider.version,
         request,
         raw: result.raw,
+        response: result.response,
         fetchedAt,
         auditRecordId: audit?.id ?? null,
       };

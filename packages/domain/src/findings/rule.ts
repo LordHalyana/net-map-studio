@@ -7,6 +7,7 @@ import { evidenceIdSchema, fieldProvenanceIdSchema } from '../imports.js';
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
 import type { IndicatorLists, RuleSettings } from './config.js';
+import type { EnrichmentInput } from './enrichment.js';
 import type { HostSecurityInventory } from './inputs.js';
 
 /**
@@ -85,6 +86,8 @@ export interface RuleContext {
   evidence: readonly Evidence[];
   /** Per-Device security telemetry (M5/M6): files, processes, persistence, software. */
   hostInventories: readonly HostSecurityInventory[];
+  /** Stored threat-intel enrichment Evidence payloads (P4-M2, ADR-0028). */
+  enrichments: readonly EnrichmentInput[];
   /** This rule's resolved operator settings (thresholds, overrides). */
   settings: RuleSettings;
   /** The operator's allow/deny string lists (ADR-0024). */

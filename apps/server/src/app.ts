@@ -28,6 +28,13 @@ import {
   createEgressDoor,
   updateEgressSettingsBodySchema,
 } from './egress/door.js';
+import { stubProvider } from './egress/providers/stub.js';
+import {
+  createLocalFeedProvider,
+  createLocalFeedStore,
+  putLocalFeedBodySchema,
+} from './egress/providers/local-feed.js';
+import { createEnrichmentService, fetchEnrichmentBodySchema } from './egress/enrichment.js';
 
 export interface AppOptions {
   dbFile?: string;
@@ -85,8 +92,18 @@ export async function buildApp(options: AppOptions = {}) {
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
-  const findingsService = createFindingsService(db, engine, importStore, provenanceStore);
-  const egressDoor = createEgressDoor(db);
+  const localFeedStore = createLocalFeedStore(db);
+  const egressDoor = createEgressDoor(db, {
+    providers: [stubProvider, createLocalFeedProvider(localFeedStore)],
+  });
+  const enrichmentService = createEnrichmentService(db, egressDoor);
+  const findingsService = createFindingsService(
+    db,
+    engine,
+    importStore,
+    provenanceStore,
+    enrichmentService,
+  );
   app.decorate('importStore', importStore);
   app.decorate('egressDoor', egressDoor);
 
@@ -345,6 +362,36 @@ export async function buildApp(options: AppOptions = {}) {
   app.get('/projects/:id/egress/audit', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
     return egressDoor.listAudit(id);
+  });
+
+  // ---------- Threat-intel enrichment (P4-M2, ADR-0028) ----------
+
+  // The operator-supplied local/offline IoC feed — the zero-egress mode that
+  // keeps enrichment fully usable with the door shut.
+  app.get('/projects/:id/threat-intel/feed', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return localFeedStore.get(id);
+  });
+
+  app.put('/projects/:id/threat-intel/feed', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = putLocalFeedBodySchema.parse(request.body ?? {});
+    return localFeedStore.put(id, body.entries);
+  });
+
+  // An enrichment fetch is a collection event through the door: gate + audit
+  // happen there; the result lands as read-only Evidence. Detection never
+  // triggers this — re-fetching is always an explicit operator action.
+  app.post('/projects/:id/enrichments', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = fetchEnrichmentBodySchema.parse(request.body ?? {});
+    const view = await enrichmentService.fetch(id, body);
+    return reply.status(201).send(view);
+  });
+
+  app.get('/projects/:id/enrichments', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return enrichmentService.list(id);
   });
 
   app.get('/projects/:id/evidence', async (request) => {
