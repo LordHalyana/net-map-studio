@@ -109,8 +109,19 @@ The review step where conflicting or duplicate observations of the same real thi
 One run of the import pipeline: its status, parser/schema version, produced observations and rollback boundary.
 
 **Finding**:
-An advisory security, quality, conflict or design warning with category, affected object, Severity, Confidence, Evidence references, explanation and verification steps. Never a confirmed-compromise verdict.
+An advisory security, quality, conflict or design warning with category, affected object, Severity, Confidence, Evidence references, explanation and verification steps. Never a confirmed-compromise verdict. A Finding has two halves: **detection** — the derived, recomputed output of a Rule over the committed graph (never written through the Operation log); and **disposition** — the durable analyst workflow (status, notes, audit) persisted and mutated only through the Operation log, keyed to detection by Fingerprint.
 _Avoid_: Alert, detection, incident, threat.
+
+**Fingerprint**:
+The stable identity of a Finding across re-analysis — derived from its Rule, affected object and salient evidence — so an analyst's Disposition survives re-runs and re-imports. Two runs that detect the same real issue share a Fingerprint; the Disposition attaches to the Fingerprint, not to a run.
+
+**Rule**:
+A single versioned detection in the local rule engine that consumes the committed graph, Provenance, Evidence and its own operator-tunable config, and emits Findings. Carries a code-logic version and a config version; both stamp onto every Finding it produces. Distinct from a PolicyRule (an _intended_ network allow/deny) and from a §3.11 RuleWarning (policy-validation output, not a Finding).
+_Avoid_: Check, detector, signature, PolicyRule.
+
+**Baseline**:
+An operator-declared statement of _expected_ services or traffic for a scope (Zone, Network or Device) — the yardstick a Finding measures deviation against (e.g. an exposed service or cross-zone flow is only a Finding when it departs from the Baseline). A first-class model entity referencing objects by id, edited through the Operation log and cited by Findings as evidence. Distinct from opaque operator allow/deny string lists (filenames, hashes, approved-software names), which are Rule config, not model objects.
+_Avoid_: Allowlist (that is Rule config), policy, expected state.
 
 ### Change & state
 
