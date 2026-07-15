@@ -1,0 +1,234 @@
+import { z } from 'zod';
+import {
+  addressIdSchema,
+  deviceIdSchema,
+  interfaceIdSchema,
+  linkIdSchema,
+  networkIdSchema,
+  policyRuleIdSchema,
+  projectIdSchema,
+  serviceIdSchema,
+  siteIdSchema,
+  zoneIdSchema,
+} from './ids.js';
+import { lifecycleStateSchema } from './lifecycle.js';
+import { linkEndpointSchema, policyEndpointSchema } from './endpoints.js';
+
+const positionSchema = z.object({ x: z.number(), y: z.number() });
+export type Position = z.infer<typeof positionSchema>;
+
+/**
+ * Per-(network, view) layout hints (ADR-0013): a network-node on the canvas is
+ * a projection of Membership, so its position is a hint keyed by view id, not
+ * a real topological node.
+ */
+const layoutHintsSchema = z.record(z.string(), positionSchema).default({});
+
+const tagsSchema = z.array(z.string()).default([]);
+
+export const projectSchema = z.object({
+  id: projectIdSchema,
+  name: z.string().min(1),
+  description: z.string().default(''),
+  createdAt: z.iso.datetime(),
+  lifecycleState: lifecycleStateSchema,
+});
+export type Project = z.infer<typeof projectSchema>;
+
+export const siteSchema = z.object({
+  id: siteIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().min(1),
+  description: z.string().default(''),
+  lifecycleState: lifecycleStateSchema,
+  tags: tagsSchema,
+  notes: z.string().default(''),
+  position: positionSchema.default({ x: 0, y: 0 }),
+});
+export type Site = z.infer<typeof siteSchema>;
+
+export const zoneKindSchema = z.enum([
+  'floor',
+  'room',
+  'rack',
+  'segment',
+  'trustBoundary',
+  'other',
+]);
+
+export const zoneSchema = z.object({
+  id: zoneIdSchema,
+  projectId: projectIdSchema,
+  /** Containment (ADR-0013): a Zone belongs to exactly one Site. */
+  siteId: siteIdSchema,
+  name: z.string().min(1),
+  kind: zoneKindSchema.default('other'),
+  description: z.string().default(''),
+  lifecycleState: lifecycleStateSchema,
+  tags: tagsSchema,
+  notes: z.string().default(''),
+  position: positionSchema.default({ x: 0, y: 0 }),
+});
+export type Zone = z.infer<typeof zoneSchema>;
+
+export const deviceTypeSchema = z.enum([
+  'router',
+  'firewall',
+  'switch',
+  'accessPoint',
+  'vpnGateway',
+  'server',
+  'nas',
+  'dnsServer',
+  'dhcpServer',
+  'workstation',
+  'laptop',
+  'mobileDevice',
+  'posClient',
+  'paymentTerminal',
+  'printer',
+  'camera',
+  'voipDevice',
+  'iotDevice',
+  'custom',
+]);
+export type DeviceType = z.infer<typeof deviceTypeSchema>;
+
+export const criticalitySchema = z.enum(['unspecified', 'low', 'medium', 'high', 'critical']);
+
+export const deviceSchema = z.object({
+  id: deviceIdSchema,
+  projectId: projectIdSchema,
+  /**
+   * Containment (ADR-0013): at most one physical parent. Null while the
+   * Device has not been placed in a Zone yet.
+   */
+  zoneId: zoneIdSchema.nullable().default(null),
+  name: z.string().min(1),
+  deviceType: deviceTypeSchema,
+  /** Human label for `deviceType: 'custom'`; custom icons still require a structured type. */
+  customTypeLabel: z.string().default(''),
+  customIconKey: z.string().default(''),
+  vendor: z.string().default(''),
+  model: z.string().default(''),
+  serialNumber: z.string().default(''),
+  assetTag: z.string().default(''),
+  location: z.string().default(''),
+  criticality: criticalitySchema.default('unspecified'),
+  status: z.enum(['unknown', 'active', 'inactive']).default('unknown'),
+  lifecycleState: lifecycleStateSchema,
+  tags: tagsSchema,
+  notes: z.string().default(''),
+  position: positionSchema.default({ x: 0, y: 0 }),
+  /** Manual pin (design §3.2C): auto-arrange must not move operator-positioned nodes. */
+  pinned: z.boolean().default(false),
+});
+export type Device = z.infer<typeof deviceSchema>;
+
+export const interfaceKindSchema = z.enum(['ethernet', 'wifi', 'virtual', 'loopback', 'other']);
+
+export const interfaceSchema = z.object({
+  id: interfaceIdSchema,
+  projectId: projectIdSchema,
+  deviceId: deviceIdSchema,
+  name: z.string().min(1),
+  kind: interfaceKindSchema.default('ethernet'),
+  /** Membership (ADR-0013): logical belonging to a Network, never containment. */
+  networkId: networkIdSchema.nullable().default(null),
+  lifecycleState: lifecycleStateSchema,
+  notes: z.string().default(''),
+});
+export type Interface = z.infer<typeof interfaceSchema>;
+
+export const addressKindSchema = z.enum(['mac', 'ipv4', 'ipv6', 'hostname', 'alias']);
+
+export const addressSchema = z.object({
+  id: addressIdSchema,
+  projectId: projectIdSchema,
+  interfaceId: interfaceIdSchema,
+  kind: addressKindSchema,
+  value: z.string().min(1),
+  lifecycleState: lifecycleStateSchema,
+});
+export type Address = z.infer<typeof addressSchema>;
+
+export const networkKindSchema = z.enum(['subnet', 'vlan', 'ssid', 'routingDomain', 'addressPool']);
+
+export const networkSchema = z.object({
+  id: networkIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().min(1),
+  kind: networkKindSchema,
+  vlanId: z.number().int().min(1).max(4094).nullable().default(null),
+  cidr: z.string().default(''),
+  description: z.string().default(''),
+  lifecycleState: lifecycleStateSchema,
+  tags: tagsSchema,
+  layoutHints: layoutHintsSchema,
+});
+export type Network = z.infer<typeof networkSchema>;
+
+export const linkKindSchema = z.enum(['cable', 'wireless', 'layer2', 'layer3', 'tunnel']);
+
+/**
+ * A structural relationship between two Interfaces (ADR-0011). Endpoints are
+ * always Interfaces (ADR-0012).
+ */
+export const linkSchema = z.object({
+  id: linkIdSchema,
+  projectId: projectIdSchema,
+  source: linkEndpointSchema,
+  target: linkEndpointSchema,
+  kind: linkKindSchema.default('cable'),
+  label: z.string().default(''),
+  lifecycleState: lifecycleStateSchema,
+  notes: z.string().default(''),
+});
+export type Link = z.infer<typeof linkSchema>;
+
+export const protocolSchema = z.enum(['tcp', 'udp', 'icmp', 'any', 'other']);
+
+/**
+ * A protocol/port/process capability. Attached to a Device when it models a
+ * listening service; standalone (deviceId null) when it is a reusable
+ * "what traffic" object referenced by PolicyRules.
+ */
+export const serviceSchema = z.object({
+  id: serviceIdSchema,
+  projectId: projectIdSchema,
+  deviceId: deviceIdSchema.nullable().default(null),
+  name: z.string().min(1),
+  protocol: protocolSchema,
+  portStart: z.number().int().min(0).max(65535).nullable().default(null),
+  portEnd: z.number().int().min(0).max(65535).nullable().default(null),
+  process: z.string().default(''),
+  description: z.string().default(''),
+  lifecycleState: lifecycleStateSchema,
+});
+export type Service = z.infer<typeof serviceSchema>;
+
+export const policyDirectionSchema = z.enum(['inbound', 'outbound', 'bidirectional']);
+export const policyActionSchema = z.enum(['allow', 'deny', 'reject', 'monitor']);
+
+/**
+ * An intended rule (ADR-0011) with polymorphic endpoints (ADR-0012) —
+ * firewall policy is written network-to-network, not port-to-port.
+ */
+export const policyRuleSchema = z.object({
+  id: policyRuleIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().default(''),
+  source: policyEndpointSchema,
+  destination: policyEndpointSchema,
+  /** Null means "any service/protocol". */
+  serviceId: serviceIdSchema.nullable().default(null),
+  direction: policyDirectionSchema.default('bidirectional'),
+  action: policyActionSchema,
+  logging: z.boolean().default(false),
+  owner: z.string().default(''),
+  justification: z.string().default(''),
+  reviewDate: z.iso.date().nullable().default(null),
+  lifecycleState: lifecycleStateSchema,
+  notes: z.string().default(''),
+});
+export type PolicyRule = z.infer<typeof policyRuleSchema>;
