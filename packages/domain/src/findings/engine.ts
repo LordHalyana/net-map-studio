@@ -7,10 +7,12 @@ import { computeFingerprint } from './fingerprint.js';
 import {
   detectionRecordSchema,
   type AnalysisRun,
+  type CorrelationRule,
   type DetectionDraft,
   type DetectionRecord,
   type Rule,
   type RuleContext,
+  type RuleMeta,
 } from './rule.js';
 
 /** Everything the engine needs to run: the committed graph plus its sidecars. */
@@ -48,7 +50,7 @@ export function deriveConfidence(
 }
 
 function assemble(
-  rule: Rule,
+  rule: RuleMeta,
   draft: DetectionDraft,
   settings: RuleSettings,
   configHash: string,
@@ -79,23 +81,40 @@ function assemble(
  * log (ADR-0023): the derived half of a Finding is analysis *of* the model, not
  * a mutation *of* it.
  */
-export function runAnalysis(rules: readonly Rule[], ctx: AnalysisContext): AnalysisRun {
+export function runAnalysis(
+  rules: readonly Rule[],
+  ctx: AnalysisContext,
+  correlationRules: readonly CorrelationRule[] = [],
+): AnalysisRun {
   const configHash = hashConfig(ctx.config);
   const detections: DetectionRecord[] = [];
+  const ruleContext = (settings: RuleSettings): RuleContext => ({
+    state: ctx.state,
+    provenance: ctx.provenance,
+    evidence: ctx.evidence,
+    hostInventories: ctx.hostInventories ?? [],
+    settings,
+    lists: ctx.config.lists,
+  });
+
+  // First pass: per-object detection.
   for (const rule of rules) {
     const settings = resolveRuleSettings(ctx.config, rule.id);
     if (!settings.enabled) continue;
-    const ruleCtx: RuleContext = {
-      state: ctx.state,
-      provenance: ctx.provenance,
-      evidence: ctx.evidence,
-      hostInventories: ctx.hostInventories ?? [],
-      settings,
-      lists: ctx.config.lists,
-    };
-    for (const draft of rule.detect(ruleCtx)) {
+    for (const draft of rule.detect(ruleContext(settings))) {
       detections.push(assemble(rule, draft, settings, configHash, ctx.provenance));
     }
   }
+
+  // Second pass: correlation over the first-pass detections (M10).
+  const firstPass = [...detections];
+  for (const rule of correlationRules) {
+    const settings = resolveRuleSettings(ctx.config, rule.id);
+    if (!settings.enabled) continue;
+    for (const draft of rule.correlate(firstPass, ruleContext(settings))) {
+      detections.push(assemble(rule, draft, settings, configHash, ctx.provenance));
+    }
+  }
+
   return { opSeq: ctx.opSeq, configHash, detections };
 }

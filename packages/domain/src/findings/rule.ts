@@ -84,11 +84,8 @@ export interface RuleContext {
   lists: IndicatorLists;
 }
 
-/**
- * A single versioned detection (ADR-0024). Detection logic is code; its knobs
- * are config. `detect` is pure: same context in, same drafts out.
- */
-export interface Rule {
+/** The metadata every rule (per-object or correlation) stamps onto its findings. */
+export interface RuleMeta {
   id: string;
   ruleVersion: string;
   category: string;
@@ -96,7 +93,25 @@ export interface Rule {
   defaultSeverity: Severity;
   /** Optional classification-framework mapping (design Q9); §3.8 is primary. */
   frameworkRefs?: readonly string[];
+}
+
+/**
+ * A single versioned detection (ADR-0024). Detection logic is code; its knobs
+ * are config. `detect` is pure: same context in, same drafts out.
+ */
+export interface Rule extends RuleMeta {
   detect(ctx: RuleContext): DetectionDraft[];
+}
+
+/**
+ * A second-pass correlation rule (M10): a "finding about findings". It consumes
+ * the first-pass per-object detections plus the graph and emits network-scoped
+ * Findings (affected null, or a Zone/Network endpoint). It never states
+ * confirmed compromise — only that the network *may be* compromised, with the
+ * correlation logic and evidence chain (§3.8).
+ */
+export interface CorrelationRule extends RuleMeta {
+  correlate(detections: readonly DetectionRecord[], ctx: RuleContext): DetectionDraft[];
 }
 
 /**
