@@ -34,22 +34,39 @@ test.describe('workspace shell (M4 DoD)', () => {
 
     const before = await viewport.getAttribute('style');
 
-    // pan by dragging the pane
+    // pan by dragging the pane — from a spot where the pane itself is the hit
+    // target (a device node from another test could sit at the centre)
     const pane = page.locator('.react-flow__pane');
     const box = await pane.boundingBox();
     if (!box) throw new Error('canvas pane not visible');
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const start = await page.evaluate(
+      ({ x, y, width, height }) => {
+        const candidates: [number, number][] = [
+          [x + width / 2, y + 40],
+          [x + width - 60, y + 60],
+          [x + 60, y + height / 2],
+          [x + width / 2, y + height / 2],
+        ];
+        for (const [cx, cy] of candidates) {
+          const el = document.elementFromPoint(cx, cy);
+          if (el?.classList.contains('react-flow__pane')) return { x: cx, y: cy };
+        }
+        return null;
+      },
+      { x: box.x, y: box.y, width: box.width, height: box.height },
+    );
+    if (!start) throw new Error('no empty pane spot found to pan from');
+    await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2 + 80, { steps: 5 });
+    await page.mouse.move(start.x + 120, start.y + 80, { steps: 5 });
     await page.mouse.up();
 
     const afterPan = await viewport.getAttribute('style');
     expect(afterPan).not.toBe(before);
 
-    // zoom via the controls button
-    await page.locator('.react-flow__controls-zoomin').click();
-    const afterZoom = await viewport.getAttribute('style');
-    expect(afterZoom).not.toBe(afterPan);
+    // zoom via the controls button (zoom-out: fitView may already sit at max zoom)
+    await page.locator('.react-flow__controls-zoomout').click();
+    await expect.poll(async () => viewport.getAttribute('style')).not.toBe(afterPan);
   });
 
   test('creating a device appears optimistically and survives a reload', async ({ page }) => {

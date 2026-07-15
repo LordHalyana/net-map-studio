@@ -1,19 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
+  ReactFlowProvider,
   applyNodeChanges,
+  useReactFlow,
   type Node,
   type NodeChange,
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { deviceTypeSchema } from '@netplan/domain';
 import { useAppStore } from '../state/store';
-import { opSetField } from '../state/ops';
+import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
 import { DeviceNode, type DeviceFlowNode } from './DeviceNode';
+import { DND_MIME } from '../layout/LibraryPanel';
 
 const nodeTypes = { device: DeviceNode };
 
@@ -26,21 +30,26 @@ function deviceNodesFromGraph(devices: DeviceFlowNode['data']['device'][]): Node
   }));
 }
 
-export function Canvas() {
+function CanvasInner() {
   const graph = useAppStore((s) => s.graph);
   const project = useAppStore((s) => s.project);
   const dispatch = useAppStore((s) => s.dispatch);
   const select = useAppStore((s) => s.select);
+  const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes] = useState<Node[]>([]);
 
   const graphNodes = useMemo(() => deviceNodesFromGraph(graph?.devices ?? []), [graph]);
 
-  // Adopt graph-derived nodes, preserving live drag positions React Flow holds.
+  // Adopt graph-derived nodes, preserving live drag/selection state React Flow holds.
   useEffect(() => {
     setNodes((current) => {
-      const dragging = new Map(current.filter((n) => n.dragging).map((n) => [n.id, n]));
-      return graphNodes.map((node) => dragging.get(node.id) ?? node);
+      const byId = new Map(current.map((n) => [n.id, n]));
+      return graphNodes.map((node) => {
+        const existing = byId.get(node.id);
+        if (existing?.dragging) return existing;
+        return existing?.selected ? { ...node, selected: true } : node;
+      });
     });
   }, [graphNodes]);
 
@@ -64,10 +73,52 @@ export function Canvas() {
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
-      const first = selectedNodes[0];
-      select(first ? { entityType: 'device', id: first.id } : null);
+      select(
+        selectedNodes.length > 0
+          ? { entityType: 'device', ids: selectedNodes.map((n) => n.id) }
+          : null,
+      );
     },
     [select],
+  );
+
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      const state = useAppStore.getState().graph;
+      if (!state) return;
+      const cs = deleteDevicesChangeSet(
+        state,
+        deleted.map((n) => n.id),
+      );
+      if (cs) dispatch(cs);
+    },
+    [dispatch],
+  );
+
+  const onDragOver = useCallback((event: DragEvent) => {
+    if (event.dataTransfer.types.includes(DND_MIME)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const onDrop = useCallback(
+    (event: DragEvent) => {
+      if (!project || !graph) return;
+      const raw = event.dataTransfer.getData(DND_MIME);
+      const parsed = deviceTypeSchema.safeParse(raw);
+      if (!parsed.success) return;
+      event.preventDefault();
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const device = buildDevice(
+        project.id,
+        parsed.data,
+        position,
+        new Set(graph.devices.map((d) => d.name)),
+      );
+      dispatch(opCreateDevice(project.id, device));
+    },
+    [project, graph, dispatch, screenToFlowPosition],
   );
 
   return (
@@ -79,6 +130,11 @@ export function Canvas() {
         onNodesChange={onNodesChange}
         onNodeDragStop={onNodeDragStop}
         onSelectionChange={onSelectionChange}
+        onNodesDelete={onNodesDelete}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        deleteKeyCode={['Delete', 'Backspace']}
+        multiSelectionKeyCode={['Shift', 'Control']}
         colorMode="dark"
         snapToGrid
         snapGrid={[16, 16]}
@@ -91,5 +147,13 @@ export function Canvas() {
         <Controls />
       </ReactFlow>
     </main>
+  );
+}
+
+export function Canvas() {
+  return (
+    <ReactFlowProvider>
+      <CanvasInner />
+    </ReactFlowProvider>
   );
 }

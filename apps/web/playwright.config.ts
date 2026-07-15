@@ -8,6 +8,8 @@ const e2eDbFile = path.join(here, 'e2e', '.e2e-data', 'netplan-e2e.db');
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
+  // All tests share one server + database; parallel workers would interfere.
+  workers: 1,
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: 'http://127.0.0.1:5173',

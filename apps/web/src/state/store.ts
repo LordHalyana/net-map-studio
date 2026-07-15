@@ -18,7 +18,7 @@ import { applyOperationOptimistic } from './reducer';
 
 export interface Selection {
   entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule';
-  id: string;
+  ids: string[];
 }
 
 interface AppState {
