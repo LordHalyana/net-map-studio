@@ -24,7 +24,6 @@ import {
   type Device,
   type Flow,
   type Identity,
-  type Service,
 } from '../entities.js';
 import {
   operationSchema,
@@ -48,7 +47,6 @@ import type {
   DeviceCandidate,
   FieldValueCandidate,
   FlowCandidate,
-  IdentityCandidate,
 } from './candidates.js';
 
 /**
@@ -94,6 +92,11 @@ export const importProposalSchema = z.object({
 });
 export type ImportProposal = z.infer<typeof importProposalSchema>;
 
+/** Read an entity's fields generically, without a type assertion. */
+function recordOf(entity: unknown): Record<string, FieldValue> {
+  return z.record(z.string(), fieldValueSchema).parse(JSON.parse(JSON.stringify(entity)));
+}
+
 // ---------------------------------------------------------------------------
 // matching against the committed graph
 // ---------------------------------------------------------------------------
@@ -136,7 +139,7 @@ function indexExisting(state: ProjectState): ExistingIndex {
     index.identityByKey.set(existingIdentityKey(identity, deviceById), identity);
   }
   for (const flow of state.flows) {
-    index.flowByKey.set(existingFlowKey(flow, state), flow);
+    index.flowByKey.set(existingFlowKey(flow), flow);
   }
   return index;
 }
@@ -155,7 +158,7 @@ function flowEndpointLabel(endpoint: FlowEndpoint): string {
     : `${endpoint.kind}:${endpoint.id}`;
 }
 
-function existingFlowKey(flow: Flow, _state: ProjectState): string {
+function existingFlowKey(flow: Flow): string {
   return `${flowEndpointLabel(flow.source)}->${flowEndpointLabel(flow.destination)}:${flow.protocol}/${flow.port ?? 'any'}`;
 }
 
@@ -248,9 +251,7 @@ export function buildProposal(
       const fieldDiffs = Object.entries(candidate.fields)
         .map(([field, values]) => {
           const proposedValue = values[0]?.value ?? null;
-          const existingValue = fieldValueSchema.parse(
-            (existing as unknown as Record<string, unknown>)[field] ?? null,
-          );
+          const existingValue = recordOf(existing)[field] ?? null;
           return { field, existingValue, proposedValue };
         })
         .filter(
@@ -597,7 +598,7 @@ function dropCandidate(proposal: ImportProposal, candidateKey: string): void {
 
 function referencesAny(operation: Operation, ids: Set<string>): boolean {
   if (operation.kind !== 'CreateEntity') return false;
-  const entity = operation.payload.entity as unknown as Record<string, unknown>;
+  const entity = recordOf(operation.payload.entity);
   for (const key of ['deviceId', 'interfaceId', 'identityId', 'serviceId']) {
     const value = entity[key];
     if (typeof value === 'string' && ids.has(value)) return true;
@@ -648,7 +649,7 @@ function mergeDevice(
   proposal.entityIds[conflict.candidateKey] = existing.id;
 
   // rewrite the Create into SetFields on the existing object (ADR-0021)
-  const existingRecord = existing as unknown as Record<string, unknown>;
+  const existingRecord = recordOf(existing);
   for (const field of MERGEABLE_DEVICE_FIELDS) {
     const proposed = winning(candidate.fields, field);
     if (proposed === undefined) continue;
