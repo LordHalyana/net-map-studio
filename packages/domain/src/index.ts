@@ -4,5 +4,6 @@ export * from './endpoints.js';
 export * from './entities.js';
 export * from './operations.js';
 export * from './state.js';
+export * from './rule-validation.js';
 export * from './invert.js';
 export * from './seams.js';

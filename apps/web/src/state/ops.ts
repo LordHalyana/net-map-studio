@@ -13,6 +13,10 @@ import {
   newId,
   operationIdSchema,
   operationSchema,
+  policyRuleIdSchema,
+  policyRuleSchema,
+  serviceIdSchema,
+  serviceSchema,
   siteIdSchema,
   siteSchema,
   zoneIdSchema,
@@ -28,9 +32,11 @@ import {
   type Network,
   type NetworkId,
   type Operation,
+  type PolicyRule,
   type Position,
   type ProjectId,
   type ProjectState,
+  type Service,
   type SettableEntityType,
   type Site,
   type Zone,
@@ -119,6 +125,48 @@ export function opDeleteLink(projectId: ProjectId, link: Link): Operation {
     linkId: link.id,
     snapshot: link,
   };
+}
+
+export function opCreatePolicyRule(projectId: ProjectId, rule: PolicyRule): Operation {
+  return { id: newId(operationIdSchema), projectId, kind: 'CreatePolicyRule', rule };
+}
+
+export function opDeletePolicyRule(projectId: ProjectId, rule: PolicyRule): Operation {
+  return {
+    id: newId(operationIdSchema),
+    projectId,
+    kind: 'DeletePolicyRule',
+    ruleId: rule.id,
+    snapshot: rule,
+  };
+}
+
+export function buildService(
+  projectId: ProjectId,
+  fields: Pick<Service, 'name' | 'protocol'> &
+    Partial<Pick<Service, 'portStart' | 'portEnd' | 'process'>>,
+): Service {
+  return serviceSchema.parse({
+    id: newId(serviceIdSchema),
+    projectId,
+    ...fields,
+    portEnd: fields.portEnd ?? fields.portStart ?? null,
+  });
+}
+
+/** PolicyRule endpoints are polymorphic (ADR-0012): network-to-network is the norm. */
+export function buildPolicyRule(
+  projectId: ProjectId,
+  fields: Pick<PolicyRule, 'source' | 'destination' | 'action'> &
+    Partial<
+      Pick<PolicyRule, 'name' | 'serviceId' | 'direction' | 'logging' | 'owner' | 'justification'>
+    >,
+): PolicyRule {
+  return policyRuleSchema.parse({
+    id: newId(policyRuleIdSchema),
+    projectId,
+    ...fields,
+  });
 }
 
 /** A Link's endpoints are always Interfaces (ADR-0012). */
