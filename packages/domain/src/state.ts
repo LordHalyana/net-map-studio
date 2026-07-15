@@ -15,6 +15,7 @@ import {
   zoneSchema,
 } from './entities.js';
 import { operationSchema } from './operations.js';
+import { findingDispositionSchema } from './findings/disposition.js';
 
 /**
  * A full project graph. Authoritative state lives in the server's entity
@@ -36,6 +37,8 @@ export const projectStateSchema = z.object({
   flows: z.array(flowSchema).default([]),
   identities: z.array(identitySchema).default([]),
   roleAssignments: z.array(roleAssignmentSchema).default([]),
+  /** Phase-3 finding dispositions (ADR-0023) — the persisted analyst decisions. */
+  findingDispositions: z.array(findingDispositionSchema).default([]),
 });
 export type ProjectState = z.infer<typeof projectStateSchema>;
 

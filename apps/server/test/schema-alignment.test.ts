@@ -16,6 +16,7 @@ import {
 import {
   evidenceSchema,
   fieldProvenanceSchema,
+  findingDispositionSchema,
   flowSchema,
   identitySchema,
   importJobSchema,
@@ -28,6 +29,7 @@ import {
   makeDevice,
   makeEvidence,
   makeFieldProvenance,
+  makeFindingDisposition,
   makeFlow,
   makeIdentity,
   makeImportJob,
@@ -46,6 +48,7 @@ import {
   entityTables,
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
+  findingDispositions as findingDispositionsTable,
   importJobs as importJobsTable,
   importProposals as importProposalsTable,
   observations as observationsTable,
@@ -153,6 +156,30 @@ describe('import-spine tables align with domain Zod schemas (ADR-0017, plan M1)'
     expect(fieldProvenanceSchema.parse(db.select().from(fieldProvenanceTable).get())).toEqual(
       provenance,
     );
+  });
+});
+
+describe('findings tables align with domain Zod schemas (ADR-0023, plan M2)', () => {
+  const disposition = makeFindingDisposition(project.id, { status: 'falsePositive' });
+
+  it('finding_dispositions table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(findingDispositionsTable)).sort();
+    const schemaKeys = Object.keys(findingDispositionSchema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('a disposition fixture satisfies the drizzle select schema', () => {
+    const selectSchema = createSelectSchema(findingDispositionsTable);
+    expect(selectSchema.safeParse(disposition).success).toBe(true);
+  });
+
+  it('a disposition round-trips through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(findingDispositionsTable).values(disposition).run();
+    expect(
+      findingDispositionSchema.parse(db.select().from(findingDispositionsTable).get()),
+    ).toEqual(disposition);
   });
 });
 

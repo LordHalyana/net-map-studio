@@ -1,0 +1,79 @@
+import { z } from 'zod';
+import type { DeviceId } from '../ids.js';
+import type { ProjectState } from '../state.js';
+
+/**
+ * The classes of input a rule family needs. Coverage tracking (plan M2/M9)
+ * records which classes were available per Device this run, so the
+ * collection-quality rule (M9) can flag a rule family as **not-evaluated**
+ * rather than silently **passed** when its input is missing, and the UI (M11)
+ * can surface per-device evaluability.
+ */
+export const inputClassSchema = z.enum([
+  'listeningServices',
+  'processes',
+  'persistence',
+  'installedSoftware',
+  'remoteAccess',
+  'fileInventory',
+  'flows',
+  'identities',
+  'roleAssignments',
+]);
+export type InputClass = z.infer<typeof inputClassSchema>;
+
+export const ALL_INPUT_CLASSES: readonly InputClass[] = inputClassSchema.options;
+
+export interface DeviceCoverage {
+  deviceId: DeviceId;
+  deviceName: string;
+  available: InputClass[];
+  missing: InputClass[];
+}
+
+/**
+ * Derive per-Device coverage from the committed graph. A class counts as
+ * available when the graph holds evidence-derived entities of that class for
+ * the Device.
+ *
+ * Note (seam for M9/M5/M6): the process / persistence / installed-software /
+ * file-inventory classes are optional device-state fields (ADR-0018) that are
+ * not yet parsed into entities, so they read as missing until those families
+ * land. When they do, this function is where their availability is wired in.
+ */
+export function computeDeviceCoverage(state: ProjectState): DeviceCoverage[] {
+  const serviceDeviceIds = new Set(
+    state.services.map((s) => s.deviceId).filter((id): id is NonNullable<typeof id> => id != null),
+  );
+  const flowDeviceIds = new Set<string>();
+  for (const flow of state.flows) {
+    for (const endpoint of [flow.source, flow.destination]) {
+      if (endpoint.kind === 'device') flowDeviceIds.add(endpoint.id);
+    }
+  }
+  const identityDeviceIds = new Set(
+    state.identities
+      .map((i) => i.deviceId)
+      .filter((id): id is NonNullable<typeof id> => id != null),
+  );
+  const roleDeviceIds = new Set(
+    state.roleAssignments
+      .map((r) => r.deviceId)
+      .filter((id): id is NonNullable<typeof id> => id != null),
+  );
+
+  return state.devices.map((device) => {
+    const present = new Set<InputClass>();
+    if (serviceDeviceIds.has(device.id)) present.add('listeningServices');
+    if (flowDeviceIds.has(device.id)) present.add('flows');
+    if (identityDeviceIds.has(device.id)) present.add('identities');
+    if (roleDeviceIds.has(device.id)) present.add('roleAssignments');
+
+    return {
+      deviceId: device.id,
+      deviceName: device.name,
+      available: ALL_INPUT_CLASSES.filter((c) => present.has(c)),
+      missing: ALL_INPUT_CLASSES.filter((c) => !present.has(c)),
+    };
+  });
+}

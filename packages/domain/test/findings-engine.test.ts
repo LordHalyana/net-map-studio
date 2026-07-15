@@ -44,6 +44,7 @@ function buildContext(overrides: Partial<AnalysisContext> = {}): AnalysisContext
     flows: [],
     identities: [],
     roleAssignments: [],
+    findingDispositions: [],
   };
   return {
     state,

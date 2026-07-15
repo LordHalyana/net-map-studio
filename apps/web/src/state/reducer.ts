@@ -33,6 +33,11 @@ export function applyOperationOptimistic(state: ProjectState, op: Operation): Pr
         ...state,
         devices: state.devices.map((d) => (d.id === op.deviceId ? { ...d, zoneId: op.zoneId } : d)),
       };
+    case 'SetFindingStatus':
+    case 'SetFindingNote':
+      // Finding disposition is not canvas state (ADR-0023): the findings view
+      // refetches after the authoritative response, so nothing to mirror here.
+      return state;
   }
 }
 

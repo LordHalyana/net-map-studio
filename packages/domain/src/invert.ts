@@ -56,5 +56,21 @@ export const invertOperation: InvertOperation = (op, inverseOpId) => {
         zoneId: op.previousZoneId,
         previousZoneId: op.zoneId,
       };
+    case 'SetFindingStatus':
+      return {
+        ...base,
+        kind: 'SetFindingStatus',
+        fingerprint: op.fingerprint,
+        status: op.previousStatus,
+        previousStatus: op.status,
+      };
+    case 'SetFindingNote':
+      return {
+        ...base,
+        kind: 'SetFindingNote',
+        fingerprint: op.fingerprint,
+        note: op.previousNote,
+        previousNote: op.note,
+      };
   }
 };

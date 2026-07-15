@@ -42,6 +42,7 @@ function emptyState(): ProjectState {
     flows: [],
     identities: [],
     roleAssignments: [],
+    findingDispositions: [],
   };
 }
 

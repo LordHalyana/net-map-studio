@@ -5,3 +5,6 @@ export * from './rule.js';
 export * from './engine.js';
 export * from './registry.js';
 export * from './fixture-rule.js';
+export * from './disposition.js';
+export * from './reconcile.js';
+export * from './coverage.js';

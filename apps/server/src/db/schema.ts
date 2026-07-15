@@ -4,6 +4,7 @@ import type {
   EvidenceContentClass,
   EvidenceRetention,
   FieldValue,
+  FindingStatus,
   FlowEndpoint,
   ImportConflict,
   Operation,
@@ -369,6 +370,22 @@ export const changeSets = sqliteTable('change_sets', {
     .references(() => projects.id),
   label: text('label').notNull(),
   createdAt: text('created_at').notNull(),
+});
+
+/**
+ * The persisted half of a Finding (ADR-0023): the analyst disposition, keyed by
+ * Fingerprint (unique per project). The derived detection is never stored — it
+ * is recomputed each run and joined to this row by fingerprint. Mutated only
+ * through the Operation log, so status/note changes are undoable and audited.
+ */
+export const findingDispositions = sqliteTable('finding_dispositions', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  fingerprint: text('fingerprint').notNull(),
+  status: text('status').$type<FindingStatus>().notNull(),
+  notes: text('notes').notNull(),
 });
 
 export const entityTables = {

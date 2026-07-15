@@ -23,6 +23,10 @@ function describeOperation(op: Operation): string {
       return op.networkId ? 'Assign interface to network' : 'Clear interface network';
     case 'SetContainment':
       return op.zoneId ? 'Place device in zone' : 'Remove device from zone';
+    case 'SetFindingStatus':
+      return `Set finding status to ${op.status}`;
+    case 'SetFindingNote':
+      return 'Edit finding note';
   }
 }
 

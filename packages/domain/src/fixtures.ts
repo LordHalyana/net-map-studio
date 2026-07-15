@@ -5,6 +5,8 @@ import {
   evidenceSchema,
   fieldProvenanceIdSchema,
   fieldProvenanceSchema,
+  findingDispositionSchema,
+  findingIdSchema,
   flowIdSchema,
   flowSchema,
   identityIdSchema,
@@ -38,6 +40,7 @@ import {
   type Device,
   type Evidence,
   type FieldProvenance,
+  type FindingDisposition,
   type Flow,
   type Identity,
   type ImportJob,
@@ -279,6 +282,20 @@ export function makePolicyRule(
     source: { kind: 'network', id: source.id },
     destination: { kind: 'network', id: destination.id },
     action: 'allow',
+    ...overrides,
+  });
+}
+
+export function makeFindingDisposition(
+  projectId: ProjectId,
+  overrides: Partial<FindingDisposition> = {},
+): FindingDisposition {
+  return findingDispositionSchema.parse({
+    id: newId(findingIdSchema),
+    projectId,
+    fingerprint: 'fixture-fingerprint',
+    status: 'new',
+    notes: '',
     ...overrides,
   });
 }

@@ -3,6 +3,9 @@ import {
   addressSchema,
   changeSetSchema,
   deviceSchema,
+  findingDispositionSchema,
+  findingIdSchema,
+  findingStatusSchema,
   flowEndpointSchema,
   flowSchema,
   identitySchema,
@@ -51,6 +54,7 @@ import {
   evidence,
   evidenceBlobs,
   fieldProvenance,
+  findingDispositions,
   flows,
   identities,
   importJobs,
@@ -254,6 +258,13 @@ export function createEngine(db: Db) {
         .orderBy(asc(roleAssignments.id))
         .all()
         .map((r) => roleAssignmentSchema.parse(r)),
+      findingDispositions: db
+        .select()
+        .from(findingDispositions)
+        .where(eq(findingDispositions.projectId, projectId))
+        .orderBy(asc(findingDispositions.id))
+        .all()
+        .map((r) => findingDispositionSchema.parse(r)),
     };
   }
 
@@ -302,6 +313,7 @@ export function createEngine(db: Db) {
       tx.delete(evidence).where(eq(evidence.projectId, projectId)).run();
       tx.delete(importJobs).where(eq(importJobs.projectId, projectId)).run();
       tx.delete(fieldProvenance).where(eq(fieldProvenance.projectId, projectId)).run();
+      tx.delete(findingDispositions).where(eq(findingDispositions.projectId, projectId)).run();
       tx.delete(operationLog).where(eq(operationLog.projectId, projectId)).run();
       tx.delete(changeSets).where(eq(changeSets.projectId, projectId)).run();
       tx.delete(roleAssignments).where(eq(roleAssignments.projectId, projectId)).run();
@@ -880,7 +892,64 @@ export function createEngine(db: Db) {
         tx.update(devices).set({ zoneId: op.zoneId }).where(eq(devices.id, op.deviceId)).run();
         return { ...op, previousZoneId: previous.zoneId };
       }
+      case 'SetFindingStatus': {
+        const existing = findDisposition(tx, op.projectId, op.fingerprint);
+        if (existing) {
+          const previousStatus = findingStatusSchema.parse(existing.status);
+          tx.update(findingDispositions)
+            .set({ status: op.status })
+            .where(eq(findingDispositions.id, existing.id))
+            .run();
+          return { ...op, previousStatus };
+        }
+        // First disposition of this fingerprint: create the row (started at `new`).
+        tx.insert(findingDispositions)
+          .values({
+            id: newId(findingIdSchema),
+            projectId: op.projectId,
+            fingerprint: op.fingerprint,
+            status: op.status,
+            notes: '',
+          })
+          .run();
+        return { ...op, previousStatus: 'new' };
+      }
+      case 'SetFindingNote': {
+        const existing = findDisposition(tx, op.projectId, op.fingerprint);
+        if (existing) {
+          const previousNote = existing.notes;
+          tx.update(findingDispositions)
+            .set({ notes: op.note })
+            .where(eq(findingDispositions.id, existing.id))
+            .run();
+          return { ...op, previousNote };
+        }
+        tx.insert(findingDispositions)
+          .values({
+            id: newId(findingIdSchema),
+            projectId: op.projectId,
+            fingerprint: op.fingerprint,
+            status: 'new',
+            notes: op.note,
+          })
+          .run();
+        return { ...op, previousNote: '' };
+      }
     }
+  }
+
+  /** The disposition row for a fingerprint in a project, if the operator has touched it. */
+  function findDisposition(tx: Tx, projectId: string, fingerprint: string) {
+    return tx
+      .select()
+      .from(findingDispositions)
+      .where(
+        and(
+          eq(findingDispositions.projectId, projectId),
+          eq(findingDispositions.fingerprint, fingerprint),
+        ),
+      )
+      .get();
   }
 
   function entityPayloadFromRow(
@@ -1098,6 +1167,8 @@ export function createEngine(db: Db) {
       for (const identity of parsed.identities) tx.insert(identities).values(identity).run();
       for (const assignment of parsed.roleAssignments)
         tx.insert(roleAssignments).values(assignment).run();
+      for (const disposition of parsed.findingDispositions)
+        tx.insert(findingDispositions).values(disposition).run();
     });
     return parsed.project;
   }
