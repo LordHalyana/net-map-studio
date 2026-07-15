@@ -15,6 +15,7 @@ import {
   zoneSchema,
 } from '@netplan/domain';
 import {
+  changeSetRecordSchema,
   egressAuditRecordSchema,
   egressSettingsSchema,
   threatIntelLocalFeedSchema,
@@ -52,6 +53,7 @@ import {
   makeZone,
 } from '@netplan/domain/fixtures';
 import {
+  changeSets as changeSetsTable,
   egressAuditRecords as egressAuditRecordsTable,
   egressSettings as egressSettingsTable,
   threatIntelLocalFeeds as threatIntelLocalFeedsTable,
@@ -242,6 +244,31 @@ describe('egress tables align with domain Zod schemas (ADR-0027, plan P4-M1)', (
     expect(
       threatIntelLocalFeedSchema.parse(db.select().from(threatIntelLocalFeedsTable).get()),
     ).toEqual(feed);
+  });
+});
+
+describe('changeSet records align with the domain schema (P4-M6)', () => {
+  const record = changeSetRecordSchema.parse({
+    id: '01920000-0000-7000-8000-000000000001',
+    projectId: project.id,
+    label: 'TO-BE proposal',
+    createdAt: '2026-07-15T00:00:00.000Z',
+    reviewStatus: 'proposed',
+    reviewedAt: '2026-07-15T01:00:00.000Z',
+    reviewNote: 'awaiting sign-off',
+  });
+
+  it('change_sets table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(changeSetsTable)).sort();
+    const schemaKeys = Object.keys(changeSetRecordSchema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('a changeSet record round-trips through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(changeSetsTable).values(record).run();
+    expect(changeSetRecordSchema.parse(db.select().from(changeSetsTable).get())).toEqual(record);
   });
 });
 

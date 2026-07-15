@@ -27,6 +27,8 @@ function describeOperation(op: Operation): string {
       return `Set finding status to ${op.status}`;
     case 'SetFindingNote':
       return 'Edit finding note';
+    case 'SetChangeSetReviewStatus':
+      return `Set proposal review status to ${op.status}`;
   }
 }
 

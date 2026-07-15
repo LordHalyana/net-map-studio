@@ -234,6 +234,10 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       // Manual override (M8): one SetField through engine.applyChangeSetWith
       // plus its provenance row — the same spine, fully undoable.
       'POST /projects/:id/provenance/override',
+      // Proposal registration (P4-M6): workspace bookkeeping like project
+      // CRUD — creates a draft ChangeSet shell, applies nothing. Transitions
+      // and the eventual apply go through POST /operations (the engine gate).
+      'POST /projects/:id/changesets',
       // Egress door settings (ADR-0027, P4-M1): tool configuration, not model
       // state — no entity table is touched. Guarded by the disclosure gate;
       // every call through the door writes an append-only audit record.

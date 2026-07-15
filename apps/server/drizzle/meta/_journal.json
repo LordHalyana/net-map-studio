@@ -71,6 +71,13 @@
       "when": 1784154588361,
       "tag": "0009_tough_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784155085741,
+      "tag": "0010_romantic_kulan_gath",
+      "breakpoints": true
     }
   ]
 }

@@ -204,6 +204,22 @@ export async function buildApp(options: AppOptions = {}) {
     return { ...result, state: engine.getState(id) };
   });
 
+  // ---------- Proposal ChangeSets & the sign-off seam (P4-M6, ADR-0026) ----------
+
+  // Register a proposal shell (draft). Status transitions are Operations
+  // (SetChangeSetReviewStatus via POST /operations); the engine refuses to
+  // apply a registered proposal that is not approved.
+  app.post('/projects/:id/changesets', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = z.object({ label: z.string().min(1) }).parse(request.body ?? {});
+    return reply.status(201).send(engine.registerChangeSet(id, body.label));
+  });
+
+  app.get('/projects/:id/changesets', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return engine.listChangeSets(id);
+  });
+
   app.post('/projects/:id/undo', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
     const result = engine.undo(id);

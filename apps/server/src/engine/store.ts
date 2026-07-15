@@ -2,6 +2,8 @@ import { and, asc, eq } from 'drizzle-orm';
 import {
   addressSchema,
   baselineSchema,
+  changeSetIdSchema,
+  changeSetRecordSchema,
   changeSetSchema,
   deviceSchema,
   findingDispositionSchema,
@@ -27,6 +29,7 @@ import {
   invertOperation,
   type Address,
   type ChangeSet,
+  type ChangeSetRecord,
   type Device,
   type Endpoint,
   type EntityPayload,
@@ -966,6 +969,30 @@ export function createEngine(db: Db) {
           .run();
         return { ...op, previousNote: '' };
       }
+      case 'SetChangeSetReviewStatus': {
+        // P4-M6: the sign-off transition. No one-way transition graph is
+        // enforced here — undo/redo must re-apply reverse transitions; the
+        // real invariant is the apply gate (only `approved` ChangeSets apply).
+        const row = tx
+          .select()
+          .from(changeSets)
+          .where(and(eq(changeSets.id, op.changeSetId), eq(changeSets.projectId, op.projectId)))
+          .get();
+        if (!row) {
+          throw new OperationError('NOT_FOUND', `ChangeSet ${op.changeSetId} not found`);
+        }
+        const previousStatus = row.reviewStatus ?? 'draft';
+        const previousNote = row.reviewNote;
+        tx.update(changeSets)
+          .set({
+            reviewStatus: op.status,
+            reviewNote: op.note,
+            reviewedAt: new Date().toISOString(),
+          })
+          .where(eq(changeSets.id, op.changeSetId))
+          .run();
+        return { ...op, previousStatus, previousNote };
+      }
     }
   }
 
@@ -1103,14 +1130,39 @@ export function createEngine(db: Db) {
       throw new OperationError('INVALID', 'ChangeSet contains operations for another project');
     }
     const applied = db.transaction((tx) => {
-      tx.insert(changeSets)
-        .values({
-          id: parsed.id,
-          projectId: parsed.projectId,
-          label: parsed.label,
-          createdAt: new Date().toISOString(),
-        })
-        .run();
+      const registered = tx.select().from(changeSets).where(eq(changeSets.id, parsed.id)).get();
+      if (registered) {
+        // The sign-off gate (P4-M6, ADR-0026): a registered proposal ChangeSet
+        // applies to AS-IS only once the operator has approved it.
+        if (registered.projectId !== parsed.projectId) {
+          throw new OperationError('INVALID', 'ChangeSet is registered under another project');
+        }
+        if (registered.reviewStatus !== 'approved') {
+          throw new OperationError(
+            'CONFLICT',
+            `ChangeSet ${parsed.id} is ${registered.reviewStatus ?? 'already applied'}, not approved — sign-off is required before applying a proposal`,
+          );
+        }
+        const alreadyApplied = tx
+          .select({ id: operationLog.id })
+          .from(operationLog)
+          .where(and(eq(operationLog.changeSetId, parsed.id), eq(operationLog.role, 'do')))
+          .get();
+        if (alreadyApplied) {
+          throw new OperationError('CONFLICT', `ChangeSet ${parsed.id} was already applied`);
+        }
+      } else {
+        // unregistered = applied directly without entering review (imports,
+        // ad-hoc batches); reviewStatus stays null
+        tx.insert(changeSets)
+          .values({
+            id: parsed.id,
+            projectId: parsed.projectId,
+            label: parsed.label,
+            createdAt: new Date().toISOString(),
+          })
+          .run();
+      }
       const ops = parsed.operations.map((op) => {
         const enriched = applyOne(tx, op);
         appendLog(tx, enriched, 'do', parsed.id, null);
@@ -1129,6 +1181,39 @@ export function createEngine(db: Db) {
   /** Run arbitrary writes in one transaction (import-spine bookkeeping only). */
   function withTransaction<T>(fn: (tx: Tx) => T): T {
     return db.transaction((tx) => fn(tx));
+  }
+
+  /**
+   * Register a proposal ChangeSet shell (P4-M6): a named intent to change
+   * AS-IS, starting in `draft` with no operations applied. Like project
+   * creation this is workspace bookkeeping, not a model mutation — the model
+   * changes only when the approved proposal's operations apply. Status
+   * transitions from here on are logged Operations (I3).
+   */
+  function registerChangeSet(projectId: string, label: string): ChangeSetRecord {
+    requireProject(projectId);
+    const record = changeSetRecordSchema.parse({
+      id: newId(changeSetIdSchema),
+      projectId,
+      label,
+      createdAt: new Date().toISOString(),
+      reviewStatus: 'draft',
+      reviewedAt: null,
+      reviewNote: '',
+    });
+    db.insert(changeSets).values(record).run();
+    return record;
+  }
+
+  function listChangeSets(projectId: string): ChangeSetRecord[] {
+    requireProject(projectId);
+    return db
+      .select()
+      .from(changeSets)
+      .where(eq(changeSets.projectId, projectId))
+      .orderBy(asc(changeSets.id))
+      .all()
+      .map((row) => changeSetRecordSchema.parse(row));
   }
 
   function undo(projectId: string): ApplyResult | null {
@@ -1494,6 +1579,8 @@ export function createEngine(db: Db) {
     applyOperation,
     applyChangeSet,
     applyChangeSetWith,
+    registerChangeSet,
+    listChangeSets,
     withTransaction,
     undo,
     redo,

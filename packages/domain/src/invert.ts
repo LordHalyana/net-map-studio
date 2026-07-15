@@ -72,5 +72,15 @@ export const invertOperation: InvertOperation = (op, inverseOpId) => {
         note: op.previousNote,
         previousNote: op.note,
       };
+    case 'SetChangeSetReviewStatus':
+      return {
+        ...base,
+        kind: 'SetChangeSetReviewStatus',
+        changeSetId: op.changeSetId,
+        status: op.previousStatus,
+        note: op.previousNote,
+        previousStatus: op.status,
+        previousNote: op.note,
+      };
   }
 };

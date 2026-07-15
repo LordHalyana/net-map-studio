@@ -1,6 +1,7 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   BaselineScope,
+  ChangeSetReviewStatus,
   ConfidenceContributor,
   EgressCallOutcome,
   EvidenceContentClass,
@@ -371,6 +372,12 @@ export const operationLog = sqliteTable('operation_log', {
   createdAt: text('created_at').notNull(),
 });
 
+/**
+ * ChangeSet rows now carry the review-status seam (P4-M6, ADR-0026):
+ * `review_status` is null for ChangeSets applied directly without review;
+ * registered proposals start at 'draft' and must reach 'approved' before the
+ * engine will apply them.
+ */
 export const changeSets = sqliteTable('change_sets', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
@@ -378,6 +385,9 @@ export const changeSets = sqliteTable('change_sets', {
     .references(() => projects.id),
   label: text('label').notNull(),
   createdAt: text('created_at').notNull(),
+  reviewStatus: text('review_status').$type<ChangeSetReviewStatus>(),
+  reviewedAt: text('reviewed_at'),
+  reviewNote: text('review_note').notNull().default(''),
 });
 
 /**
