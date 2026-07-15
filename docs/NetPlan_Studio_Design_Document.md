@@ -178,26 +178,26 @@ Multiple services between the same source and destination should be stored as se
 
 The canonical project model should include the following entities:
 
-| Entity | Purpose |
-|---|---|
-| Project | Top-level workspace, settings, ownership and history. |
-| Site | Building, customer location or logical environment. |
-| Zone | Floor, room, rack, network zone or trust boundary. |
-| Device | Hardware, virtual appliance, endpoint or logical service. |
-| Interface | Physical or virtual network interface. |
-| Address | MAC, IPv4, IPv6, hostname and aliases. |
-| Network | Subnet, VLAN, SSID, routing domain or address pool. |
-| Link | Physical or logical relationship between interfaces or devices. |
-| Service | Protocol, port, process and listening/advertised service. |
-| Flow | Observed source-to-destination communication. |
-| PolicyRule | Intended allow/deny/monitor rule. |
-| Identity | Windows/Linux user, group, service account or domain identity. |
-| RoleAssignment | Mapping between an identity, privilege, device and scope. |
-| Evidence | Source file, line/chunk reference, timestamp and parser metadata. |
-| Finding | Security, quality, conflict or design warning. |
-| ImportJob | Import status, parser version, mapping result and rollback boundary. |
-| ChangeSet | Manual or automatic project changes grouped for review. |
-| Report | Generated summary, diagram or export package. |
+| Entity         | Purpose                                                              |
+| -------------- | -------------------------------------------------------------------- |
+| Project        | Top-level workspace, settings, ownership and history.                |
+| Site           | Building, customer location or logical environment.                  |
+| Zone           | Floor, room, rack, network zone or trust boundary.                   |
+| Device         | Hardware, virtual appliance, endpoint or logical service.            |
+| Interface      | Physical or virtual network interface.                               |
+| Address        | MAC, IPv4, IPv6, hostname and aliases.                               |
+| Network        | Subnet, VLAN, SSID, routing domain or address pool.                  |
+| Link           | Physical or logical relationship between interfaces or devices.      |
+| Service        | Protocol, port, process and listening/advertised service.            |
+| Flow           | Observed source-to-destination communication.                        |
+| PolicyRule     | Intended allow/deny/monitor rule.                                    |
+| Identity       | Windows/Linux user, group, service account or domain identity.       |
+| RoleAssignment | Mapping between an identity, privilege, device and scope.            |
+| Evidence       | Source file, line/chunk reference, timestamp and parser metadata.    |
+| Finding        | Security, quality, conflict or design warning.                       |
+| ImportJob      | Import status, parser version, mapping result and rollback boundary. |
+| ChangeSet      | Manual or automatic project changes grouped for review.              |
+| Report         | Generated summary, diagram or export package.                        |
 
 Every imported or inferred field should store:
 
@@ -588,38 +588,40 @@ The first usable release is complete when an operator can:
 
 ## 5. Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Incomplete or inconsistent scans | Incorrect or misleading topology | Confidence scores, evidence provenance, reconciliation queue and manual verification states. |
-| Dynamic IP addressing causes duplicate devices | Inflated inventory and wrong links | Prefer stable identifiers, correlate within time windows and never auto-merge ambiguous records. |
-| Packet captures produce excessive data | Slow imports and unreadable diagrams | Pre-aggregate flows, use import limits, background workers and layer filters. |
-| Filename heuristics create false positives | Operator fatigue and loss of trust | Separate severity from confidence, show exact evidence, support allowlists and require human disposition. |
-| Threat-intelligence lookup leaks client data | Privacy and contractual exposure | Disable by default, document disclosure, support local feeds and granular lookup controls. |
-| Malicious import file targets the application | Service compromise | Isolated parsers, resource limits, read-only evidence, archive protections and dependency patching. |
-| Planned and observed states are confused | Bad implementation decisions | Enforce AS-IS/TO-BE separation and visible state badges. |
-| Automatic layout destroys operator work | Usability failure | Manual node pinning, preview before apply and undoable layout changes. |
-| Too many node and edge types overwhelm users | Slow adoption | Curated defaults, progressive disclosure, templates and role-based views. |
-| Sensitive usernames, paths or addresses appear in reports | Data leakage | Redaction profiles, report preview and safe defaults. |
-| User-role model becomes mixed with imported OS identities | Authorization errors and conceptual confusion | Separate application access-control entities from modelled infrastructure identities. |
-| Broad rule engine is mistaken for EDR/SIEM coverage | False sense of security | Clear product boundaries, evidence-based language and explicit collection limitations. |
-| Parser changes break old imports | Loss of reproducibility | Store parser version, schema version and original evidence; maintain migration tests. |
-| Large projects exceed browser performance | Poor operator experience | Canvas virtualization, edge aggregation, clustering and tested scale thresholds. |
-| Evidence retention grows without control | Storage and compliance problems | Retention policies, project quotas, deduplication and secure deletion workflow. |
+| Risk                                                      | Impact                                        | Mitigation                                                                                                |
+| --------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Incomplete or inconsistent scans                          | Incorrect or misleading topology              | Confidence scores, evidence provenance, reconciliation queue and manual verification states.              |
+| Dynamic IP addressing causes duplicate devices            | Inflated inventory and wrong links            | Prefer stable identifiers, correlate within time windows and never auto-merge ambiguous records.          |
+| Packet captures produce excessive data                    | Slow imports and unreadable diagrams          | Pre-aggregate flows, use import limits, background workers and layer filters.                             |
+| Filename heuristics create false positives                | Operator fatigue and loss of trust            | Separate severity from confidence, show exact evidence, support allowlists and require human disposition. |
+| Threat-intelligence lookup leaks client data              | Privacy and contractual exposure              | Disable by default, document disclosure, support local feeds and granular lookup controls.                |
+| Malicious import file targets the application             | Service compromise                            | Isolated parsers, resource limits, read-only evidence, archive protections and dependency patching.       |
+| Planned and observed states are confused                  | Bad implementation decisions                  | Enforce AS-IS/TO-BE separation and visible state badges.                                                  |
+| Automatic layout destroys operator work                   | Usability failure                             | Manual node pinning, preview before apply and undoable layout changes.                                    |
+| Too many node and edge types overwhelm users              | Slow adoption                                 | Curated defaults, progressive disclosure, templates and role-based views.                                 |
+| Sensitive usernames, paths or addresses appear in reports | Data leakage                                  | Redaction profiles, report preview and safe defaults.                                                     |
+| User-role model becomes mixed with imported OS identities | Authorization errors and conceptual confusion | Separate application access-control entities from modelled infrastructure identities.                     |
+| Broad rule engine is mistaken for EDR/SIEM coverage       | False sense of security                       | Clear product boundaries, evidence-based language and explicit collection limitations.                    |
+| Parser changes break old imports                          | Loss of reproducibility                       | Store parser version, schema version and original evidence; maintain migration tests.                     |
+| Large projects exceed browser performance                 | Poor operator experience                      | Canvas virtualization, edge aggregation, clustering and tested scale thresholds.                          |
+| Evidence retention grows without control                  | Storage and compliance problems               | Retention policies, project quotas, deduplication and secure deletion workflow.                           |
 
 ## 6. Open Questions
 
-1. Will the first deployment be single-operator local use, shared on-premises use or both?
-2. Should the product be a standalone NetPlan Studio application, or should it remain split into a collection/normalization service and a separate proposal-design frontend?
-3. What exact formats do the client's current extraction scripts produce, and can the scripts be changed to a versioned JSON schema?
-4. Which fields are collected on Windows and Linux today: users, groups, processes, services, scheduled tasks, packages, hashes and active connections?
-5. Should raw PCAP/PCAPNG files be stored inside the project, referenced externally or optionally discarded after flow extraction?
-6. What is the expected maximum project size for devices, flows, identities and evidence files?
+> Q1–Q6, Q11 and Q13 were resolved during Phase 2 planning (see `docs/plan/phase-2-implementation-plan.md` and the cited ADRs). The remainder stay open for Phase 3/4.
+
+1. ~~Will the first deployment be single-operator local use, shared on-premises use or both?~~ **Resolved (ADR-0001):** single-operator, local-first; multi-user deferred.
+2. ~~Should the product be a standalone NetPlan Studio application, or should it remain split into a collection/normalization service and a separate proposal-design frontend?~~ **Resolved (ADR-0002):** single app — local web server + browser SPA.
+3. ~~What exact formats do the client's current extraction scripts produce, and can the scripts be changed to a versioned JSON schema?~~ **Resolved (ADR-0018):** NetPlan Studio owns a versioned canonical device-state JSON schema; the client's scripts conform to it.
+4. ~~Which fields are collected on Windows and Linux today: users, groups, processes, services, scheduled tasks, packages, hashes and active connections?~~ **Resolved (ADR-0018):** the full §3.6 report is published now; P2-reconstruction fields required/strict, P3 security fields optional/loose.
+5. ~~Should raw PCAP/PCAPNG files be stored inside the project, referenced externally or optionally discarded after flow extraction?~~ **Resolved (ADR-0019):** split by class — structured evidence inline, PCAP summarized-by-default with the raw blob opt-in; hash + manifest always retained.
+6. ~~What is the expected maximum project size for devices, flows, identities and evidence files?~~ **Resolved (ADR-0019):** SMB tier — ~500 devices, ~100k raw flows aggregated to ≤~5k, ~2k identities; forces background-worker import, flow pre-aggregation and virtualized lists.
 7. Does the operator need multi-site and multi-customer tenancy in the first release?
 8. Which report formats are contractually required for client delivery?
 9. Should findings use an existing classification framework, a product-specific taxonomy or both?
 10. Will external threat-intelligence services be permitted under the client's privacy and data-processing requirements?
-11. Are Active Directory, Entra ID, LDAP or local-only identities expected in the first identity-import version?
+11. ~~Are Active Directory, Entra ID, LDAP or local-only identities expected in the first identity-import version?~~ **Resolved (ADR-0022):** local identities only in P2; observed-domain principals via `Identity.scope`; directory adapter → P4.
 12. Should the application support firewall-vendor configuration export, or only vendor-neutral policy modelling?
-13. Which approval steps are required before an inferred device or finding becomes part of the verified AS-IS model?
+13. ~~Which approval steps are required before an inferred device or finding becomes part of the verified AS-IS model?~~ **Resolved (ADR-0021):** reconciliation edits a pending ChangeSet before commit; committed objects are AS-IS as Observed/Inferred; manual verification is a badge, not a gate.
 14. Is the visual concept's three-role model sufficient for the MVP, or are separate Engineer, Security Analyst, Reviewer and Operator roles required immediately?
 15. What data must be redacted by default when exporting a report outside the engineering team?
