@@ -2,11 +2,14 @@ import { z } from 'zod';
 import {
   addressSchema,
   deviceSchema,
+  flowSchema,
+  identitySchema,
   interfaceSchema,
   linkSchema,
   networkSchema,
   policyRuleSchema,
   projectSchema,
+  roleAssignmentSchema,
   serviceSchema,
   siteSchema,
   zoneSchema,
@@ -29,6 +32,10 @@ export const projectStateSchema = z.object({
   links: z.array(linkSchema),
   services: z.array(serviceSchema),
   policyRules: z.array(policyRuleSchema),
+  /** Phase-2 collections — defaulted so version-1 bundles still parse. */
+  flows: z.array(flowSchema).default([]),
+  identities: z.array(identitySchema).default([]),
+  roleAssignments: z.array(roleAssignmentSchema).default([]),
 });
 export type ProjectState = z.infer<typeof projectStateSchema>;
 

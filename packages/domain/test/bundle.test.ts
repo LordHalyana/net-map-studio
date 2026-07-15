@@ -46,6 +46,9 @@ function sampleState(): ProjectState {
     links: [link],
     services: [service],
     policyRules: [rule],
+    flows: [],
+    identities: [],
+    roleAssignments: [],
   };
 }
 

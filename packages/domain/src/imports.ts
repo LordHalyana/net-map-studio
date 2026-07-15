@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { changeSetIdSchema, projectIdSchema } from './ids.js';
-import { confidenceContributorSchema } from './confidence.js';
+import { confidenceContributorSchema, confidenceSchema } from './confidence.js';
 import {
   addressKindSchema,
   deviceTypeSchema,
@@ -10,6 +10,7 @@ import {
   protocolSchema,
   rolePrivilegeSchema,
 } from './entities.js';
+import { settableEntityTypeSchema } from './operations.js';
 
 /**
  * The import spine (ADR-0019, ADR-0020): Evidence is the read-only source
@@ -240,3 +241,40 @@ export const observationDraftSchema = observationSchema.omit({
   evidenceId: true,
 });
 export type ObservationDraft = z.infer<typeof observationDraftSchema>;
+
+// ---------------------------------------------------------------------------
+// Field provenance sidecar (ADR-0008)
+// ---------------------------------------------------------------------------
+
+export const fieldProvenanceIdSchema = z.uuidv7().brand<'FieldProvenanceId'>();
+export type FieldProvenanceId = z.infer<typeof fieldProvenanceIdSchema>;
+
+export const provenanceSourceTypeSchema = z.enum(['imported', 'inferred', 'manual']);
+export type ProvenanceSourceType = z.infer<typeof provenanceSourceTypeSchema>;
+
+export const provenanceStatusSchema = z.enum(['accepted', 'rejected', 'overridden']);
+export type ProvenanceStatus = z.infer<typeof provenanceStatusSchema>;
+
+/**
+ * One provenance row, keyed by (entityType, entityId, field). The entity
+ * table holds the current accepted value — always equal to the winning
+ * (`accepted`) row here; competing observations sit beside it as `rejected`,
+ * and a manual override adds an `overridden`-superseding `manual` row.
+ */
+export const fieldProvenanceSchema = z.object({
+  id: fieldProvenanceIdSchema,
+  projectId: projectIdSchema,
+  entityType: settableEntityTypeSchema,
+  entityId: z.uuidv7(),
+  field: z.string().min(1),
+  sourceType: provenanceSourceTypeSchema,
+  evidenceId: evidenceIdSchema.nullable(),
+  importJobId: importJobIdSchema.nullable(),
+  observationId: observationIdSchema.nullable(),
+  confidence: confidenceSchema,
+  parserVersion: z.string(),
+  status: provenanceStatusSchema,
+  observedValue: z.json(),
+  observedAt: z.iso.datetime(),
+});
+export type FieldProvenance = z.infer<typeof fieldProvenanceSchema>;

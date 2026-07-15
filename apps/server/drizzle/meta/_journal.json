@@ -22,6 +22,13 @@
       "when": 1784098835833,
       "tag": "0002_aberrant_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784099739647,
+      "tag": "0003_dusty_gateway",
+      "breakpoints": true
     }
   ]
 }

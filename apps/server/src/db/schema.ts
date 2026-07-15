@@ -1,14 +1,22 @@
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   ConfidenceContributor,
   EvidenceContentClass,
   EvidenceRetention,
+  FieldValue,
+  FlowEndpoint,
+  IdentityKind,
+  IdentityScope,
   ImportJobStatus,
   LifecycleState,
   LinkEndpoint,
   ObservationClaim,
   PolicyEndpoint,
   Position,
+  ProvenanceSourceType,
+  ProvenanceStatus,
+  RolePrivilege,
+  SettableEntityType,
 } from '@netplan/domain';
 
 /**
@@ -74,6 +82,7 @@ export const devices = sqliteTable('devices', {
   customIconKey: text('custom_icon_key').notNull(),
   vendor: text('vendor').notNull(),
   model: text('model').notNull(),
+  os: text('os').notNull(),
   serialNumber: text('serial_number').notNull(),
   assetTag: text('asset_tag').notNull(),
   location: text('location').notNull(),
@@ -174,6 +183,75 @@ export const policyRules = sqliteTable('policy_rules', {
   reviewDate: text('review_date'),
   lifecycleState: lifecycleState(),
   notes: text('notes').notNull(),
+});
+
+export const flows = sqliteTable('flows', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  source: text('source', { mode: 'json' }).$type<FlowEndpoint>().notNull(),
+  destination: text('destination', { mode: 'json' }).$type<FlowEndpoint>().notNull(),
+  protocol: text('protocol').notNull(),
+  port: integer('port'),
+  serviceId: text('service_id').references(() => services.id),
+  firstSeen: text('first_seen').notNull(),
+  lastSeen: text('last_seen').notNull(),
+  observationCount: integer('observation_count').notNull(),
+  confidence: real('confidence').notNull(),
+  lifecycleState: lifecycleState(),
+});
+
+export const identities = sqliteTable('identities', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  scope: text('scope').$type<IdentityScope>().notNull(),
+  name: text('name').notNull(),
+  domain: text('domain').notNull(),
+  kind: text('kind').$type<IdentityKind>().notNull(),
+  deviceId: text('device_id').references(() => devices.id),
+  lifecycleState: lifecycleState(),
+  notes: text('notes').notNull(),
+});
+
+export const roleAssignments = sqliteTable('role_assignments', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  identityId: text('identity_id')
+    .notNull()
+    .references(() => identities.id),
+  deviceId: text('device_id').references(() => devices.id),
+  privilege: text('privilege').$type<RolePrivilege>().notNull(),
+  detail: text('detail').notNull(),
+  lifecycleState: lifecycleState(),
+});
+
+/**
+ * Per-field provenance sidecar (ADR-0008), keyed by (entityType, entityId,
+ * field) with competing rows side by side. The entity tables keep the plain,
+ * indexable current value; this table keeps where it came from.
+ */
+export const fieldProvenance = sqliteTable('field_provenance', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  entityType: text('entity_type').$type<SettableEntityType>().notNull(),
+  entityId: text('entity_id').notNull(),
+  field: text('field').notNull(),
+  sourceType: text('source_type').$type<ProvenanceSourceType>().notNull(),
+  evidenceId: text('evidence_id'),
+  importJobId: text('import_job_id'),
+  observationId: text('observation_id'),
+  confidence: real('confidence').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  status: text('status').$type<ProvenanceStatus>().notNull(),
+  observedValue: text('observed_value', { mode: 'json' }).$type<FieldValue>().notNull(),
+  observedAt: text('observed_at').notNull(),
 });
 
 /**
@@ -283,5 +361,8 @@ export const entityTables = {
   link: links,
   service: services,
   policyRule: policyRules,
+  flow: flows,
+  identity: identities,
+  roleAssignment: roleAssignments,
 };
 export type EntityTableKey = keyof typeof entityTables;

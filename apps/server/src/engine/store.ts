@@ -3,6 +3,9 @@ import {
   addressSchema,
   changeSetSchema,
   deviceSchema,
+  flowEndpointSchema,
+  flowSchema,
+  identitySchema,
   interfaceSchema,
   linkSchema,
   networkSchema,
@@ -13,6 +16,7 @@ import {
   policyRuleSchema,
   projectSchema,
   projectStateSchema,
+  roleAssignmentSchema,
   serviceSchema,
   siteSchema,
   zoneSchema,
@@ -22,6 +26,8 @@ import {
   type Device,
   type Endpoint,
   type EntityPayload,
+  type Flow,
+  type Identity,
   type Interface,
   type Link,
   type Network,
@@ -29,6 +35,7 @@ import {
   type PolicyRule,
   type Project,
   type ProjectState,
+  type RoleAssignment,
   type Service,
   type SettableEntityType,
   type Site,
@@ -43,6 +50,9 @@ import {
   devices,
   evidence,
   evidenceBlobs,
+  fieldProvenance,
+  flows,
+  identities,
   importJobs,
   interfaces,
   links,
@@ -51,6 +61,7 @@ import {
   operationLog,
   policyRules,
   projects,
+  roleAssignments,
   services,
   sites,
   zones,
@@ -80,7 +91,19 @@ export type LogEntry = OperationLogEntry;
 
 export interface SearchResult {
   entityType: Exclude<SettableEntityType, 'project'>;
-  entity: Site | Zone | Device | Interface | Address | Network | Link | Service | PolicyRule;
+  entity:
+    | Site
+    | Zone
+    | Device
+    | Interface
+    | Address
+    | Network
+    | Link
+    | Service
+    | PolicyRule
+    | Flow
+    | Identity
+    | RoleAssignment;
 }
 
 /** An undoable unit: a single operation or a whole ChangeSet (ADR-0010). */
@@ -101,13 +124,16 @@ const settableSchemas = {
   link: linkSchema,
   service: serviceSchema,
   policyRule: policyRuleSchema,
+  flow: flowSchema,
+  identity: identitySchema,
+  roleAssignment: roleAssignmentSchema,
 };
 
 /** Fields that reference another entity, checked on SetField (ADR-0012 note). */
 const referenceFields: Partial<
   Record<
     SettableEntityType,
-    Record<string, 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service'>
+    Record<string, 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service' | 'identity'>
   >
 > = {
   zone: { siteId: 'site' },
@@ -116,6 +142,9 @@ const referenceFields: Partial<
   address: { interfaceId: 'interface' },
   service: { deviceId: 'device' },
   policyRule: { serviceId: 'service' },
+  flow: { serviceId: 'service' },
+  identity: { deviceId: 'device' },
+  roleAssignment: { identityId: 'identity', deviceId: 'device' },
 };
 
 export type Engine = ReturnType<typeof createEngine>;
@@ -201,6 +230,27 @@ export function createEngine(db: Db) {
         .orderBy(asc(policyRules.id))
         .all()
         .map((r) => policyRuleSchema.parse(r)),
+      flows: db
+        .select()
+        .from(flows)
+        .where(eq(flows.projectId, projectId))
+        .orderBy(asc(flows.id))
+        .all()
+        .map((r) => flowSchema.parse(r)),
+      identities: db
+        .select()
+        .from(identities)
+        .where(eq(identities.projectId, projectId))
+        .orderBy(asc(identities.id))
+        .all()
+        .map((r) => identitySchema.parse(r)),
+      roleAssignments: db
+        .select()
+        .from(roleAssignments)
+        .where(eq(roleAssignments.projectId, projectId))
+        .orderBy(asc(roleAssignments.id))
+        .all()
+        .map((r) => roleAssignmentSchema.parse(r)),
     };
   }
 
@@ -247,8 +297,12 @@ export function createEngine(db: Db) {
       tx.delete(observations).where(eq(observations.projectId, projectId)).run();
       tx.delete(evidence).where(eq(evidence.projectId, projectId)).run();
       tx.delete(importJobs).where(eq(importJobs.projectId, projectId)).run();
+      tx.delete(fieldProvenance).where(eq(fieldProvenance.projectId, projectId)).run();
       tx.delete(operationLog).where(eq(operationLog.projectId, projectId)).run();
       tx.delete(changeSets).where(eq(changeSets.projectId, projectId)).run();
+      tx.delete(roleAssignments).where(eq(roleAssignments.projectId, projectId)).run();
+      tx.delete(identities).where(eq(identities.projectId, projectId)).run();
+      tx.delete(flows).where(eq(flows.projectId, projectId)).run();
       tx.delete(policyRules).where(eq(policyRules.projectId, projectId)).run();
       tx.delete(links).where(eq(links.projectId, projectId)).run();
       tx.delete(services).where(eq(services.projectId, projectId)).run();
@@ -268,11 +322,17 @@ export function createEngine(db: Db) {
 
   function exists(
     tx: Tx,
-    kind: 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service',
+    kind: 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service' | 'identity',
     projectId: string,
     id: string,
   ): boolean {
     switch (kind) {
+      case 'identity':
+        return !!tx
+          .select({ id: identities.id })
+          .from(identities)
+          .where(and(eq(identities.id, id), eq(identities.projectId, projectId)))
+          .get();
       case 'site':
         return !!tx
           .select({ id: sites.id })
@@ -322,10 +382,21 @@ export function createEngine(db: Db) {
     }
   }
 
+  /** Flow endpoints may be `external` address literals — nothing to check for those. */
+  function requireFlowEndpoint(
+    tx: Tx,
+    projectId: string,
+    endpoint: Flow['source'],
+    role: string,
+  ): void {
+    if (endpoint.kind === 'external') return;
+    requireEndpoint(tx, projectId, endpoint, role);
+  }
+
   function requireRef(
     tx: Tx,
     projectId: string,
-    kind: 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service',
+    kind: 'site' | 'zone' | 'device' | 'interface' | 'network' | 'service' | 'identity',
     id: string | null | undefined,
     label: string,
   ): void {
@@ -365,6 +436,40 @@ export function createEngine(db: Db) {
           payload.entity.deviceId,
           'Service',
         );
+      case 'flow':
+        requireFlowEndpoint(tx, payload.entity.projectId, payload.entity.source, 'Flow source');
+        requireFlowEndpoint(
+          tx,
+          payload.entity.projectId,
+          payload.entity.destination,
+          'Flow destination',
+        );
+        requireRef(tx, payload.entity.projectId, 'service', payload.entity.serviceId, 'Flow');
+        return;
+      case 'identity':
+        return requireRef(
+          tx,
+          payload.entity.projectId,
+          'device',
+          payload.entity.deviceId,
+          'Identity',
+        );
+      case 'roleAssignment':
+        requireRef(
+          tx,
+          payload.entity.projectId,
+          'identity',
+          payload.entity.identityId,
+          'RoleAssignment',
+        );
+        requireRef(
+          tx,
+          payload.entity.projectId,
+          'device',
+          payload.entity.deviceId,
+          'RoleAssignment',
+        );
+        return;
     }
   }
 
@@ -383,6 +488,17 @@ export function createEngine(db: Db) {
       projectRules().some((r) =>
         [r.source, r.destination].some((e) => kinds.includes(e.kind) && e.id === id),
       );
+    const flowTouches = (kinds: Endpoint['kind'][]) =>
+      tx
+        .select()
+        .from(flows)
+        .where(eq(flows.projectId, projectId))
+        .all()
+        .some((f) =>
+          [f.source, f.destination].some(
+            (e) => e.kind !== 'external' && kinds.includes(e.kind) && e.id === id,
+          ),
+        );
 
     switch (entityType) {
       case 'site':
@@ -393,6 +509,7 @@ export function createEngine(db: Db) {
         if (tx.select({ id: devices.id }).from(devices).where(eq(devices.zoneId, id)).get())
           fail('a Device');
         if (ruleTouches(['zone'])) fail('a PolicyRule');
+        if (flowTouches(['zone'])) fail('a Flow');
         return;
       case 'device':
         if (
@@ -402,6 +519,19 @@ export function createEngine(db: Db) {
         if (tx.select({ id: services.id }).from(services).where(eq(services.deviceId, id)).get())
           fail('a Service');
         if (ruleTouches(['device'])) fail('a PolicyRule');
+        if (flowTouches(['device'])) fail('a Flow');
+        if (
+          tx.select({ id: identities.id }).from(identities).where(eq(identities.deviceId, id)).get()
+        )
+          fail('an Identity');
+        if (
+          tx
+            .select({ id: roleAssignments.id })
+            .from(roleAssignments)
+            .where(eq(roleAssignments.deviceId, id))
+            .get()
+        )
+          fail('a RoleAssignment');
         return;
       case 'interface':
         if (
@@ -410,6 +540,17 @@ export function createEngine(db: Db) {
           fail('an Address');
         if (projectLinks().some((l) => l.source.id === id || l.target.id === id)) fail('a Link');
         if (ruleTouches(['interface'])) fail('a PolicyRule');
+        if (flowTouches(['interface'])) fail('a Flow');
+        return;
+      case 'identity':
+        if (
+          tx
+            .select({ id: roleAssignments.id })
+            .from(roleAssignments)
+            .where(eq(roleAssignments.identityId, id))
+            .get()
+        )
+          fail('a RoleAssignment');
         return;
       case 'network':
         if (
@@ -421,6 +562,7 @@ export function createEngine(db: Db) {
         )
           fail('an Interface membership');
         if (ruleTouches(['network', 'subnet'])) fail('a PolicyRule');
+        if (flowTouches(['network', 'subnet'])) fail('a Flow');
         return;
       case 'service':
         if (
@@ -431,6 +573,8 @@ export function createEngine(db: Db) {
             .get()
         )
           fail('a PolicyRule');
+        if (tx.select({ id: flows.id }).from(flows).where(eq(flows.serviceId, id)).get())
+          fail('a Flow');
         return;
       default:
         return;
@@ -455,6 +599,12 @@ export function createEngine(db: Db) {
         return void tx.insert(networks).values(payload.entity).run();
       case 'service':
         return void tx.insert(services).values(payload.entity).run();
+      case 'flow':
+        return void tx.insert(flows).values(payload.entity).run();
+      case 'identity':
+        return void tx.insert(identities).values(payload.entity).run();
+      case 'roleAssignment':
+        return void tx.insert(roleAssignments).values(payload.entity).run();
     }
   }
 
@@ -474,6 +624,12 @@ export function createEngine(db: Db) {
         return void tx.delete(networks).where(eq(networks.id, id)).run();
       case 'service':
         return void tx.delete(services).where(eq(services.id, id)).run();
+      case 'flow':
+        return void tx.delete(flows).where(eq(flows.id, id)).run();
+      case 'identity':
+        return void tx.delete(identities).where(eq(identities.id, id)).run();
+      case 'roleAssignment':
+        return void tx.delete(roleAssignments).where(eq(roleAssignments.id, id)).run();
     }
   }
 
@@ -503,6 +659,12 @@ export function createEngine(db: Db) {
         return tx.select().from(services).where(eq(services.id, id)).get();
       case 'policyRule':
         return tx.select().from(policyRules).where(eq(policyRules.id, id)).get();
+      case 'flow':
+        return tx.select().from(flows).where(eq(flows.id, id)).get();
+      case 'identity':
+        return tx.select().from(identities).where(eq(identities.id, id)).get();
+      case 'roleAssignment':
+        return tx.select().from(roleAssignments).where(eq(roleAssignments.id, id)).get();
     }
   }
 
@@ -561,6 +723,20 @@ export function createEngine(db: Db) {
           .update(policyRules)
           .set(policyRuleSchema.parse(candidate))
           .where(eq(policyRules.id, id))
+          .run();
+      case 'flow':
+        return void tx.update(flows).set(flowSchema.parse(candidate)).where(eq(flows.id, id)).run();
+      case 'identity':
+        return void tx
+          .update(identities)
+          .set(identitySchema.parse(candidate))
+          .where(eq(identities.id, id))
+          .run();
+      case 'roleAssignment':
+        return void tx
+          .update(roleAssignments)
+          .set(roleAssignmentSchema.parse(candidate))
+          .where(eq(roleAssignments.id, id))
           .run();
     }
   }
@@ -621,6 +797,11 @@ export function createEngine(db: Db) {
           const parsed = policyRuleSchema.shape.source.safeParse(op.value);
           if (!parsed.success) throw new OperationError('INVALID', 'Invalid PolicyRule endpoint');
           requireEndpoint(tx, op.projectId, parsed.data, 'PolicyRule');
+        }
+        if (op.entityType === 'flow' && (op.field === 'source' || op.field === 'destination')) {
+          const parsed = flowEndpointSchema.safeParse(op.value);
+          if (!parsed.success) throw new OperationError('INVALID', 'Invalid Flow endpoint');
+          requireFlowEndpoint(tx, op.projectId, parsed.data, 'Flow');
         }
         const previousValue = toJsonValue(row[op.field]);
         const candidate = { ...row, [op.field]: op.value };
@@ -717,6 +898,12 @@ export function createEngine(db: Db) {
         return { entityType, entity: networkSchema.parse(row) };
       case 'service':
         return { entityType, entity: serviceSchema.parse(row) };
+      case 'flow':
+        return { entityType, entity: flowSchema.parse(row) };
+      case 'identity':
+        return { entityType, entity: identitySchema.parse(row) };
+      case 'roleAssignment':
+        return { entityType, entity: roleAssignmentSchema.parse(row) };
     }
   }
 
@@ -887,6 +1074,10 @@ export function createEngine(db: Db) {
       for (const service of parsed.services) tx.insert(services).values(service).run();
       for (const link of parsed.links) tx.insert(links).values(link).run();
       for (const rule of parsed.policyRules) tx.insert(policyRules).values(rule).run();
+      for (const flow of parsed.flows) tx.insert(flows).values(flow).run();
+      for (const identity of parsed.identities) tx.insert(identities).values(identity).run();
+      for (const assignment of parsed.roleAssignments)
+        tx.insert(roleAssignments).values(assignment).run();
     });
     return parsed.project;
   }
@@ -943,6 +1134,11 @@ export function createEngine(db: Db) {
     for (const rule of state.policyRules) {
       if (hit(rule.name, rule.justification, rule.owner, rule.notes)) {
         results.push({ entityType: 'policyRule', entity: rule });
+      }
+    }
+    for (const identity of state.identities) {
+      if (hit(identity.name, identity.domain, identity.notes)) {
+        results.push({ entityType: 'identity', entity: identity });
       }
     }
     return results;
@@ -1063,6 +1259,59 @@ export function createEngine(db: Db) {
           relationships: {
             device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
             policyRules: state.policyRules.filter((r) => r.serviceId === entityId),
+          },
+        };
+      }
+      case 'flow': {
+        const entity = state.flows.find((f) => f.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `flow ${entityId} not found`);
+        const resolveFlowEndpoint = (e: Flow['source']): unknown => {
+          switch (e.kind) {
+            case 'external':
+              return { external: e.value };
+            case 'interface':
+              return state.interfaces.find((i) => i.id === e.id) ?? null;
+            case 'device':
+              return state.devices.find((d) => d.id === e.id) ?? null;
+            case 'zone':
+              return state.zones.find((z) => z.id === e.id) ?? null;
+            case 'network':
+            case 'subnet':
+              return state.networks.find((n) => n.id === e.id) ?? null;
+          }
+        };
+        return {
+          entity,
+          relationships: {
+            service: state.services.find((s) => s.id === entity.serviceId) ?? null,
+            source: resolveFlowEndpoint(entity.source),
+            destination: resolveFlowEndpoint(entity.destination),
+          },
+        };
+      }
+      case 'identity': {
+        const entity = state.identities.find((i) => i.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `identity ${entityId} not found`);
+        const assignments = state.roleAssignments.filter((r) => r.identityId === entityId);
+        return {
+          entity,
+          relationships: {
+            device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
+            roleAssignments: assignments.map((assignment) => ({
+              ...assignment,
+              device: state.devices.find((d) => d.id === assignment.deviceId) ?? null,
+            })),
+          },
+        };
+      }
+      case 'roleAssignment': {
+        const entity = state.roleAssignments.find((r) => r.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `roleAssignment ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            identity: state.identities.find((i) => i.id === entity.identityId) ?? null,
+            device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
           },
         };
       }
