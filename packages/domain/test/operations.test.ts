@@ -7,7 +7,13 @@ import {
   operationIdSchema,
   operationSchema,
 } from '../src/index.js';
-import { makeDevice, makeInterface, makeLink, makeNetwork, makeProject } from './fixtures.js';
+import {
+  makeDevice,
+  makeInterface,
+  makeLink,
+  makeNetwork,
+  makeProject,
+} from '@netplan/domain/fixtures';
 
 const project = makeProject();
 const device = makeDevice(project.id);

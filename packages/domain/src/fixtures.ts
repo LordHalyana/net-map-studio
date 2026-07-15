@@ -31,7 +31,7 @@ import {
   type Service,
   type Site,
   type Zone,
-} from '../src/index.js';
+} from './index.js';
 
 /** Parse-based fixtures: defaults are filled by the schemas themselves. */
 

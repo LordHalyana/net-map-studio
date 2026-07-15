@@ -23,7 +23,7 @@ import {
   makeService,
   makeSite,
   makeZone,
-} from './fixtures.js';
+} from '@netplan/domain/fixtures';
 
 const project = makeProject();
 const site = makeSite(project.id);

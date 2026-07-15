@@ -14,3 +14,47 @@ import type { OperationId } from './ids.js';
  * operation log like any other mutation — undo is audited too.
  */
 export type InvertOperation = (op: Operation, inverseOpId: OperationId) => Operation;
+
+export const invertOperation: InvertOperation = (op, inverseOpId) => {
+  const base = { id: inverseOpId, projectId: op.projectId };
+  switch (op.kind) {
+    case 'CreateEntity':
+      return { ...base, kind: 'DeleteEntity', payload: op.payload };
+    case 'DeleteEntity':
+      return { ...base, kind: 'CreateEntity', payload: op.payload };
+    case 'SetField':
+      return {
+        ...base,
+        kind: 'SetField',
+        entityType: op.entityType,
+        entityId: op.entityId,
+        field: op.field,
+        value: op.previousValue,
+        previousValue: op.value,
+      };
+    case 'CreateLink':
+      return { ...base, kind: 'DeleteLink', linkId: op.link.id, snapshot: op.link };
+    case 'DeleteLink':
+      return { ...base, kind: 'CreateLink', link: op.snapshot };
+    case 'CreatePolicyRule':
+      return { ...base, kind: 'DeletePolicyRule', ruleId: op.rule.id, snapshot: op.rule };
+    case 'DeletePolicyRule':
+      return { ...base, kind: 'CreatePolicyRule', rule: op.snapshot };
+    case 'SetMembership':
+      return {
+        ...base,
+        kind: 'SetMembership',
+        interfaceId: op.interfaceId,
+        networkId: op.previousNetworkId,
+        previousNetworkId: op.networkId,
+      };
+    case 'SetContainment':
+      return {
+        ...base,
+        kind: 'SetContainment',
+        deviceId: op.deviceId,
+        zoneId: op.previousZoneId,
+        previousZoneId: op.zoneId,
+      };
+  }
+};
