@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { DeviceId } from '../ids.js';
+import { deviceIdSchema } from '../ids.js';
 import type { ProjectState } from '../state.js';
 
 /**
@@ -24,12 +24,13 @@ export type InputClass = z.infer<typeof inputClassSchema>;
 
 export const ALL_INPUT_CLASSES: readonly InputClass[] = inputClassSchema.options;
 
-export interface DeviceCoverage {
-  deviceId: DeviceId;
-  deviceName: string;
-  available: InputClass[];
-  missing: InputClass[];
-}
+export const deviceCoverageSchema = z.object({
+  deviceId: deviceIdSchema,
+  deviceName: z.string(),
+  available: z.array(inputClassSchema),
+  missing: z.array(inputClassSchema),
+});
+export type DeviceCoverage = z.infer<typeof deviceCoverageSchema>;
 
 /**
  * Derive per-Device coverage from the committed graph. A class counts as

@@ -21,6 +21,12 @@ import {
   postUndo,
 } from '../api/client';
 import {
+  getFindings,
+  setFindingStatus as apiSetFindingStatus,
+  type FindingsReport,
+} from '../api/findings';
+import type { FindingStatus } from '@netplan/domain';
+import {
   commitImport,
   createImport,
   getImportDetail,
@@ -52,7 +58,7 @@ export interface LayerState {
 export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff';
 
 /** Which primary workspace fills the central region (design §3.2B). */
-export type WorkspaceView = 'canvas' | 'imports' | 'identities';
+export type WorkspaceView = 'canvas' | 'imports' | 'identities' | 'findings';
 
 /** AS-IS / TO-BE / Diff rendering mode (ADR-0009, design §3.10). */
 export type CanvasMode = 'asIs' | 'toBe' | 'diff';
@@ -95,6 +101,16 @@ interface AppState {
   importJobs: ImportJob[];
   selectedImport: ImportJobDetail | null;
   importNotice: string | null;
+  /** Findings report (ADR-0023), recomputed on demand — always current. */
+  findings: FindingsReport | null;
+  findingsLoading: boolean;
+  findingsError: string | null;
+  refreshFindings: () => Promise<void>;
+  disposeFinding: (
+    fingerprint: string,
+    status: FindingStatus,
+    previousStatus: FindingStatus,
+  ) => Promise<void>;
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
   dispatch: (payload: Operation | ChangeSet) => void;
@@ -151,6 +167,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   importJobs: [],
   selectedImport: null,
   importNotice: null,
+  findings: null,
+  findingsLoading: false,
+  findingsError: null,
+
+  refreshFindings: async () => {
+    const project = get().project;
+    if (!project) return;
+    set({ findingsLoading: true, findingsError: null });
+    try {
+      set({ findings: await getFindings(project.id), findingsLoading: false });
+    } catch (error) {
+      set({
+        findingsLoading: false,
+        findingsError: error instanceof Error ? error.message : 'Failed to load findings',
+      });
+    }
+  },
+
+  /** Change a finding's disposition through the Operation log, then re-analyze. */
+  disposeFinding: async (fingerprint, status, previousStatus) => {
+    const project = get().project;
+    if (!project) return;
+    const response = await apiSetFindingStatus(project.id, fingerprint, status, previousStatus);
+    set({ availability: response.availability });
+    await get().refreshFindings();
+  },
 
   bootstrap: () => {
     bootstrapPromise ??= (async () => {

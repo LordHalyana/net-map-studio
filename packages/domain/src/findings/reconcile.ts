@@ -1,10 +1,11 @@
-import type { FindingId } from '../ids.js';
+import { z } from 'zod';
+import { findingIdSchema } from '../ids.js';
 import {
+  findingStatusSchema,
   INITIAL_FINDING_STATUS,
   type FindingDisposition,
-  type FindingStatus,
 } from './disposition.js';
-import type { DetectionRecord } from './rule.js';
+import { detectionRecordSchema, type DetectionRecord } from './rule.js';
 
 /**
  * A Finding as the UI sees it: the derived detection joined to its persisted
@@ -14,16 +15,17 @@ import type { DetectionRecord } from './rule.js';
  *   survives but whose evidence has disappeared from the latest run. We retain
  *   it (never silently delete an analyst's decision) and flag it.
  */
-export interface FindingView {
-  fingerprint: string;
-  detection: DetectionRecord | null;
-  status: FindingStatus;
-  notes: string;
+export const findingViewSchema = z.object({
+  fingerprint: z.string(),
+  detection: detectionRecordSchema.nullable(),
+  status: findingStatusSchema,
+  notes: z.string(),
   /** True when a disposition exists but the current run no longer detects it. */
-  stale: boolean;
+  stale: z.boolean(),
   /** The persisted disposition's id, or null when the finding is still `new`. */
-  dispositionId: FindingId | null;
-}
+  dispositionId: findingIdSchema.nullable(),
+});
+export type FindingView = z.infer<typeof findingViewSchema>;
 
 /**
  * Join this run's detections to the stored dispositions by Fingerprint:

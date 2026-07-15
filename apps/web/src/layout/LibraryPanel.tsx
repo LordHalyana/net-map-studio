@@ -75,6 +75,7 @@ export function LibraryPanel() {
               ['canvas', '🗺', 'Canvas'],
               ['imports', '⇪', 'Imports and Evidence'],
               ['identities', '👤', 'Users and Roles'],
+              ['findings', '⚠', 'Findings'],
             ] as const
           ).map(([key, glyph, label]) => (
             <li key={key}>
