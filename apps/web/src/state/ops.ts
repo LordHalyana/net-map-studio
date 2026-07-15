@@ -6,6 +6,8 @@ import {
   deviceSchema,
   interfaceIdSchema,
   interfaceSchema,
+  linkIdSchema,
+  linkSchema,
   networkIdSchema,
   networkSchema,
   newId,
@@ -22,6 +24,7 @@ import {
   type EntityPayload,
   type Interface,
   type InterfaceId,
+  type Link,
   type Network,
   type NetworkId,
   type Operation,
@@ -102,6 +105,38 @@ export function opSetContainment(
     zoneId,
     previousZoneId,
   };
+}
+
+export function opCreateLink(projectId: ProjectId, link: Link): Operation {
+  return { id: newId(operationIdSchema), projectId, kind: 'CreateLink', link };
+}
+
+export function opDeleteLink(projectId: ProjectId, link: Link): Operation {
+  return {
+    id: newId(operationIdSchema),
+    projectId,
+    kind: 'DeleteLink',
+    linkId: link.id,
+    snapshot: link,
+  };
+}
+
+/** A Link's endpoints are always Interfaces (ADR-0012). */
+export function buildLink(
+  projectId: ProjectId,
+  sourceInterfaceId: InterfaceId,
+  targetInterfaceId: InterfaceId,
+  kind: Link['kind'],
+  label: string,
+): Link {
+  return linkSchema.parse({
+    id: newId(linkIdSchema),
+    projectId,
+    source: { kind: 'interface', id: sourceInterfaceId },
+    target: { kind: 'interface', id: targetInterfaceId },
+    kind,
+    label,
+  });
 }
 
 export function changeSet(projectId: ProjectId, label: string, operations: Operation[]): ChangeSet {

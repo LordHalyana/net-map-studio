@@ -6,8 +6,11 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
+  type Edge,
+  type EdgeChange,
   type Node,
   type NodeChange,
   type OnSelectionChangeParams,
@@ -40,6 +43,7 @@ function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
 
   const flow = useMemo(
     () =>
@@ -49,20 +53,63 @@ function CanvasInner() {
     [graph, layers, collapsedSites],
   );
 
-  // Adopt graph-derived nodes, preserving live drag/selection state React Flow holds.
+  // Adopt graph-derived nodes, preserving drag/selection state AND object
+  // identity for unchanged nodes — replacing every object makes React Flow
+  // drop its measurements and flash the whole canvas invisible.
   useEffect(() => {
+    const nodeContent = (n: Node) =>
+      JSON.stringify([
+        n.type,
+        n.position,
+        n.parentId,
+        n.extent,
+        n.hidden,
+        n.style,
+        n.zIndex,
+        n.data,
+      ]);
     setNodes((current) => {
       const byId = new Map(current.map((n) => [n.id, n]));
       return flow.nodes.map((node) => {
         const existing = byId.get(node.id);
-        if (existing?.dragging) return existing;
-        return existing?.selected ? { ...node, selected: true } : node;
+        if (!existing) return node;
+        if (existing.dragging) return existing;
+        if (nodeContent(existing) === nodeContent(node)) return existing;
+        return existing.selected ? { ...node, selected: true } : node;
       });
     });
   }, [flow.nodes]);
 
+  useEffect(() => {
+    const edgeContent = (e: Edge) =>
+      JSON.stringify([
+        e.source,
+        e.target,
+        e.sourceHandle,
+        e.targetHandle,
+        e.style,
+        e.label,
+        e.data,
+        e.hidden,
+      ]);
+    setEdges((current) => {
+      const byId = new Map(current.map((e) => [e.id, e]));
+      return flow.edges.map((edge) => {
+        const existing = byId.get(edge.id);
+        if (!existing) return edge;
+        if (edgeContent(existing) === edgeContent(edge)) return existing;
+        return existing.selected ? { ...edge, selected: true } : edge;
+      });
+    });
+  }, [flow.edges]);
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    [],
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
     [],
   );
 
@@ -130,7 +177,18 @@ function CanvasInner() {
   );
 
   const onSelectionChange = useCallback(
-    ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
+    ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
+      if (selectedNodes.length === 0 && selectedEdges.length > 0) {
+        // link edges carry the underlying Link ids (bundles carry several)
+        const linkIds = selectedEdges.flatMap((edge) => {
+          const data = edge.data;
+          return data && Array.isArray(data['linkIds'])
+            ? data['linkIds'].filter((v): v is string => typeof v === 'string')
+            : [];
+        });
+        select(linkIds.length > 0 ? { entityType: 'link', ids: linkIds } : null);
+        return;
+      }
       if (selectedNodes.length === 0) {
         select(null);
         return;
@@ -145,6 +203,16 @@ function CanvasInner() {
       select({ entityType, ids: sameType.map((n) => n.id) });
     },
     [select],
+  );
+
+  const connectMode = useAppStore((s) => s.connectMode);
+  const connectPickNode = useAppStore((s) => s.connectPickNode);
+
+  const onNodeClick = useCallback(
+    (_event: unknown, node: Node) => {
+      if (connectMode && node.type) connectPickNode(node.type, node.id);
+    },
+    [connectMode, connectPickNode],
   );
 
   const onNodesDelete = useCallback(
@@ -188,10 +256,12 @@ function CanvasInner() {
     <main className="canvas-region" data-testid="canvas-region">
       <ReactFlow
         nodes={nodes}
-        edges={flow.edges}
+        edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
+        onNodeClick={onNodeClick}
         onSelectionChange={onSelectionChange}
         onNodesDelete={onNodesDelete}
         onDragOver={onDragOver}

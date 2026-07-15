@@ -26,6 +26,24 @@ export interface LayerState {
   logical: boolean;
 }
 
+/**
+ * Connect mode (design §3.3): pick a source Interface, pick a destination,
+ * complete a compact form. Links terminate on Interfaces only (ADR-0012).
+ */
+export interface ConnectDraft {
+  sourceDeviceId: string | null;
+  sourceInterfaceId: string | null;
+  targetDeviceId: string | null;
+  targetInterfaceId: string | null;
+}
+
+const emptyDraft: ConnectDraft = {
+  sourceDeviceId: null,
+  sourceInterfaceId: null,
+  targetDeviceId: null,
+  targetInterfaceId: null,
+};
+
 interface AppState {
   project: Project | null;
   graph: ProjectState | null;
@@ -35,6 +53,9 @@ interface AppState {
   pendingOps: number;
   layers: LayerState;
   collapsedSites: string[];
+  connectMode: boolean;
+  connectDraft: ConnectDraft;
+  connectNotice: string | null;
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
   dispatch: (payload: Operation | ChangeSet) => void;
@@ -43,10 +64,17 @@ interface AppState {
   select: (selection: Selection | null) => void;
   toggleLogicalLayer: () => void;
   toggleSiteCollapsed: (siteId: string) => void;
+  toggleConnectMode: () => void;
+  connectPickNode: (nodeType: string, nodeId: string) => void;
+  setConnectInterface: (side: 'source' | 'target', interfaceId: string | null) => void;
+  resetConnectDraft: () => void;
 }
 
 /** Serializes syncs so operations reach the server in dispatch order. */
 let syncQueue: Promise<void> = Promise.resolve();
+
+/** Single-flight guard: StrictMode re-runs effects, and a double bootstrap would create two projects. */
+let bootstrapPromise: Promise<void> | null = null;
 
 export const useAppStore = create<AppState>((set, get) => ({
   project: null,
@@ -57,12 +85,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingOps: 0,
   layers: { logical: true },
   collapsedSites: [],
+  connectMode: false,
+  connectDraft: emptyDraft,
+  connectNotice: null,
 
-  bootstrap: async () => {
-    const projects = await listProjects();
-    const project = projects[0] ?? (await createProject('Untitled Project'));
-    const graph = await getGraph(project.id);
-    set({ project, graph });
+  bootstrap: () => {
+    bootstrapPromise ??= (async () => {
+      const projects = await listProjects();
+      const project = projects[0] ?? (await createProject('Untitled Project'));
+      const graph = await getGraph(project.id);
+      set({ project, graph });
+    })().catch((error: unknown) => {
+      bootstrapPromise = null; // allow a retry after a failed boot
+      throw error;
+    });
+    return bootstrapPromise;
   },
 
   reload: async () => {
@@ -130,4 +167,43 @@ export const useAppStore = create<AppState>((set, get) => ({
         : [...current, siteId],
     });
   },
+
+  toggleConnectMode: () =>
+    set({ connectMode: !get().connectMode, connectDraft: emptyDraft, connectNotice: null }),
+
+  connectPickNode: (nodeType, nodeId) => {
+    if (!get().connectMode) return;
+    if (nodeType !== 'device') {
+      set({
+        connectNotice: `A Link cannot terminate on a ${nodeType} — endpoints must be Interfaces.`,
+      });
+      return;
+    }
+    const graph = get().graph;
+    const draft = get().connectDraft;
+    const firstInterface = graph?.interfaces.find((i) => i.deviceId === nodeId)?.id ?? null;
+    if (!draft.sourceDeviceId) {
+      set({
+        connectDraft: { ...draft, sourceDeviceId: nodeId, sourceInterfaceId: firstInterface },
+        connectNotice: null,
+      });
+    } else if (nodeId !== draft.sourceDeviceId) {
+      set({
+        connectDraft: { ...draft, targetDeviceId: nodeId, targetInterfaceId: firstInterface },
+        connectNotice: null,
+      });
+    }
+  },
+
+  setConnectInterface: (side, interfaceId) => {
+    const draft = get().connectDraft;
+    set({
+      connectDraft:
+        side === 'source'
+          ? { ...draft, sourceInterfaceId: interfaceId }
+          : { ...draft, targetInterfaceId: interfaceId },
+    });
+  },
+
+  resetConnectDraft: () => set({ connectDraft: emptyDraft, connectNotice: null }),
 }));

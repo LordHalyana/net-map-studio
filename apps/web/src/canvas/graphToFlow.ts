@@ -1,5 +1,13 @@
 import type { Edge, Node } from '@xyflow/react';
-import type { Device, Network, Position as XY, ProjectState, Site, Zone } from '@netplan/domain';
+import type {
+  Device,
+  Link,
+  Network,
+  Position as XY,
+  ProjectState,
+  Site,
+  Zone,
+} from '@netplan/domain';
 
 /** Stable tint per Network, used for membership edges and device chips. */
 const palette = ['#4da3ff', '#4dc38a', '#e5b455', '#c78bff', '#e06c6c', '#5bd0d0', '#9fd05b'];
@@ -93,6 +101,41 @@ export function graphToFlow(
       position: device.position,
       data: { device, memberships, showTint: options.logical },
       hidden,
+    });
+  }
+
+  // Links render between the owning Devices, bundled per device pair: multiple
+  // records between the same pair collapse into one expandable edge (§3.3).
+  const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
+  const bundles = new Map<string, Link[]>();
+  for (const link of state.links) {
+    const sourceDevice = deviceByInterface.get(link.source.id);
+    const targetDevice = deviceByInterface.get(link.target.id);
+    if (!sourceDevice || !targetDevice) continue;
+    if (hiddenDeviceIds.has(sourceDevice) || hiddenDeviceIds.has(targetDevice)) continue;
+    const key = [sourceDevice, targetDevice].sort().join('~');
+    const bundle = bundles.get(key) ?? [];
+    bundle.push(link);
+    bundles.set(key, bundle);
+  }
+  for (const [key, bundleLinks] of bundles) {
+    const first = bundleLinks[0];
+    if (!first) continue;
+    const sourceDevice = deviceByInterface.get(first.source.id) ?? '';
+    const targetDevice = deviceByInterface.get(first.target.id) ?? '';
+    const single = bundleLinks.length === 1;
+    edges.push({
+      id: single ? `link-${first.id}` : `bundle-${key}`,
+      source: sourceDevice,
+      target: targetDevice,
+      sourceHandle: 'link-out',
+      targetHandle: 'link-in',
+      type: 'default',
+      data: { linkIds: bundleLinks.map((l) => l.id) },
+      style: { stroke: '#8b94a7', strokeWidth: single ? 1.5 : 2.5 },
+      label: single ? first.label || first.kind : `${bundleLinks.length} links`,
+      labelStyle: { fill: '#d7dde8', fontSize: 10 },
+      labelBgStyle: { fill: '#161a22' },
     });
   }
 

@@ -13,6 +13,7 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: 'http://127.0.0.1:5173',
+    screenshot: 'only-on-failure',
   },
   webServer: [
     {

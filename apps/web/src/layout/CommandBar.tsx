@@ -9,6 +9,8 @@ export function CommandBar() {
   const pendingOps = useAppStore((s) => s.pendingOps);
   const layers = useAppStore((s) => s.layers);
   const toggleLogicalLayer = useAppStore((s) => s.toggleLogicalLayer);
+  const connectMode = useAppStore((s) => s.connectMode);
+  const toggleConnectMode = useAppStore((s) => s.toggleConnectMode);
 
   return (
     <header className="command-bar" data-testid="command-bar">
@@ -34,6 +36,15 @@ export function CommandBar() {
           title="Redo"
         >
           ⤻ Redo
+        </button>
+        <button
+          type="button"
+          data-testid="toggle-connect-mode"
+          className={connectMode ? 'toggle--on' : ''}
+          onClick={toggleConnectMode}
+          title="Connect mode: pick a source interface, then a destination (§3.3)"
+        >
+          ↯ Connect {connectMode ? 'on' : 'off'}
         </button>
         <button
           type="button"

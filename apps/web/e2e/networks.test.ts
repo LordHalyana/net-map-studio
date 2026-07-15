@@ -75,9 +75,9 @@ test.describe('Membership & Containment (M6 DoD, ADR-0013)', () => {
     const node = page.getByTestId(`device-node-${deviceName}`);
     await expect(node.getByTestId(`membership-chip-${vlanA}`)).toBeVisible();
     await expect(node.getByTestId(`membership-chip-${vlanB}`)).toBeVisible();
-    const edges = page.locator('.react-flow__edge');
-    await expect(edges).toHaveCount(await edges.count()); // stable
-    expect(await page.locator('.react-flow__edge').count()).toBeGreaterThanOrEqual(2);
+    await expect
+      .poll(async () => page.locator('.react-flow__edge').count())
+      .toBeGreaterThanOrEqual(2);
   });
 
   test('moving an interface between VLANs is exactly one Operation', async ({ page }) => {
@@ -101,6 +101,11 @@ test.describe('Membership & Containment (M6 DoD, ADR-0013)', () => {
   });
 
   test('a device sits in exactly one zone; collapsing the site hides it', async ({ page }) => {
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' || msg.type() === 'error') {
+        console.log('BROWSER:', msg.type(), msg.text().slice(0, 300));
+      }
+    });
     await openApp(page);
     await page.getByTestId('add-site').click();
     await waitSaved(page);
@@ -109,6 +114,7 @@ test.describe('Membership & Containment (M6 DoD, ADR-0013)', () => {
     const deviceName = await addDeviceViaLibrary(page, 'nas');
 
     // assign to the zone via the inspector — single physical parent
+    await page.locator('.react-flow__controls-fitview').click();
     await page.getByTestId(`device-node-${deviceName}`).click();
     const zoneSelect = page.getByTestId('device-zone-select');
     const optionLabels = await zoneSelect.locator('option').allInnerTexts();
@@ -120,6 +126,7 @@ test.describe('Membership & Containment (M6 DoD, ADR-0013)', () => {
 
     // collapse the site: the device node disappears
     const siteName = zoneOption.split(' / ')[0] ?? '';
+    await page.locator('.react-flow__controls-fitview').click();
     await page.getByTestId(`site-toggle-${siteName}`).click();
     await expect(page.getByTestId(`device-node-${deviceName}`)).toBeHidden();
 

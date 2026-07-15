@@ -535,6 +535,64 @@ button:disabled {
   color: var(--accent);
 }
 
+/* ---------- connect mode & link info (§3.3) ---------- */
+
+.connect-form__hint {
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+
+.connect-form__notice {
+  color: var(--warn);
+  margin: 0 0 6px;
+}
+
+.connect-form__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.connect-form__side,
+.connect-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.connect-form__side select,
+.connect-form__field select,
+.connect-form__field input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.link-list__item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 260px;
+}
+
+.link-list__endpoints {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
 /* ---------- boot screens ---------- */
 
 .boot-error,
