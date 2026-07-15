@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
 import {
   applyRedaction,
@@ -19,6 +20,20 @@ import { createEngine, OperationError } from './engine/store.js';
 export interface AppOptions {
   dbFile?: string;
   logger?: boolean;
+  /**
+   * Absolute path to the built web app (`apps/web/dist`). When set, the
+   * server serves the SPA and exposes the API from one process (ADR-0002).
+   * The web client calls `/api/*`; those are rewritten to the bare API
+   * routes below, so nothing here needs an `/api` prefix.
+   */
+  serveWebRoot?: string;
+}
+
+/** Strip a leading `/api` segment so the SPA can call `/api/*` on one origin. */
+function stripApiPrefix(url: string): string {
+  if (url === '/api') return '/';
+  if (url.startsWith('/api/')) return url.slice('/api'.length);
+  return url;
 }
 
 const createProjectBodySchema = z.object({
@@ -42,7 +57,11 @@ declare module 'fastify' {
 }
 
 export async function buildApp(options: AppOptions = {}) {
-  const app = Fastify({ logger: options.logger ?? true });
+  const app = Fastify({
+    logger: options.logger ?? true,
+    // Runs before routing; injected/test requests use bare paths and pass through.
+    rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
+  });
   const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
 
@@ -234,6 +253,21 @@ export async function buildApp(options: AppOptions = {}) {
     const params = entityParamsSchema.parse(request.params);
     return engine.getEntityWithRelationships(params.id, params.entityType, params.entityId);
   });
+
+  // ---------- Static SPA (production single-process, ADR-0002) ----------
+
+  if (options.serveWebRoot) {
+    await app.register(fastifyStatic, { root: options.serveWebRoot, wildcard: false });
+    // SPA fallback: unmatched GET navigations (no file extension) get index.html.
+    // API routes that 404 throw OperationError and go through the error handler,
+    // not here, so this never masks a real API not-found.
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method === 'GET' && !request.url.includes('.')) {
+        return reply.sendFile('index.html');
+      }
+      return reply.status(404).send({ error: 'Not found' });
+    });
+  }
 
   return app;
 }
