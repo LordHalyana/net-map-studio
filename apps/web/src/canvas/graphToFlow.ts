@@ -26,6 +26,7 @@ export interface Membership {
 
 export interface FlowOptions {
   logical: boolean;
+  physical: boolean;
   collapsedSites: string[];
 }
 
@@ -108,7 +109,7 @@ export function graphToFlow(
   // records between the same pair collapse into one expandable edge (§3.3).
   const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
   const bundles = new Map<string, Link[]>();
-  for (const link of state.links) {
+  for (const link of options.physical ? state.links : []) {
     const sourceDevice = deviceByInterface.get(link.source.id);
     const targetDevice = deviceByInterface.get(link.target.id);
     if (!sourceDevice || !targetDevice) continue;

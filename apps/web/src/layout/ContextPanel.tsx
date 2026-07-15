@@ -1,17 +1,15 @@
-import { useState } from 'react';
 import { useAppStore } from '../state/store';
 import { ConnectForm } from './ConnectForm';
 import { LinkDetails } from './LinkDetails';
 import { RulesPanel } from './RulesPanel';
 import { ActivityLog } from './ActivityLog';
 
-type Tab = 'details' | 'rules' | 'activity';
-
 export function ContextPanel() {
   const connectMode = useAppStore((s) => s.connectMode);
   const selection = useAppStore((s) => s.selection);
   const graph = useAppStore((s) => s.graph);
-  const [tab, setTab] = useState<Tab>('details');
+  const tab = useAppStore((s) => s.contextTab);
+  const setTab = useAppStore((s) => s.setContextTab);
 
   let detailsTitle = 'Details';
   let details = <p className="panel-empty">Select a connection or rule to edit it here.</p>;

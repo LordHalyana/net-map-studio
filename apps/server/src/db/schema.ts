@@ -73,6 +73,7 @@ export const devices = sqliteTable('devices', {
   tags: tags(),
   notes: text('notes').notNull(),
   position: position(),
+  pinned: integer('pinned', { mode: 'boolean' }).notNull(),
 });
 
 export const networks = sqliteTable('networks', {

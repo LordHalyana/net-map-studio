@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { useAppStore } from '../state/store';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
+import { autoArrangeChangeSet } from '../canvas/autoArrange';
+import { GlobalSearch } from './GlobalSearch';
 
 export function CommandBar() {
   const project = useAppStore((s) => s.project);
@@ -13,6 +15,15 @@ export function CommandBar() {
   const toggleLogicalLayer = useAppStore((s) => s.toggleLogicalLayer);
   const connectMode = useAppStore((s) => s.connectMode);
   const toggleConnectMode = useAppStore((s) => s.toggleConnectMode);
+  const togglePhysicalLayer = useAppStore((s) => s.togglePhysicalLayer);
+  const graph = useAppStore((s) => s.graph);
+  const dispatch = useAppStore((s) => s.dispatch);
+
+  function arrange() {
+    if (!graph) return;
+    const cs = autoArrangeChangeSet(graph);
+    if (cs) dispatch(cs);
+  }
 
   return (
     <header className="command-bar" data-testid="command-bar">
@@ -55,9 +66,41 @@ export function CommandBar() {
           onClick={toggleLogicalLayer}
           title="Show or hide networks, membership edges and tints"
         >
-          ◫ Logical layer {layers.logical ? 'on' : 'off'}
+          ◫ Logical {layers.logical ? 'on' : 'off'}
         </button>
+        <button
+          type="button"
+          data-testid="toggle-physical-layer"
+          className={layers.physical ? 'toggle--on' : ''}
+          onClick={togglePhysicalLayer}
+          title="Show or hide Link edges (physical topology)"
+        >
+          ─ Physical {layers.physical ? 'on' : 'off'}
+        </button>
+        <button
+          type="button"
+          data-testid="auto-arrange"
+          onClick={arrange}
+          title="Auto-arrange unpinned devices (pinned nodes stay put, §3.2C)"
+        >
+          ⌗ Arrange
+        </button>
+        <span className="command-bar__zoom" title="Zoom presets">
+          {[0.5, 1, 2].map((level) => (
+            <button
+              key={level}
+              type="button"
+              data-testid={`zoom-${level * 100}`}
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent('netplan:zoom', { detail: { level } }))
+              }
+            >
+              {level * 100}%
+            </button>
+          ))}
+        </span>
       </div>
+      <GlobalSearch />
       <ExportMenu />
       <div className="command-bar__status" data-testid="sync-status">
         {syncError ? `⚠ ${syncError}` : pendingOps > 0 ? 'Saving…' : 'Saved'}

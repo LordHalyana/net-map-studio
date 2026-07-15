@@ -48,7 +48,11 @@ function CanvasInner() {
   const flow = useMemo(
     () =>
       graph
-        ? graphToFlow(graph, { logical: layers.logical, collapsedSites })
+        ? graphToFlow(graph, {
+            logical: layers.logical,
+            physical: layers.physical,
+            collapsedSites,
+          })
         : { nodes: [], edges: [] },
     [graph, layers, collapsedSites],
   );
@@ -226,6 +230,33 @@ function CanvasInner() {
     [dispatch],
   );
 
+  // command-bar requests: focus an entity, apply a zoom preset
+  const { setCenter, zoomTo } = useReactFlow();
+  useEffect(() => {
+    function onFocusNode(event: Event) {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      const id = detail && typeof detail === 'object' ? detail.id : null;
+      if (typeof id !== 'string') return;
+      const state = useAppStore.getState().graph;
+      if (!state) return;
+      const device = state.devices.find((d) => d.id === id);
+      const network = state.networks.find((n) => n.id === id);
+      const position = device?.position ?? network?.layoutHints['main'];
+      if (position) void setCenter(position.x + 80, position.y + 30, { zoom: 1.2, duration: 350 });
+    }
+    function onZoomPreset(event: Event) {
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      const level = detail && typeof detail === 'object' ? detail.level : null;
+      if (typeof level === 'number') void zoomTo(level, { duration: 250 });
+    }
+    window.addEventListener('netplan:focus-node', onFocusNode);
+    window.addEventListener('netplan:zoom', onZoomPreset);
+    return () => {
+      window.removeEventListener('netplan:focus-node', onFocusNode);
+      window.removeEventListener('netplan:zoom', onZoomPreset);
+    };
+  }, [setCenter, zoomTo]);
+
   // PNG/SVG topology export (design §3.12) — listens for command-bar requests.
   useEffect(() => {
     async function onExportImage(event: Event) {
@@ -298,7 +329,9 @@ function CanvasInner() {
         snapToGrid
         snapGrid={[16, 16]}
         fitView
-        minZoom={0.1}
+        // viewport culling once the canvas is big enough to care (design acceptance #1)
+        onlyRenderVisibleElements={nodes.length > 60}
+        minZoom={0.05}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} />

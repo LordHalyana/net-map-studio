@@ -800,6 +800,75 @@ button:disabled {
   font-size: 12px;
 }
 
+/* ---------- global search & zoom presets ---------- */
+
+.command-bar__zoom {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.command-bar__zoom button {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.global-search {
+  position: relative;
+  margin-left: auto;
+}
+
+.global-search input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  width: 240px;
+}
+
+.global-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.global-search__results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  min-width: 280px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.global-search__results button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.global-search__results button:hover {
+  background: var(--bg-panel);
+}
+
+.global-search__detail {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
 /* ---------- boot screens ---------- */
 
 .boot-error,

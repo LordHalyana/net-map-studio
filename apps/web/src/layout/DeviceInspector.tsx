@@ -206,6 +206,16 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           options={enumOptions(['unknown', 'active', 'inactive'])}
           onCommit={(v) => setField('status', v, device.status)}
         />
+        <label className="field">
+          <span className="field__label">Pinned</span>
+          <input
+            type="checkbox"
+            checked={device.pinned}
+            data-testid="device-pinned-toggle"
+            title="Pinned devices are never moved by auto-arrange (§3.2C)"
+            onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
+          />
+        </label>
       </FieldSection>
 
       <FieldSection title="Interfaces" testId="inspector-interfaces">

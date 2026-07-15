@@ -120,6 +120,8 @@ export const deviceSchema = z.object({
   tags: tagsSchema,
   notes: z.string().default(''),
   position: positionSchema.default({ x: 0, y: 0 }),
+  /** Manual pin (design §3.2C): auto-arrange must not move operator-positioned nodes. */
+  pinned: z.boolean().default(false),
 });
 export type Device = z.infer<typeof deviceSchema>;
 

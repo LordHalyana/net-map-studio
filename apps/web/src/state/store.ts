@@ -27,7 +27,11 @@ export interface Selection {
 export interface LayerState {
   /** Show network-nodes, membership edges and per-network tints (ADR-0013). */
   logical: boolean;
+  /** Show physical topology: Link/bundle edges. */
+  physical: boolean;
 }
+
+export type ContextTab = 'details' | 'rules' | 'activity';
 
 /**
  * Connect mode (design §3.3): pick a source Interface, pick a destination,
@@ -66,7 +70,10 @@ interface AppState {
   redo: () => Promise<void>;
   select: (selection: Selection | null) => void;
   importBundle: (bundleText: string) => Promise<void>;
+  contextTab: ContextTab;
+  setContextTab: (tab: ContextTab) => void;
   toggleLogicalLayer: () => void;
+  togglePhysicalLayer: () => void;
   toggleSiteCollapsed: (siteId: string) => void;
   toggleConnectMode: () => void;
   connectPickNode: (nodeType: string, nodeId: string) => void;
@@ -87,8 +94,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
-  layers: { logical: true },
+  layers: { logical: true, physical: true },
   collapsedSites: [],
+  contextTab: 'details',
   connectMode: false,
   connectDraft: emptyDraft,
   connectNotice: null,
@@ -188,7 +196,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ project, graph, availability, selection: null });
   },
 
-  toggleLogicalLayer: () => set({ layers: { logical: !get().layers.logical } }),
+  setContextTab: (tab) => set({ contextTab: tab }),
+
+  toggleLogicalLayer: () => set({ layers: { ...get().layers, logical: !get().layers.logical } }),
+
+  togglePhysicalLayer: () => set({ layers: { ...get().layers, physical: !get().layers.physical } }),
 
   toggleSiteCollapsed: (siteId) => {
     const current = get().collapsedSites;
