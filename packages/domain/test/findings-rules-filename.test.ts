@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  builtInRules,
+  filenamePathRules,
   engineConfigSchema,
   runAnalysis,
   type AnalysisContext,
@@ -50,7 +50,7 @@ function run(inventory: HostSecurityInventory | null, config?: EngineConfig): De
     config: config ?? engineConfigSchema.parse({}),
     opSeq: 1,
   };
-  return runAnalysis(builtInRules, ctx).detections;
+  return runAnalysis(filenamePathRules, ctx).detections;
 }
 
 describe('M5 filename / path family (§3.8)', () => {

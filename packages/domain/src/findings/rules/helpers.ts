@@ -1,5 +1,5 @@
 import type { Baseline, Device } from '../../entities.js';
-import type { FlowEndpoint } from '../../endpoints.js';
+import type { Endpoint, FlowEndpoint } from '../../endpoints.js';
 import type { EvidenceId } from '../../imports.js';
 import type { ProjectState } from '../../state.js';
 import type { HostSecurityInventory } from '../inputs.js';
@@ -117,6 +117,36 @@ export function flowEndpointDevice(state: ProjectState, ep: FlowEndpoint): Devic
     return iface ? state.devices.find((d) => d.id === iface.deviceId) : undefined;
   }
   return undefined;
+}
+
+/** Does a PolicyRule endpoint resolve to (cover) this device — directly, by zone, or by network? */
+export function endpointCoversDevice(state: ProjectState, ep: Endpoint, device: Device): boolean {
+  switch (ep.kind) {
+    case 'device':
+      return ep.id === device.id;
+    case 'zone':
+      return device.zoneId != null && ep.id === device.zoneId;
+    case 'interface':
+      return state.interfaces.some((i) => i.id === ep.id && i.deviceId === device.id);
+    case 'network':
+    case 'subnet':
+      return deviceNetworkIds(state, device).has(ep.id);
+  }
+}
+
+/** Is there an intended `allow` PolicyRule sanctioning traffic between two devices? */
+export function policyAllows(state: ProjectState, src: Device, dst: Device): boolean {
+  return state.policyRules.some((rule) => {
+    if (rule.action !== 'allow') return false;
+    const forward =
+      endpointCoversDevice(state, rule.source, src) &&
+      endpointCoversDevice(state, rule.destination, dst);
+    const reverse =
+      rule.direction === 'bidirectional' &&
+      endpointCoversDevice(state, rule.source, dst) &&
+      endpointCoversDevice(state, rule.destination, src);
+    return forward || reverse;
+  });
 }
 
 /** Read a numeric rule-config param, falling back to a default. */

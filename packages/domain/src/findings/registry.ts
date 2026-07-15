@@ -3,6 +3,7 @@ import { filenamePathRules } from './rules/filename-path.js';
 import { processPersistenceRules } from './rules/process-persistence.js';
 import { exposedServiceRules } from './rules/exposed-service.js';
 import { externalConnectionRules } from './rules/external-connection.js';
+import { segmentationIdentityRules } from './rules/segmentation-identity.js';
 
 /**
  * The built-in rule registry: the rules the analysis run executes. Real
@@ -14,4 +15,5 @@ export const builtInRules: readonly Rule[] = [
   ...processPersistenceRules,
   ...exposedServiceRules,
   ...externalConnectionRules,
+  ...segmentationIdentityRules,
 ];
