@@ -26,9 +26,11 @@ import {
   type Operation,
   type PolicyRule,
   type Project,
+  type ProjectState,
   type Service,
   type SettableEntityType,
   type Site,
+  type UndoRedoAvailability,
   type Zone,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
@@ -59,23 +61,7 @@ export class OperationError extends Error {
   }
 }
 
-export interface ProjectState {
-  project: Project;
-  sites: Site[];
-  zones: Zone[];
-  devices: Device[];
-  interfaces: Interface[];
-  addresses: Address[];
-  networks: Network[];
-  links: Link[];
-  services: Service[];
-  policyRules: PolicyRule[];
-}
-
-export interface UndoRedoAvailability {
-  canUndo: boolean;
-  canRedo: boolean;
-}
+export type { ProjectState, UndoRedoAvailability } from '@netplan/domain';
 
 export interface ApplyResult {
   appliedOperations: Operation[];

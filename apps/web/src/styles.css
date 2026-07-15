@@ -2,10 +2,14 @@
   color-scheme: dark;
   --bg: #0f1115;
   --bg-panel: #161a22;
+  --bg-raised: #1d2330;
   --border: #262c38;
   --text: #d7dde8;
   --text-dim: #8b94a7;
   --accent: #4da3ff;
+  --ok: #4dc38a;
+  --warn: #e5b455;
+  --danger: #e06c6c;
 }
 
 * {
@@ -27,9 +31,240 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
-  font-size: 14px;
+  font-size: 13px;
 }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- five-region shell (design §3.2) ---------- */
 
 .app-shell {
   height: 100%;
+  display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  grid-template-rows: 44px 1fr 200px;
+  grid-template-areas:
+    'command command command'
+    'library canvas inspector'
+    'library context inspector';
+}
+
+.command-bar {
+  grid-area: command;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.command-bar__brand {
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.command-bar__project {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.command-bar__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.command-bar__status {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.library-panel {
+  grid-area: library;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  padding: 10px;
+}
+
+.canvas-region {
+  grid-area: canvas;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.inspector-panel {
+  grid-area: inspector;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  padding: 10px;
+}
+
+.context-panel {
+  grid-area: context;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 10px;
+}
+
+.panel-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.panel-empty {
+  color: var(--text-dim);
+}
+
+/* ---------- library ---------- */
+
+.library-category h3 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.library-category ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 6px;
+  border-radius: 4px;
+}
+
+.library-item:hover {
+  background: var(--bg-raised);
+  border-color: var(--border);
+}
+
+.library-item__glyph {
+  width: 18px;
+  text-align: center;
+}
+
+/* ---------- inspector ---------- */
+
+.inspector-fields {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.inspector-fields dt {
+  color: var(--text-dim);
+}
+
+.inspector-fields dd {
+  margin: 0;
+}
+
+/* ---------- device node ---------- */
+
+.device-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+}
+
+.device-node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.device-node__glyph {
+  font-size: 18px;
+}
+
+.device-node__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.device-node__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-node__meta {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.device-node__lifecycle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.device-node__lifecycle--planned {
+  background: var(--accent);
+}
+
+.device-node__lifecycle--observed {
+  background: var(--ok);
+}
+
+.device-node__lifecycle--deprecated {
+  background: var(--warn);
+}
+
+/* ---------- boot screens ---------- */
+
+.boot-error,
+.boot-loading {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  text-align: center;
 }

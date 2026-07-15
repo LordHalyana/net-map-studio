@@ -1,0 +1,42 @@
+import { useAppStore } from '../state/store';
+
+export function CommandBar() {
+  const project = useAppStore((s) => s.project);
+  const availability = useAppStore((s) => s.availability);
+  const undo = useAppStore((s) => s.undo);
+  const redo = useAppStore((s) => s.redo);
+  const syncError = useAppStore((s) => s.syncError);
+  const pendingOps = useAppStore((s) => s.pendingOps);
+
+  return (
+    <header className="command-bar" data-testid="command-bar">
+      <span className="command-bar__brand">NetPlan Studio</span>
+      <span className="command-bar__project" data-testid="project-name">
+        {project?.name ?? 'Loading…'}
+      </span>
+      <div className="command-bar__actions">
+        <button
+          type="button"
+          data-testid="undo-button"
+          disabled={!availability.canUndo}
+          onClick={() => void undo()}
+          title="Undo"
+        >
+          ⤺ Undo
+        </button>
+        <button
+          type="button"
+          data-testid="redo-button"
+          disabled={!availability.canRedo}
+          onClick={() => void redo()}
+          title="Redo"
+        >
+          ⤻ Redo
+        </button>
+      </div>
+      <div className="command-bar__status" data-testid="sync-status">
+        {syncError ? `⚠ ${syncError}` : pendingOps > 0 ? 'Saving…' : 'Saved'}
+      </div>
+    </header>
+  );
+}
