@@ -7,6 +7,8 @@ export function CommandBar() {
   const redo = useAppStore((s) => s.redo);
   const syncError = useAppStore((s) => s.syncError);
   const pendingOps = useAppStore((s) => s.pendingOps);
+  const layers = useAppStore((s) => s.layers);
+  const toggleLogicalLayer = useAppStore((s) => s.toggleLogicalLayer);
 
   return (
     <header className="command-bar" data-testid="command-bar">
@@ -32,6 +34,15 @@ export function CommandBar() {
           title="Redo"
         >
           ⤻ Redo
+        </button>
+        <button
+          type="button"
+          data-testid="toggle-logical-layer"
+          className={layers.logical ? 'toggle--on' : ''}
+          onClick={toggleLogicalLayer}
+          title="Show or hide networks, membership edges and tints"
+        >
+          ◫ Logical layer {layers.logical ? 'on' : 'off'}
         </button>
       </div>
       <div className="command-bar__status" data-testid="sync-status">

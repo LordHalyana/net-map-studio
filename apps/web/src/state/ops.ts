@@ -6,9 +6,15 @@ import {
   deviceSchema,
   interfaceIdSchema,
   interfaceSchema,
+  networkIdSchema,
+  networkSchema,
   newId,
   operationIdSchema,
   operationSchema,
+  siteIdSchema,
+  siteSchema,
+  zoneIdSchema,
+  zoneSchema,
   type Address,
   type ChangeSet,
   type Device,
@@ -16,12 +22,15 @@ import {
   type EntityPayload,
   type Interface,
   type InterfaceId,
+  type Network,
   type NetworkId,
   type Operation,
   type Position,
   type ProjectId,
   type ProjectState,
   type SettableEntityType,
+  type Site,
+  type Zone,
   type ZoneId,
 } from '@netplan/domain';
 
@@ -129,6 +138,56 @@ export function buildInterface(
     deviceId: device.id,
     name,
     ...overrides,
+  });
+}
+
+export function buildNetwork(
+  projectId: ProjectId,
+  kind: Network['kind'],
+  existingNames: ReadonlySet<string>,
+  position: Position,
+): Network {
+  const prefix = kind === 'vlan' ? 'VLAN' : kind;
+  let index = 1;
+  while (existingNames.has(`${prefix}-${index * 10}`)) index += 1;
+  return networkSchema.parse({
+    id: newId(networkIdSchema),
+    projectId,
+    name: `${prefix}-${index * 10}`,
+    kind,
+    vlanId: kind === 'vlan' ? index * 10 : null,
+    layoutHints: { main: position },
+  });
+}
+
+export function buildSite(
+  projectId: ProjectId,
+  existingNames: ReadonlySet<string>,
+  position: Position,
+): Site {
+  let index = 1;
+  while (existingNames.has(`site-${index}`)) index += 1;
+  return siteSchema.parse({
+    id: newId(siteIdSchema),
+    projectId,
+    name: `site-${index}`,
+    position,
+  });
+}
+
+export function buildZone(
+  site: Site,
+  existingNames: ReadonlySet<string>,
+  position: Position,
+): Zone {
+  let index = 1;
+  while (existingNames.has(`zone-${index}`)) index += 1;
+  return zoneSchema.parse({
+    id: newId(zoneIdSchema),
+    projectId: site.projectId,
+    siteId: site.id,
+    name: `zone-${index}`,
+    position,
   });
 }
 

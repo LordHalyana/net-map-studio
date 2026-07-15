@@ -1,6 +1,13 @@
 import { libraryCatalog } from '../library/catalog';
 import { useAppStore } from '../state/store';
-import { buildDevice, opCreateDevice } from '../state/ops';
+import {
+  buildDevice,
+  buildNetwork,
+  buildSite,
+  buildZone,
+  opCreateDevice,
+  opCreateEntity,
+} from '../state/ops';
 import type { DeviceType } from '@netplan/domain';
 
 export const DND_MIME = 'application/x-netplan-device-type';
@@ -26,9 +33,74 @@ export function LibraryPanel() {
     dispatch(opCreateDevice(project.id, device));
   }
 
+  function addNetwork() {
+    if (!project || !graph) return;
+    const network = buildNetwork(project.id, 'vlan', new Set(graph.networks.map((n) => n.name)), {
+      x: 80 + graph.networks.length * 220,
+      y: -140,
+    });
+    dispatch(opCreateEntity(project.id, { entityType: 'network', entity: network }));
+  }
+
+  function addSite() {
+    if (!project || !graph) return;
+    const site = buildSite(project.id, new Set(graph.sites.map((s) => s.name)), {
+      x: 60 + graph.sites.length * 80,
+      y: 320 + graph.sites.length * 60,
+    });
+    dispatch(opCreateEntity(project.id, { entityType: 'site', entity: site }));
+  }
+
+  function addZone() {
+    if (!project || !graph) return;
+    const site = graph.sites[0];
+    if (!site) return;
+    const zonesInSite = graph.zones.filter((z) => z.siteId === site.id);
+    const zone = buildZone(site, new Set(graph.zones.map((z) => z.name)), {
+      x: 20 + (zonesInSite.length % 2) * 220,
+      y: 44 + Math.floor(zonesInSite.length / 2) * 165,
+    });
+    dispatch(opCreateEntity(project.id, { entityType: 'zone', entity: zone }));
+  }
+
   return (
     <nav className="library-panel" data-testid="library-panel">
       <h2 className="panel-title">Components</h2>
+      <section className="library-category">
+        <h3>Structure</h3>
+        <ul>
+          <li>
+            <button
+              type="button"
+              className="library-item"
+              data-testid="add-network"
+              onClick={addNetwork}
+            >
+              <span className="library-item__glyph">☁</span>
+              Network / VLAN
+            </button>
+          </li>
+          <li>
+            <button type="button" className="library-item" data-testid="add-site" onClick={addSite}>
+              <span className="library-item__glyph">🏢</span>
+              Site
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="library-item"
+              data-testid="add-zone"
+              onClick={addZone}
+              disabled={!graph || graph.sites.length === 0}
+              title={graph?.sites.length ? 'Add a zone to the first site' : 'Add a site first'}
+            >
+              <span className="library-item__glyph">▦</span>
+              Zone
+            </button>
+          </li>
+        </ul>
+      </section>
       {libraryCatalog.map((category) => (
         <section key={category.key} className="library-category">
           <h3>{category.label}</h3>

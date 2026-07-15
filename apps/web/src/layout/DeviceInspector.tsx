@@ -5,6 +5,7 @@ import {
   deviceTypeSchema,
   interfaceKindSchema,
   networkIdSchema,
+  zoneIdSchema,
   type Address,
   type Device,
   type Interface,
@@ -19,6 +20,7 @@ import {
   duplicateDevicesChangeSet,
   opCreateEntity,
   opDeleteEntity,
+  opSetContainment,
   opSetField,
   opSetMembership,
 } from '../state/ops';
@@ -37,6 +39,31 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
 
   const interfaces = graph.interfaces.filter((i) => i.deviceId === device.id);
   const structuredTypeMissing = device.deviceType === 'custom' && !device.customTypeLabel.trim();
+
+  /** Containment (ADR-0013): exactly one physical parent; position converts with it. */
+  function commitZone(value: string) {
+    const nextZoneId = value ? zoneIdSchema.parse(value) : null;
+    if (nextZoneId === device.zoneId) return;
+    const ops = [opSetContainment(projectId, device.id, nextZoneId, device.zoneId)];
+
+    if (nextZoneId) {
+      const siblings = graph.devices.filter(
+        (d) => d.zoneId === nextZoneId && d.id !== device.id,
+      ).length;
+      const slot = { x: 24 + (siblings % 4) * 40, y: 44 + Math.floor(siblings / 4) * 56 };
+      ops.push(opSetField(projectId, 'device', device.id, 'position', slot, device.position));
+    } else if (device.zoneId) {
+      // back to the open canvas: restore an absolute position
+      const zone = graph.zones.find((z) => z.id === device.zoneId);
+      const site = zone ? graph.sites.find((s) => s.id === zone.siteId) : undefined;
+      const absolute = {
+        x: (site?.position.x ?? 0) + (zone?.position.x ?? 0) + device.position.x,
+        y: (site?.position.y ?? 0) + (zone?.position.y ?? 0) + device.position.y,
+      };
+      ops.push(opSetField(projectId, 'device', device.id, 'position', absolute, device.position));
+    }
+    dispatch(changeSet(projectId, `Move ${device.name} to zone`, ops));
+  }
 
   function onIconUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -152,6 +179,19 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           label="Location"
           value={device.location}
           onCommit={(v) => setField('location', v, device.location)}
+        />
+        <SelectField
+          label="Zone"
+          value={device.zoneId ?? ''}
+          testId="device-zone-select"
+          options={[
+            { value: '', label: '— none —' },
+            ...graph.zones.map((zone) => {
+              const site = graph.sites.find((s) => s.id === zone.siteId);
+              return { value: zone.id, label: `${site?.name ?? '?'} / ${zone.name}` };
+            }),
+          ]}
+          onCommit={commitZone}
         />
         <SelectField
           label="Criticality"

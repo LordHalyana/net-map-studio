@@ -14,44 +14,52 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { deviceTypeSchema } from '@netplan/domain';
-import { useAppStore } from '../state/store';
+import { useAppStore, type Selection } from '../state/store';
 import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
-import { DeviceNode, type DeviceFlowNode } from './DeviceNode';
+import { DeviceNode } from './DeviceNode';
+import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
+import { graphToFlow } from './graphToFlow';
 import { DND_MIME } from '../layout/LibraryPanel';
 
-const nodeTypes = { device: DeviceNode };
+const nodeTypes = { device: DeviceNode, site: SiteNode, zone: ZoneNode, network: NetworkNode };
 
-function deviceNodesFromGraph(devices: DeviceFlowNode['data']['device'][]): Node[] {
-  return devices.map((device) => ({
-    id: device.id,
-    type: 'device',
-    position: device.position,
-    data: { device },
-  }));
-}
+const nodeTypeToSelection: Record<string, Selection['entityType']> = {
+  device: 'device',
+  site: 'site',
+  zone: 'zone',
+  network: 'network',
+};
 
 function CanvasInner() {
   const graph = useAppStore((s) => s.graph);
   const project = useAppStore((s) => s.project);
+  const layers = useAppStore((s) => s.layers);
+  const collapsedSites = useAppStore((s) => s.collapsedSites);
   const dispatch = useAppStore((s) => s.dispatch);
   const select = useAppStore((s) => s.select);
   const { screenToFlowPosition } = useReactFlow();
 
   const [nodes, setNodes] = useState<Node[]>([]);
 
-  const graphNodes = useMemo(() => deviceNodesFromGraph(graph?.devices ?? []), [graph]);
+  const flow = useMemo(
+    () =>
+      graph
+        ? graphToFlow(graph, { logical: layers.logical, collapsedSites })
+        : { nodes: [], edges: [] },
+    [graph, layers, collapsedSites],
+  );
 
   // Adopt graph-derived nodes, preserving live drag/selection state React Flow holds.
   useEffect(() => {
     setNodes((current) => {
       const byId = new Map(current.map((n) => [n.id, n]));
-      return graphNodes.map((node) => {
+      return flow.nodes.map((node) => {
         const existing = byId.get(node.id);
         if (existing?.dragging) return existing;
         return existing?.selected ? { ...node, selected: true } : node;
       });
     });
-  }, [graphNodes]);
+  }, [flow.nodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -61,23 +69,80 @@ function CanvasInner() {
   const onNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
       if (!project || !graph) return;
-      const device = graph.devices.find((d) => d.id === node.id);
-      if (!device) return;
-      if (device.position.x === node.position.x && device.position.y === node.position.y) return;
-      dispatch(
-        opSetField(project.id, 'device', device.id, 'position', node.position, device.position),
-      );
+      const { x, y } = node.position;
+      switch (node.type) {
+        case 'device': {
+          const device = graph.devices.find((d) => d.id === node.id);
+          if (device && (device.position.x !== x || device.position.y !== y)) {
+            dispatch(
+              opSetField(
+                project.id,
+                'device',
+                device.id,
+                'position',
+                node.position,
+                device.position,
+              ),
+            );
+          }
+          return;
+        }
+        case 'zone': {
+          const zone = graph.zones.find((z) => z.id === node.id);
+          if (zone && (zone.position.x !== x || zone.position.y !== y)) {
+            dispatch(
+              opSetField(project.id, 'zone', zone.id, 'position', node.position, zone.position),
+            );
+          }
+          return;
+        }
+        case 'site': {
+          const site = graph.sites.find((s) => s.id === node.id);
+          if (site && (site.position.x !== x || site.position.y !== y)) {
+            dispatch(
+              opSetField(project.id, 'site', site.id, 'position', node.position, site.position),
+            );
+          }
+          return;
+        }
+        case 'network': {
+          // Per-(network, view) layout hint (ADR-0013) — the projection keeps
+          // its position without the Network becoming a topological node.
+          const network = graph.networks.find((n) => n.id === node.id);
+          const previous = network?.layoutHints['main'];
+          if (network && (previous?.x !== x || previous?.y !== y)) {
+            dispatch(
+              opSetField(
+                project.id,
+                'network',
+                network.id,
+                'layoutHints',
+                { ...network.layoutHints, main: node.position },
+                network.layoutHints,
+              ),
+            );
+          }
+          return;
+        }
+      }
     },
     [project, graph, dispatch],
   );
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
-      select(
-        selectedNodes.length > 0
-          ? { entityType: 'device', ids: selectedNodes.map((n) => n.id) }
-          : null,
-      );
+      if (selectedNodes.length === 0) {
+        select(null);
+        return;
+      }
+      const first = selectedNodes[0];
+      const entityType = first?.type ? nodeTypeToSelection[first.type] : undefined;
+      if (!entityType) {
+        select(null);
+        return;
+      }
+      const sameType = selectedNodes.filter((n) => n.type === first?.type);
+      select({ entityType, ids: sameType.map((n) => n.id) });
     },
     [select],
   );
@@ -86,10 +151,8 @@ function CanvasInner() {
     (deleted: Node[]) => {
       const state = useAppStore.getState().graph;
       if (!state) return;
-      const cs = deleteDevicesChangeSet(
-        state,
-        deleted.map((n) => n.id),
-      );
+      const deviceIds = deleted.filter((n) => n.type === 'device').map((n) => n.id);
+      const cs = deleteDevicesChangeSet(state, deviceIds);
       if (cs) dispatch(cs);
     },
     [dispatch],
@@ -125,7 +188,7 @@ function CanvasInner() {
     <main className="canvas-region" data-testid="canvas-region">
       <ReactFlow
         nodes={nodes}
-        edges={[]}
+        edges={flow.edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onNodeDragStop={onNodeDragStop}

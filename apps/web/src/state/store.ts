@@ -21,6 +21,11 @@ export interface Selection {
   ids: string[];
 }
 
+export interface LayerState {
+  /** Show network-nodes, membership edges and per-network tints (ADR-0013). */
+  logical: boolean;
+}
+
 interface AppState {
   project: Project | null;
   graph: ProjectState | null;
@@ -28,12 +33,16 @@ interface AppState {
   selection: Selection | null;
   syncError: string | null;
   pendingOps: number;
+  layers: LayerState;
+  collapsedSites: string[];
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
   dispatch: (payload: Operation | ChangeSet) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   select: (selection: Selection | null) => void;
+  toggleLogicalLayer: () => void;
+  toggleSiteCollapsed: (siteId: string) => void;
 }
 
 /** Serializes syncs so operations reach the server in dispatch order. */
@@ -46,6 +55,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
+  layers: { logical: true },
+  collapsedSites: [],
 
   bootstrap: async () => {
     const projects = await listProjects();
@@ -108,4 +119,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   select: (selection) => set({ selection }),
+
+  toggleLogicalLayer: () => set({ layers: { logical: !get().layers.logical } }),
+
+  toggleSiteCollapsed: (siteId) => {
+    const current = get().collapsedSites;
+    set({
+      collapsedSites: current.includes(siteId)
+        ? current.filter((id) => id !== siteId)
+        : [...current, siteId],
+    });
+  },
 }));
