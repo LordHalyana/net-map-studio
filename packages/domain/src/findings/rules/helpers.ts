@@ -63,3 +63,21 @@ export function inventoryEvidence(inventory: HostSecurityInventory): EvidenceId[
 export function includesInsensitive(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
+
+/** Locations legitimate software rarely launches from (shared by M5 and M6). */
+export const SUSPECT_LOCATIONS: readonly string[] = [
+  '\\temp\\',
+  '/tmp/',
+  '\\tmp\\',
+  '\\downloads\\',
+  '/downloads/',
+  'appdata\\local\\temp',
+  '\\$recycle',
+  '/dev/shm/',
+  '\\programdata\\temp',
+  '\\users\\public\\',
+];
+
+export function isSuspectLocation(text: string, extra: readonly string[] = []): boolean {
+  return [...SUSPECT_LOCATIONS, ...extra].some((loc) => includesInsensitive(text, loc));
+}

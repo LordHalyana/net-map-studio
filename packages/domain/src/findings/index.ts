@@ -10,3 +10,4 @@ export * from './reconcile.js';
 export * from './coverage.js';
 export * from './inputs.js';
 export * from './rules/filename-path.js';
+export * from './rules/process-persistence.js';
