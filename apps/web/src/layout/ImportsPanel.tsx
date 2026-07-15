@@ -76,14 +76,22 @@ function ImportWizard({
   onUpload: (input: { filename: string; adapter: string; content: string }) => Promise<void>;
 }) {
   const [adapter, setAdapter] = useState('device-state');
+  // a filename-based guess only applies while the operator hasn't chosen
+  const [adapterChosen, setAdapterChosen] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
+    const effectiveAdapter = adapterChosen ? adapter : guessAdapter(file.name);
+    setAdapter(effectiveAdapter);
     setBusy(true);
     try {
-      await onUpload({ filename: file.name, adapter, content: await file.text() });
+      await onUpload({
+        filename: file.name,
+        adapter: effectiveAdapter,
+        content: await file.text(),
+      });
     } finally {
       setBusy(false);
     }
@@ -96,7 +104,10 @@ function ImportWizard({
         <select
           data-testid="import-adapter-select"
           value={adapter}
-          onChange={(e) => setAdapter(e.target.value)}
+          onChange={(e) => {
+            setAdapter(e.target.value);
+            setAdapterChosen(true);
+          }}
         >
           {ADAPTERS.map((a) => (
             <option key={a.name} value={a.name}>
@@ -119,9 +130,7 @@ function ImportWizard({
         className="export-menu__file"
         data-testid="import-evidence-file-input"
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) setAdapter((current) => (current ? current : guessAdapter(file.name)));
-          void onFile(file);
+          void onFile(e.target.files?.[0]);
           e.target.value = '';
         }}
       />

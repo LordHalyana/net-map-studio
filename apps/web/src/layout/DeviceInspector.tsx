@@ -4,6 +4,7 @@ import {
   criticalitySchema,
   deviceTypeSchema,
   interfaceKindSchema,
+  lifecycleStateSchema,
   networkIdSchema,
   zoneIdSchema,
   type Address,
@@ -11,6 +12,7 @@ import {
   type Interface,
   type ProjectState,
 } from '@netplan/domain';
+import { getLog } from '../api/client';
 import { useAppStore } from '../state/store';
 import {
   buildAddress,
@@ -79,6 +81,37 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
     event.target.value = '';
   }
 
+  /**
+   * Clearing a removal flag restores what the object was before — a
+   * manually-verified trust badge must survive the round trip (ADR-0021).
+   * The Operation log knows the previous state; fall back to `observed`.
+   */
+  async function restoreFromProposal() {
+    let previous: unknown = 'observed';
+    try {
+      const log = await getLog(projectId);
+      for (const entry of log) {
+        if (
+          entry.role === 'do' &&
+          entry.payload.kind === 'SetField' &&
+          entry.payload.entityId === device.id &&
+          entry.payload.field === 'lifecycleState' &&
+          entry.payload.value === 'removedInProposal'
+        ) {
+          previous = entry.payload.previousValue;
+        }
+      }
+    } catch {
+      // log unavailable — the observed fallback still clears the flag
+    }
+    const target = lifecycleStateSchema.safeParse(previous);
+    setField(
+      'lifecycleState',
+      target.success && target.data !== 'removedInProposal' ? target.data : 'observed',
+      device.lifecycleState,
+    );
+  }
+
   function addInterface() {
     const names = new Set(interfaces.map((i) => i.name));
     let index = interfaces.length;
@@ -128,8 +161,8 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           <button
             type="button"
             data-testid="restore-in-proposal"
-            title="Clear the removal flag"
-            onClick={() => setField('lifecycleState', 'observed', device.lifecycleState)}
+            title="Clear the removal flag (restores the previous lifecycle state)"
+            onClick={() => void restoreFromProposal()}
           >
             Restore
           </button>

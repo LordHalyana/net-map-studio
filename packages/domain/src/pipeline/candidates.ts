@@ -3,6 +3,7 @@ import type { DeviceHints, FlowEndpointHints, Observation, ObservationId } from 
 import type { AddressKind, IdentityScope, Protocol, RolePrivilege } from '../entities.js';
 import { fieldValueSchema, type FieldValue } from '../operations.js';
 import { normalizeObservation } from './normalize.js';
+import { identityNaturalKey } from './keys.js';
 
 /**
  * Deduplication + confidence scoring (ADR-0020, plan M2): normalized
@@ -384,10 +385,7 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
   const identityKeyOf = (
     identity: { scope: IdentityScope; name: string; domain: string },
     deviceKey: string,
-  ): string =>
-    identity.scope === 'domain'
-      ? `identity:domain:${identity.domain}\\${identity.name.toLowerCase()}`
-      : `identity:local:${deviceKey}:${identity.name.toLowerCase()}`;
+  ): string => identityNaturalKey(identity.scope, identity.domain, identity.name, deviceKey);
 
   const flowEndpointKey = (hints: FlowEndpointHints): string =>
     hints.ip ?? hints.hostname ?? hints.mac ?? 'unknown';

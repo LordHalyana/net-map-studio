@@ -57,10 +57,12 @@ test.describe('M9: AS-IS / TO-BE / Diff overlay (ADR-0009)', () => {
     await importAndCommitSample(page);
 
     // author a TO-BE addition: manually drawn objects are born Planned
-    await page.getByTestId('library-item-firewall').click();
+    // (earlier suite files may have left planned devices — count relatively)
     const planned = page.locator('.device-node__lifecycle--planned');
-    await expect(planned.first()).toBeVisible();
-    const plannedCount = await planned.count();
+    const plannedBefore = await planned.count();
+    await page.getByTestId('library-item-firewall').click();
+    const plannedCount = plannedBefore + 1;
+    await expect(planned).toHaveCount(plannedCount);
 
     // AS-IS hides planned-only objects, keeps the Observed import
     await page.getByTestId('mode-asIs').click();

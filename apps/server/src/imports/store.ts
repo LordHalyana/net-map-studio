@@ -42,7 +42,7 @@ import {
   operationLog,
   projects,
 } from '../db/schema.js';
-import { OperationError, type Engine } from '../engine/store.js';
+import { OperationError, type Engine, type EngineTx } from '../engine/store.js';
 import { insertProvenanceRows } from './provenance.js';
 import {
   DEFAULT_PARSE_LIMITS,
@@ -186,6 +186,13 @@ export function createImportStore(
    * Ingest an evidence file and enqueue its parse (ADR-0019): hash-on-ingest,
    * split-by-class retention, then the parse runs off the request path — the
    * returned job is `pending`/`parsing` until the worker finishes.
+   *
+   * Execution strategy: an in-process cooperative worker (event-loop yields +
+   * the guards.ts limits), not a separate thread/process. Every ADR-0019
+   * limit is enforced and a hostile file fails the job, not the app — but a
+   * parser that hard-crashes the runtime would still take the process down.
+   * `runParse` is the seam: moving it into a worker thread changes nothing
+   * above this line.
    */
   function createJob(projectId: string, body: CreateImportBody): ImportJob {
     requireProject(projectId);
@@ -383,7 +390,7 @@ export function createImportStore(
       job,
       now,
     );
-    const finishJob = (tx: Parameters<Parameters<Db['transaction']>[0]>[0]) => {
+    const finishJob = (tx: EngineTx) => {
       insertProvenanceRows(tx, provenanceRows);
       tx.update(importJobs)
         .set({ status: 'committed', changeSetId: proposal.changeSetId, finishedAt: now })
@@ -416,7 +423,7 @@ export function createImportStore(
       throw new OperationError('CONFLICT', `ImportJob ${jobId} is ${job.status}, not committed`);
     }
     const now = new Date().toISOString();
-    const finishJob = (tx: Parameters<Parameters<Db['transaction']>[0]>[0]) => {
+    const finishJob = (tx: EngineTx) => {
       // the imported values are being restored — their provenance goes with them
       tx.delete(fieldProvenance).where(eq(fieldProvenance.importJobId, jobId)).run();
       tx.update(importJobs)

@@ -42,6 +42,7 @@ import {
   type ObservationId,
 } from '../imports.js';
 import { normalizeHostname, normalizeIp, normalizeMac } from './normalize.js';
+import { identityNaturalKey } from './keys.js';
 import type {
   CandidateSet,
   DeviceCandidate,
@@ -136,7 +137,7 @@ function indexExisting(state: ProjectState): ExistingIndex {
     }
   }
   for (const identity of state.identities) {
-    index.identityByKey.set(existingIdentityKey(identity, deviceById), identity);
+    index.identityByKey.set(existingIdentityKey(identity), identity);
   }
   for (const flow of state.flows) {
     index.flowByKey.set(existingFlowKey(flow), flow);
@@ -144,12 +145,13 @@ function indexExisting(state: ProjectState): ExistingIndex {
   return index;
 }
 
-function existingIdentityKey(identity: Identity, deviceById: Map<string, Device>): string {
-  if (identity.scope === 'domain') {
-    return `domain:${identity.domain.toUpperCase()}\\${identity.name.toLowerCase()}`;
-  }
-  const host = identity.deviceId ? (deviceById.get(identity.deviceId)?.id ?? '') : '';
-  return `local:${host}:${identity.name.toLowerCase()}`;
+function existingIdentityKey(identity: Identity): string {
+  return identityNaturalKey(
+    identity.scope,
+    identity.domain,
+    identity.name,
+    identity.deviceId ?? '',
+  );
 }
 
 function flowEndpointLabel(endpoint: FlowEndpoint): string {
@@ -376,11 +378,13 @@ export function buildProposal(
     });
     op({ ...opBase(), kind: 'CreateEntity', payload: { entityType: 'identity', entity } });
 
-    const existingKey =
+    // only domain principals can match across imports — local keys are host-scoped
+    const existing =
       candidate.scope === 'domain'
-        ? `domain:${candidate.domain.toUpperCase()}\\${candidate.name.toLowerCase()}`
-        : null;
-    const existing = existingKey ? index.identityByKey.get(existingKey) : undefined;
+        ? index.identityByKey.get(
+            identityNaturalKey('domain', candidate.domain, candidate.name, ''),
+          )
+        : undefined;
     if (existing) {
       conflicts.push(
         importConflictSchema.parse({

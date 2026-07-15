@@ -166,7 +166,11 @@ export const nmapXmlAdapter: Adapter = {
         const description = [
           port.service?.product,
           port.service?.version,
-          ...(port.script ?? []).map((s) => `[${s.id}]`),
+          // script output travels into the Service description (plan M5),
+          // truncated: it is evidence-derived detail, not a document store
+          ...(port.script ?? []).map(
+            (s) => `[${s.id}${s.output ? `: ${s.output.slice(0, 200)}` : ''}]`,
+          ),
         ]
           .filter(Boolean)
           .join(' ');

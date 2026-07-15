@@ -76,6 +76,8 @@ test.describe('M7: import wizard, review, commit, rollback', () => {
     await expect(page.getByTestId('device-node-web01').getByTestId('badge-evidence')).toContainText(
       '⎘',
     );
+    // M6: observed traffic renders as bundled flow edges (web01 → db01:5432)
+    await expect(page.locator('.react-flow__edge', { hasText: 'tcp/5432' })).toHaveCount(1);
 
     // rollback removes them cleanly
     await page.getByTestId('nav-imports').click();
