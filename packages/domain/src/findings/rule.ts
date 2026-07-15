@@ -6,6 +6,7 @@ import { evidenceIdSchema, fieldProvenanceIdSchema } from '../imports.js';
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
 import type { IndicatorLists, RuleSettings } from './config.js';
+import type { HostSecurityInventory } from './inputs.js';
 
 /**
  * A Finding's *derived* half (ADR-0023): the output of a Rule over the
@@ -75,6 +76,8 @@ export interface RuleContext {
   state: ProjectState;
   provenance: readonly FieldProvenance[];
   evidence: readonly Evidence[];
+  /** Per-Device security telemetry (M5/M6): files, processes, persistence, software. */
+  hostInventories: readonly HostSecurityInventory[];
   /** This rule's resolved operator settings (thresholds, overrides). */
   settings: RuleSettings;
   /** The operator's allow/deny string lists (ADR-0024). */

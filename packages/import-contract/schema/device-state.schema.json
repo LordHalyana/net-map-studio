@@ -302,48 +302,143 @@
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "path": {
+                  "type": "string"
+                },
+                "pid": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "parentPid": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "commandLine": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "packages": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string"
+                },
+                "publisher": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "persistence": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "command": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "name"],
+              "additionalProperties": false
             }
           },
           "scheduledTasks": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "command": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "schedule": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "services": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "binaryPath": {
+                  "type": "string"
+                },
+                "startMode": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "startupEntries": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "command": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "shares": {
@@ -358,16 +453,42 @@
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string"
+                },
+                "publisher": {
+                  "type": "string"
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
             }
           },
           "fileInventory": {
             "type": "array",
             "items": {
               "type": "object",
-              "properties": {},
-              "additionalProperties": {}
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "type": "string"
+                },
+                "sizeBytes": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["path"],
+              "additionalProperties": false
             }
           },
           "dns": {

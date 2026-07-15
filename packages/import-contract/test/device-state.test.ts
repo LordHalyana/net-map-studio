@@ -39,11 +39,20 @@ describe('device-state contract (ADR-0018)', () => {
     expect(result.issues.some((i) => i.path.includes('interfaces'))).toBe(true);
   });
 
-  it('accepts arbitrary shapes in the loose P3 sections', () => {
+  it('accepts typed P3 sections and tolerates unknown keys (ADR-0018, Phase 3)', () => {
     const doc = sample();
-    doc.hosts[0].processes = [{ pid: 1, exe: 'C:\\evil.exe', whatever: { nested: true } }];
-    doc.hosts[0].persistence = [{ mechanism: 'run-key', value: 'x' }];
+    doc.hosts[0].processes = [
+      { name: 'evil.exe', path: 'C:\\evil.exe', whatever: { nested: true } },
+    ];
+    doc.hosts[0].persistence = [{ type: 'run-key', name: 'Updater', value: 'x' }];
+    doc.hosts[0].fileInventory = [{ path: 'C:\\a.exe', sha256: 'a'.repeat(64), extra: 1 }];
     expect(validateDeviceStateReport(doc).ok).toBe(true);
+  });
+
+  it('rejects a P3 entry missing its required field', () => {
+    const doc = sample();
+    doc.hosts[0].processes = [{ pid: 1, exe: 'C:\\evil.exe' }]; // no `name`
+    expect(validateDeviceStateReport(doc).ok).toBe(false);
   });
 
   it('rejects a wrong schemaVersion', () => {

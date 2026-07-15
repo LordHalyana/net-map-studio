@@ -9,6 +9,7 @@ import {
   fieldProvenanceSchema,
   findingDispositionSchema,
   findingIdSchema,
+  hostSecurityInventorySchema,
   flowIdSchema,
   flowSchema,
   identityIdSchema,
@@ -45,6 +46,8 @@ import {
   type FieldProvenance,
   type FindingDisposition,
   type Flow,
+  type HostSecurityInventory,
+  type DeviceId,
   type Identity,
   type ImportJob,
   type Observation,
@@ -285,6 +288,20 @@ export function makePolicyRule(
     source: { kind: 'network', id: source.id },
     destination: { kind: 'network', id: destination.id },
     action: 'allow',
+    ...overrides,
+  });
+}
+
+export function makeHostInventory(
+  deviceId: DeviceId,
+  overrides: Partial<HostSecurityInventory> = {},
+): HostSecurityInventory {
+  return hostSecurityInventorySchema.parse({
+    deviceId,
+    files: [],
+    processes: [],
+    persistence: [],
+    software: [],
     ...overrides,
   });
 }

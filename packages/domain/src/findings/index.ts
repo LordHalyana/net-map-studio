@@ -8,3 +8,5 @@ export * from './fixture-rule.js';
 export * from './disposition.js';
 export * from './reconcile.js';
 export * from './coverage.js';
+export * from './inputs.js';
+export * from './rules/filename-path.js';

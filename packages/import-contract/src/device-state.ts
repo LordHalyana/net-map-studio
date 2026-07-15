@@ -88,6 +88,68 @@ export const localGroupEntrySchema = z.strictObject({
   members: z.array(nonEmpty),
 });
 
+/**
+ * Phase-3 security fields (ADR-0018). Typed but tolerant (`z.object`, not
+ * strict): collectors vary and may add keys, but the fields NetPlan Studio's
+ * findings engine reads (M5/M6) have real shapes. All are optional at the host
+ * level — a collector that could not gather a class omits it, which the
+ * findings engine treats as un-collected coverage, never as a clean result.
+ */
+export const processEntrySchema = z.object({
+  name: nonEmpty,
+  path: z.string().optional(),
+  pid: z.number().int().optional(),
+  parentPid: z.number().int().optional(),
+  commandLine: z.string().optional(),
+  user: z.string().optional(),
+});
+
+export const startupEntrySchema = z.object({
+  name: nonEmpty,
+  command: z.string().optional(),
+  path: z.string().optional(),
+});
+
+export const scheduledTaskEntrySchema = z.object({
+  name: nonEmpty,
+  command: z.string().optional(),
+  path: z.string().optional(),
+  schedule: z.string().optional(),
+});
+
+export const serviceEntrySchema = z.object({
+  name: nonEmpty,
+  displayName: z.string().optional(),
+  binaryPath: z.string().optional(),
+  startMode: z.string().optional(),
+});
+
+export const persistenceEntrySchema = z.object({
+  /** e.g. "registryRun", "cron", "launchd", "wmi". */
+  type: nonEmpty,
+  name: nonEmpty,
+  command: z.string().optional(),
+  path: z.string().optional(),
+});
+
+export const packageEntrySchema = z.object({
+  name: nonEmpty,
+  version: z.string().optional(),
+  publisher: z.string().optional(),
+});
+
+export const remoteAccessEntrySchema = z.object({
+  name: nonEmpty,
+  version: z.string().optional(),
+  publisher: z.string().optional(),
+});
+
+export const fileInventoryEntrySchema = z.object({
+  path: nonEmpty,
+  sha256: z.string().optional(),
+  sizeBytes: z.number().int().optional(),
+});
+
 export const collectionSchema = z.strictObject({
   /** What the script attempted to collect, e.g. ["interfaces", "users"]. */
   scope: z.array(nonEmpty),
@@ -121,16 +183,16 @@ export const deviceStateHostSchema = z.strictObject({
   sudoers: z.array(nonEmpty),
   collection: collectionSchema,
 
-  // --- Phase-3 optional, loose (stored as Evidence, parsed in Phase 3) ---
-  processes: z.array(z.looseObject({})).optional(),
-  packages: z.array(z.looseObject({})).optional(),
-  persistence: z.array(z.looseObject({})).optional(),
-  scheduledTasks: z.array(z.looseObject({})).optional(),
-  services: z.array(z.looseObject({})).optional(),
-  startupEntries: z.array(z.looseObject({})).optional(),
+  // --- Phase-3 optional, typed but tolerant (ADR-0018) ---
+  processes: z.array(processEntrySchema).optional(),
+  packages: z.array(packageEntrySchema).optional(),
+  persistence: z.array(persistenceEntrySchema).optional(),
+  scheduledTasks: z.array(scheduledTaskEntrySchema).optional(),
+  services: z.array(serviceEntrySchema).optional(),
+  startupEntries: z.array(startupEntrySchema).optional(),
   shares: z.array(z.looseObject({})).optional(),
-  remoteAccess: z.array(z.looseObject({})).optional(),
-  fileInventory: z.array(z.looseObject({})).optional(),
+  remoteAccess: z.array(remoteAccessEntrySchema).optional(),
+  fileInventory: z.array(fileInventoryEntrySchema).optional(),
   dns: z.looseObject({}).optional(),
 });
 

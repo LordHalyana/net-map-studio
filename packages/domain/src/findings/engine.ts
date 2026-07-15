@@ -2,6 +2,7 @@ import { combineConfidence, confidenceSchema, type Confidence } from '../confide
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
 import { hashConfig, resolveRuleSettings, type EngineConfig, type RuleSettings } from './config.js';
+import type { HostSecurityInventory } from './inputs.js';
 import { computeFingerprint } from './fingerprint.js';
 import {
   detectionRecordSchema,
@@ -17,6 +18,8 @@ export interface AnalysisContext {
   state: ProjectState;
   provenance: readonly FieldProvenance[];
   evidence: readonly Evidence[];
+  /** Per-Device security telemetry (M5/M6); empty when none was collected. */
+  hostInventories?: readonly HostSecurityInventory[];
   config: EngineConfig;
   /** The current Operation-log `seq` — stamped on the run as its watermark. */
   opSeq: number;
@@ -86,6 +89,7 @@ export function runAnalysis(rules: readonly Rule[], ctx: AnalysisContext): Analy
       state: ctx.state,
       provenance: ctx.provenance,
       evidence: ctx.evidence,
+      hostInventories: ctx.hostInventories ?? [],
       settings,
       lists: ctx.config.lists,
     };
