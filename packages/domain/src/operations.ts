@@ -12,6 +12,7 @@ import {
 } from './ids.js';
 import {
   addressSchema,
+  baselineSchema,
   deviceSchema,
   flowSchema,
   identitySchema,
@@ -50,6 +51,7 @@ export const entityPayloadSchema = z.discriminatedUnion('entityType', [
   z.object({ entityType: z.literal('flow'), entity: flowSchema }),
   z.object({ entityType: z.literal('identity'), entity: identitySchema }),
   z.object({ entityType: z.literal('roleAssignment'), entity: roleAssignmentSchema }),
+  z.object({ entityType: z.literal('baseline'), entity: baselineSchema }),
 ]);
 export type EntityPayload = z.infer<typeof entityPayloadSchema>;
 export type GenericEntityType = EntityPayload['entityType'];
@@ -69,6 +71,7 @@ export const settableEntityTypeSchema = z.enum([
   'flow',
   'identity',
   'roleAssignment',
+  'baseline',
 ]);
 export type SettableEntityType = z.infer<typeof settableEntityTypeSchema>;
 

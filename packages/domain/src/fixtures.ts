@@ -1,6 +1,8 @@
 import {
   addressIdSchema,
   addressSchema,
+  baselineIdSchema,
+  baselineSchema,
   evidenceIdSchema,
   evidenceSchema,
   fieldProvenanceIdSchema,
@@ -37,6 +39,7 @@ import {
   zoneIdSchema,
   zoneSchema,
   type Address,
+  type Baseline,
   type Device,
   type Evidence,
   type FieldProvenance,
@@ -282,6 +285,21 @@ export function makePolicyRule(
     source: { kind: 'network', id: source.id },
     destination: { kind: 'network', id: destination.id },
     action: 'allow',
+    ...overrides,
+  });
+}
+
+export function makeBaseline(
+  projectId: ProjectId,
+  scope: Baseline['scope'],
+  overrides: Partial<Baseline> = {},
+): Baseline {
+  return baselineSchema.parse({
+    id: newId(baselineIdSchema),
+    projectId,
+    name: 'Expected services',
+    scope,
+    lifecycleState: 'manuallyVerified',
     ...overrides,
   });
 }

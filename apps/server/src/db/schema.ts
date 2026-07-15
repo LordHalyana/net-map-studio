@@ -1,8 +1,11 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
+  BaselineScope,
   ConfidenceContributor,
   EvidenceContentClass,
   EvidenceRetention,
+  ExpectedService,
+  ExpectedTraffic,
   FieldValue,
   FindingStatus,
   FlowEndpoint,
@@ -373,6 +376,27 @@ export const changeSets = sqliteTable('change_sets', {
 });
 
 /**
+ * The expected-state yardstick (ADR-0025): operator-declared expected services
+ * and traffic for a scope (Zone/Network/Device by id). A first-class entity
+ * mutated through the Operation log; Findings cite its id + version.
+ */
+export const baselines = sqliteTable('baselines', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  name: text('name').notNull(),
+  scope: text('scope', { mode: 'json' }).$type<BaselineScope>().notNull(),
+  version: integer('version').notNull(),
+  expectedServices: text('expected_services', { mode: 'json' })
+    .$type<ExpectedService[]>()
+    .notNull(),
+  expectedTraffic: text('expected_traffic', { mode: 'json' }).$type<ExpectedTraffic[]>().notNull(),
+  lifecycleState: lifecycleState(),
+  notes: text('notes').notNull(),
+});
+
+/**
  * The persisted half of a Finding (ADR-0023): the analyst disposition, keyed by
  * Fingerprint (unique per project). The derived detection is never stored — it
  * is recomputed each run and joined to this row by fingerprint. Mutated only
@@ -402,5 +426,6 @@ export const entityTables = {
   flow: flows,
   identity: identities,
   roleAssignment: roleAssignments,
+  baseline: baselines,
 };
 export type EntityTableKey = keyof typeof entityTables;

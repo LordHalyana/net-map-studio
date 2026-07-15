@@ -103,6 +103,7 @@ describe('M3 severity is rule-declared and independent of confidence', () => {
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
+    baselines: [],
   };
 
   const rule: Rule = {

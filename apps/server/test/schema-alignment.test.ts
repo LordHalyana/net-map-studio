@@ -3,6 +3,7 @@ import { getTableColumns } from 'drizzle-orm';
 import { createSelectSchema } from 'drizzle-zod';
 import {
   addressSchema,
+  baselineSchema,
   deviceSchema,
   interfaceSchema,
   linkSchema,
@@ -26,6 +27,7 @@ import {
 } from '@netplan/domain';
 import {
   makeAddress,
+  makeBaseline,
   makeDevice,
   makeEvidence,
   makeFieldProvenance,
@@ -76,6 +78,7 @@ const rule = makePolicyRule(network, network2);
 const flow = makeFlow(project.id, { serviceId: service.id });
 const identity = makeIdentity(project.id, { deviceId: device.id });
 const roleAssignment = makeRoleAssignment(identity, { deviceId: device.id });
+const baseline = makeBaseline(project.id, { kind: 'zone', id: zone.id });
 
 const cases = [
   ['project', projectSchema, project],
@@ -91,6 +94,7 @@ const cases = [
   ['flow', flowSchema, flow],
   ['identity', identitySchema, identity],
   ['roleAssignment', roleAssignmentSchema, roleAssignment],
+  ['baseline', baselineSchema, baseline],
 ] as const;
 
 describe('drizzle tables align with domain Zod schemas', () => {
@@ -205,6 +209,7 @@ describe('entities round-trip through SQLite unchanged', () => {
       ['flow', flow],
       ['identity', identity],
       ['roleAssignment', roleAssignment],
+      ['baseline', baseline],
     ] as const;
 
     for (const [entityType, entity] of inserts) {

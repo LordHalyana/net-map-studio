@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   addressSchema,
+  baselineSchema,
   deviceSchema,
   flowSchema,
   identitySchema,
@@ -39,6 +40,8 @@ export const projectStateSchema = z.object({
   roleAssignments: z.array(roleAssignmentSchema).default([]),
   /** Phase-3 finding dispositions (ADR-0023) — the persisted analyst decisions. */
   findingDispositions: z.array(findingDispositionSchema).default([]),
+  /** Phase-3 Baselines (ADR-0025) — the expected-state yardsticks. */
+  baselines: z.array(baselineSchema).default([]),
 });
 export type ProjectState = z.infer<typeof projectStateSchema>;
 

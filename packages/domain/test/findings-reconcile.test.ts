@@ -35,6 +35,7 @@ function emptyState(project = makeProject()): ProjectState {
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
+    baselines: [],
   };
 }
 

@@ -50,6 +50,7 @@ function sampleState(): ProjectState {
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
+    baselines: [],
   };
 }
 

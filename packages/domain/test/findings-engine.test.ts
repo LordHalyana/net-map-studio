@@ -45,6 +45,7 @@ function buildContext(overrides: Partial<AnalysisContext> = {}): AnalysisContext
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
+    baselines: [],
   };
   return {
     state,

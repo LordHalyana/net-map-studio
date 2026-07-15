@@ -63,6 +63,8 @@ function addEntity(state: ProjectState, payload: EntityPayload): ProjectState {
       return { ...state, identities: [...state.identities, payload.entity] };
     case 'roleAssignment':
       return { ...state, roleAssignments: [...state.roleAssignments, payload.entity] };
+    case 'baseline':
+      return { ...state, baselines: [...state.baselines, payload.entity] };
   }
 }
 
@@ -89,6 +91,8 @@ function removeEntity(state: ProjectState, payload: EntityPayload): ProjectState
       return { ...state, identities: state.identities.filter((e) => e.id !== id) };
     case 'roleAssignment':
       return { ...state, roleAssignments: state.roleAssignments.filter((e) => e.id !== id) };
+    case 'baseline':
+      return { ...state, baselines: state.baselines.filter((e) => e.id !== id) };
   }
 }
 

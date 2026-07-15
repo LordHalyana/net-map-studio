@@ -43,6 +43,7 @@ function emptyState(): ProjectState {
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
+    baselines: [],
   };
 }
 
