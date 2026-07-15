@@ -205,5 +205,20 @@ test.describe('scale, layout & polish (M11 DoD, acceptance #1)', () => {
     await page.getByTestId('global-search-input').fill('VLAN-');
     await expect(page.getByTestId('search-results').locator('li').first()).toBeVisible();
     await page.getByTestId('global-search-input').press('Escape');
+
+    // by rule: create one with a searchable justification, result opens Rules tab
+    await page.getByTestId('context-tab-rules').click();
+    await page.getByTestId('rule-source-select').selectOption({ index: 1 });
+    await page.getByTestId('rule-destination-select').selectOption({ index: 1 });
+    await page.getByTestId('rule-justification-input').fill('pci-segmentation-x1');
+    await page.getByTestId('rule-create').click();
+    await waitSaved(page);
+    await page.getByTestId('context-tab-details').click();
+
+    await page.getByTestId('global-search-input').fill('pci-segmentation-x1');
+    const ruleResult = page.getByTestId('search-results').locator('li').first();
+    await expect(ruleResult).toContainText('rule');
+    await ruleResult.locator('button').click();
+    await expect(page.getByTestId('rules-panel')).toBeVisible();
   });
 });

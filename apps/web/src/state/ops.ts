@@ -159,7 +159,10 @@ export function buildPolicyRule(
   projectId: ProjectId,
   fields: Pick<PolicyRule, 'source' | 'destination' | 'action'> &
     Partial<
-      Pick<PolicyRule, 'name' | 'serviceId' | 'direction' | 'logging' | 'owner' | 'justification'>
+      Pick<
+        PolicyRule,
+        'name' | 'serviceId' | 'direction' | 'logging' | 'owner' | 'justification' | 'reviewDate'
+      >
     >,
 ): PolicyRule {
   return policyRuleSchema.parse({

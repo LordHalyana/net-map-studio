@@ -8,6 +8,7 @@ import {
   networkSchema,
   newId,
   operationIdSchema,
+  operationLogEntrySchema,
   operationSchema,
   policyRuleSchema,
   projectSchema,
@@ -31,6 +32,7 @@ import {
   type Service,
   type SettableEntityType,
   type Site,
+  type OperationLogEntry,
   type UndoRedoAvailability,
   type Zone,
 } from '@netplan/domain';
@@ -69,17 +71,8 @@ export interface ApplyResult {
   availability: UndoRedoAvailability;
 }
 
-export interface LogEntry {
-  seq: number;
-  id: string;
-  projectId: string;
-  changeSetId: string | null;
-  kind: string;
-  role: 'do' | 'undo' | 'redo';
-  targetUnitId: string | null;
-  payload: Operation;
-  createdAt: string;
-}
+/** One wire-shaped log row — the domain schema is the single source (ADR-0017). */
+export type LogEntry = OperationLogEntry;
 
 export interface SearchResult {
   entityType: Exclude<SettableEntityType, 'project'>;
@@ -214,17 +207,7 @@ export function createEngine(db: Db) {
       .where(eq(operationLog.projectId, projectId))
       .orderBy(asc(operationLog.seq))
       .all()
-      .map((row) => ({
-        seq: row.seq,
-        id: row.id,
-        projectId: row.projectId,
-        changeSetId: row.changeSetId,
-        kind: row.kind,
-        role: row.role,
-        targetUnitId: row.targetUnitId,
-        payload: operationSchema.parse(row.payload),
-        createdAt: row.createdAt,
-      }));
+      .map((row) => operationLogEntrySchema.parse(row));
   }
 
   // ---------- project CRUD (workspace bootstrap; entities go through Operations) ----------

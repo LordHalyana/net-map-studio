@@ -38,6 +38,7 @@ function CanvasInner() {
   const project = useAppStore((s) => s.project);
   const layers = useAppStore((s) => s.layers);
   const collapsedSites = useAppStore((s) => s.collapsedSites);
+  const collapsedZones = useAppStore((s) => s.collapsedZones);
   const dispatch = useAppStore((s) => s.dispatch);
   const select = useAppStore((s) => s.select);
   const { screenToFlowPosition } = useReactFlow();
@@ -52,9 +53,10 @@ function CanvasInner() {
             logical: layers.logical,
             physical: layers.physical,
             collapsedSites,
+            collapsedZones,
           })
         : { nodes: [], edges: [] },
-    [graph, layers, collapsedSites],
+    [graph, layers, collapsedSites, collapsedZones],
   );
 
   // Adopt graph-derived nodes, preserving drag/selection state AND object

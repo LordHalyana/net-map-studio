@@ -134,7 +134,9 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
   const [direction, setDirection] = useState('bidirectional');
   const [action, setAction] = useState('allow');
   const [logging, setLogging] = useState(false);
+  const [owner, setOwner] = useState('');
   const [justification, setJustification] = useState('');
+  const [reviewDate, setReviewDate] = useState('');
 
   const options = endpointOptions(graph);
   const canCreate = Boolean(source && destination);
@@ -159,13 +161,17 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
       direction: parsedDirection.data,
       serviceId: serviceId ? serviceIdSchema.parse(serviceId) : null,
       logging,
+      owner: owner.trim(),
       justification: justification.trim(),
+      reviewDate: reviewDate || null,
     });
     dispatch(opCreatePolicyRule(graph.project.id, rule));
     setSource('');
     setDestination('');
     setServiceId('');
+    setOwner('');
     setJustification('');
+    setReviewDate('');
   }
 
   return (
@@ -239,10 +245,23 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
         log
       </label>
       <input
+        value={owner}
+        placeholder="owner"
+        data-testid="rule-owner-input"
+        onChange={(e) => setOwner(e.target.value)}
+      />
+      <input
         value={justification}
         placeholder="justification"
         data-testid="rule-justification-input"
         onChange={(e) => setJustification(e.target.value)}
+      />
+      <input
+        type="date"
+        value={reviewDate}
+        title="Optional review date"
+        data-testid="rule-review-date-input"
+        onChange={(e) => setReviewDate(e.target.value)}
       />
       <button type="button" data-testid="rule-create" disabled={!canCreate} onClick={create}>
         Add rule

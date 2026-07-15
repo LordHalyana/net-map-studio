@@ -72,6 +72,17 @@ test.describe('export & restore (M10 DoD, ADR-0016, acceptance #9/#10)', () => {
     expect(buffer.length).toBeGreaterThan(1000);
   });
 
+  test('exports a valid SVG topology image', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('export-menu-toggle').click();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByTestId('export-svg').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('topology.svg');
+    const svg = fs.readFileSync(await download.path(), 'utf8');
+    expect(svg).toContain('<svg');
+  });
+
   test('exports devices as CSV', async ({ page }) => {
     await openApp(page);
     await page.getByTestId('library-item-switch').click();

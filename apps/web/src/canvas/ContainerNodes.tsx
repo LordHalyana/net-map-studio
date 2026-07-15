@@ -32,10 +32,26 @@ export const SiteNode = memo(function SiteNode({ data }: NodeProps<Node<SiteNode
 });
 
 export const ZoneNode = memo(function ZoneNode({ data }: NodeProps<Node<ZoneNodeData, 'zone'>>) {
-  const { zone } = data;
+  const toggle = useAppStore((s) => s.toggleZoneCollapsed);
+  const { zone, collapsed } = data;
   return (
-    <div className="zone-node" data-testid={`zone-node-${zone.name}`}>
+    <div
+      className={`zone-node${collapsed ? ' zone-node--collapsed' : ''}`}
+      data-testid={`zone-node-${zone.name}`}
+    >
       <span className="zone-node__name">
+        <button
+          type="button"
+          className="site-node__toggle"
+          data-testid={`zone-toggle-${zone.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggle(zone.id);
+          }}
+          title={collapsed ? 'Expand zone' : 'Collapse zone'}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>{' '}
         {zone.kind === 'rack' ? '🗄' : '▦'} {zone.name}
       </span>
     </div>

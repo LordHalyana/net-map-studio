@@ -28,14 +28,16 @@ export interface FlowOptions {
   logical: boolean;
   physical: boolean;
   collapsedSites: string[];
+  collapsedZones: string[];
 }
 
 export const SITE_SIZE = { width: 460, height: 300 };
 export const SITE_COLLAPSED_SIZE = { width: 200, height: 48 };
 export const ZONE_SIZE = { width: 200, height: 150 };
+export const ZONE_COLLAPSED_SIZE = { width: 170, height: 34 };
 
 export type SiteNodeData = { site: Site; collapsed: boolean };
-export type ZoneNodeData = { zone: Zone };
+export type ZoneNodeData = { zone: Zone; collapsed: boolean };
 export type NetworkNodeData = { network: Network; color: string };
 export type DeviceNodeData = { device: Device; memberships: Membership[]; showTint: boolean };
 
@@ -49,6 +51,7 @@ export function graphToFlow(
   options: FlowOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   const collapsed = new Set(options.collapsedSites);
+  const collapsedZones = new Set(options.collapsedZones);
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
@@ -69,14 +72,15 @@ export function graphToFlow(
 
   for (const zone of state.zones) {
     const siteCollapsed = collapsed.has(zone.siteId);
+    const zoneCollapsed = collapsedZones.has(zone.id);
     nodes.push({
       id: zone.id,
       type: 'zone',
       parentId: zone.siteId,
       extent: 'parent',
       position: zone.position,
-      data: { zone },
-      style: { ...ZONE_SIZE },
+      data: { zone, collapsed: zoneCollapsed },
+      style: zoneCollapsed ? { ...ZONE_COLLAPSED_SIZE } : { ...ZONE_SIZE },
       hidden: siteCollapsed,
       zIndex: -10,
     });
@@ -84,7 +88,7 @@ export function graphToFlow(
 
   for (const device of state.devices) {
     const zone = device.zoneId ? zoneById.get(device.zoneId) : undefined;
-    const hidden = zone ? collapsed.has(zone.siteId) : false;
+    const hidden = zone ? collapsed.has(zone.siteId) || collapsedZones.has(zone.id) : false;
     if (hidden) hiddenDeviceIds.add(device.id);
     const memberships: Membership[] = state.interfaces
       .filter((i) => i.deviceId === device.id && i.networkId)

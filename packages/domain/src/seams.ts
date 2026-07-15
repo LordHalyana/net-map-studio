@@ -84,6 +84,25 @@ export const importJobSchema = z.object({
 });
 export type ImportJob = z.infer<typeof importJobSchema>;
 
+/**
+ * NetPlan Studio application Access Role (design §3.9) — who may do what in
+ * the tool, strictly separate from a modelled Identity. Modellable as data,
+ * not enforced until multi-user lands (ADR-0001).
+ */
+export const accessRoleSchema = z.object({
+  name: z.enum([
+    'administrator',
+    'networkEngineer',
+    'securityAnalyst',
+    'operator',
+    'reviewer',
+    'viewer',
+  ]),
+  /** Capability-based so deployments can define custom roles later. */
+  capabilities: z.array(z.string()),
+});
+export type AccessRole = z.infer<typeof accessRoleSchema>;
+
 /** An advisory warning — never a confirmed-compromise verdict. Phase 3. */
 export const findingSchema = z.object({
   id: findingIdSchema,

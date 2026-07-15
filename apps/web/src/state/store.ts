@@ -60,6 +60,7 @@ interface AppState {
   pendingOps: number;
   layers: LayerState;
   collapsedSites: string[];
+  collapsedZones: string[];
   connectMode: boolean;
   connectDraft: ConnectDraft;
   connectNotice: string | null;
@@ -75,6 +76,7 @@ interface AppState {
   toggleLogicalLayer: () => void;
   togglePhysicalLayer: () => void;
   toggleSiteCollapsed: (siteId: string) => void;
+  toggleZoneCollapsed: (zoneId: string) => void;
   toggleConnectMode: () => void;
   connectPickNode: (nodeType: string, nodeId: string) => void;
   setConnectInterface: (side: 'source' | 'target', interfaceId: string | null) => void;
@@ -96,6 +98,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingOps: 0,
   layers: { logical: true, physical: true },
   collapsedSites: [],
+  collapsedZones: [],
   contextTab: 'details',
   connectMode: false,
   connectDraft: emptyDraft,
@@ -208,6 +211,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       collapsedSites: current.includes(siteId)
         ? current.filter((id) => id !== siteId)
         : [...current, siteId],
+    });
+  },
+
+  toggleZoneCollapsed: (zoneId) => {
+    const current = get().collapsedZones;
+    set({
+      collapsedZones: current.includes(zoneId)
+        ? current.filter((id) => id !== zoneId)
+        : [...current, zoneId],
     });
   },
 

@@ -133,6 +133,13 @@ test.describe('Membership & Containment (M6 DoD, ADR-0013)', () => {
     // expand again: it is back
     await page.getByTestId(`site-toggle-${siteName}`).click();
     await expect(page.getByTestId(`device-node-${deviceName}`)).toBeVisible();
+
+    // zones collapse too (M6 deliverable: Site AND Zone containers)
+    const zoneName = zoneOption.split(' / ')[1] ?? '';
+    await page.getByTestId(`zone-toggle-${zoneName}`).click();
+    await expect(page.getByTestId(`device-node-${deviceName}`)).toBeHidden();
+    await page.getByTestId(`zone-toggle-${zoneName}`).click();
+    await expect(page.getByTestId(`device-node-${deviceName}`)).toBeVisible();
   });
 
   test('logical layer toggle hides network nodes and membership edges', async ({ page }) => {
