@@ -81,5 +81,11 @@ test.describe('M11: findings dashboard and disposition', () => {
     // Coverage surfacing shows per-device evaluability.
     await expect(page.getByTestId('findings-coverage')).toBeVisible();
     await expect(page.getByTestId('coverage-ws-find-01')).toContainText('/');
+
+    // Clean up so the shared e2e database is left as we found it (single worker,
+    // one persistent DB across files) — mirror the imports test's rollback.
+    await page.getByTestId('nav-imports').click();
+    await page.getByTestId('import-rollback-button').click();
+    await expect(page.getByTestId('import-review')).toContainText('rolledBack');
   });
 });
