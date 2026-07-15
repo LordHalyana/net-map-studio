@@ -19,6 +19,8 @@ import { createEngine, OperationError } from './engine/store.js';
 import { createImportBodySchema, createImportStore } from './imports/store.js';
 import { createProvenanceStore, overrideFieldBodySchema } from './imports/provenance.js';
 import { createFindingsService } from './findings/analysis-service.js';
+import { buildFindingsReport, findingsToCsvRows } from './export/findings-report.js';
+import { isFindingsRedactionProfile, redactFindings, type FindingView } from '@netplan/domain';
 import { ParseLimitError } from './imports/guards.js';
 import { importResolutionActionSchema } from '@netplan/domain';
 
@@ -281,9 +283,38 @@ export async function buildApp(options: AppOptions = {}) {
   // committed graph — detection never touches the Operation log. Findings are
   // always current, so there is no server-side run to trigger; disposition
   // changes go through POST /projects/:id/operations (SetFindingStatus/Note).
+  /** Findings, optionally through the client-safe redaction profile (M12, Q15). */
+  function analyzeWithRedaction(id: string, redactParam: unknown): FindingView[] {
+    const findings = findingsService.analyze(id).findings;
+    const profile =
+      typeof redactParam === 'string' && isFindingsRedactionProfile(redactParam)
+        ? redactParam
+        : 'none';
+    if (profile === 'none') return findings;
+    const usernames = engine.getState(id).identities.map((i) => i.name);
+    return redactFindings(findings, profile, usernames);
+  }
+
   app.get('/projects/:id/findings', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
-    return findingsService.analyze(id);
+    const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
+    const report = findingsService.analyze(id);
+    if (query.redact) {
+      return { ...report, findings: analyzeWithRedaction(id, query.redact) };
+    }
+    return report;
+  });
+
+  app.get('/projects/:id/report/findings', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
+    const report = findingsService.analyze(id);
+    const findings = query.redact ? analyzeWithRedaction(id, query.redact) : report.findings;
+    const html = buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
+      opSeq: report.opSeq,
+      configHash: report.configHash,
+    });
+    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 
   app.get('/projects/:id/evidence', async (request) => {
@@ -311,6 +342,7 @@ export async function buildApp(options: AppOptions = {}) {
     'services',
     'links',
     'policyRules',
+    'findings',
   ]);
 
   app.get('/projects/:id/export/csv/:entityType', async (request, reply) => {
@@ -319,12 +351,17 @@ export async function buildApp(options: AppOptions = {}) {
     if (!params.success) {
       throw new OperationError('INVALID', 'Unknown entity type for CSV export');
     }
-    const state = engine.getState(id);
-    const csv = toCsv(state[params.data.entityType]);
+    const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
+    // Findings are derived — not a ProjectState collection — and flow through
+    // the same redaction pipeline as every other export (M12).
+    const rows =
+      params.data.entityType === 'findings'
+        ? findingsToCsvRows(engine.getState(id), analyzeWithRedaction(id, query.redact))
+        : engine.getState(id)[params.data.entityType];
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="${params.data.entityType}.csv"`)
-      .send(csv);
+      .send(toCsv(rows));
   });
 
   app.get('/projects/:id/report', async (request, reply) => {

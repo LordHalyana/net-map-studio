@@ -232,6 +232,36 @@ function ExportMenu() {
           </button>
           <button
             type="button"
+            data-testid="export-findings-report"
+            onClick={run(() => {
+              window.open(`/api/projects/${project.id}/report/findings`, '_blank');
+            })}
+          >
+            Security findings report (HTML)
+          </button>
+          <button
+            type="button"
+            data-testid="export-findings-report-safe"
+            onClick={run(() => {
+              window.open(
+                `/api/projects/${project.id}/report/findings?redact=client-safe`,
+                '_blank',
+              );
+            })}
+          >
+            Security findings — client-safe (HTML)
+          </button>
+          <button
+            type="button"
+            data-testid="export-csv-findings"
+            onClick={run(() => {
+              window.open(`/api/projects/${project.id}/export/csv/findings`, '_blank');
+            })}
+          >
+            Findings (CSV)
+          </button>
+          <button
+            type="button"
             data-testid="import-netplan"
             onClick={() => {
               setOpen(false);

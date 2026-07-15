@@ -15,3 +15,4 @@ export * from './rules/exposed-service.js';
 export * from './rules/external-connection.js';
 export * from './rules/segmentation-identity.js';
 export * from './correlation.js';
+export * from './redaction.js';
