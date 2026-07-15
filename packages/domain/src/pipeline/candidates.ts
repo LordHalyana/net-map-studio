@@ -274,7 +274,10 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
   for (const observation of observations) {
     const { claim } = observation;
     if (claim.targetKind === 'flow') continue; // never invent a Device for a flow endpoint
-    const acc = correlator.resolve(claim.device);
+    const hints = claim.device;
+    // a host-less directory-export identity claim references no device (P4-M3)
+    if (hints === null) continue;
+    const acc = correlator.resolve(hints);
     accByObservation.set(observation.id, acc);
     acc.observations.set(observation.id, observation);
     if (claim.targetKind === 'device') {
@@ -467,8 +470,10 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
         break;
       }
       case 'identity': {
-        const deviceKey = deviceKeyFor(observation);
-        const key = identityKeyOf(claim.identity, deviceKey);
+        // host-less claims (directory export, always domain-scoped) key
+        // without a hostRef — exactly how domain principals correlate anyway
+        const deviceKey = claim.device === null ? null : deviceKeyFor(observation);
+        const key = identityKeyOf(claim.identity, deviceKey ?? '');
         const entry = identities.get(key) ?? {
           scope: claim.identity.scope,
           name: claim.identity.name,
@@ -477,7 +482,7 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
           fields: new Map<string, Map<string, Observation[]>>(),
           obs: new Array<Observation>(),
         };
-        entry.deviceKeys.add(deviceKey);
+        if (deviceKey !== null) entry.deviceKeys.add(deviceKey);
         for (const [field, value] of Object.entries(claim.fields)) {
           if (value !== undefined) addFieldValue(entry.fields, field, value, observation);
         }

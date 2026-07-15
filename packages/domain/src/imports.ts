@@ -180,13 +180,22 @@ const flowClaimSchema = z.object({
   count: z.number().int().min(1).default(1),
 });
 
-const identityClaimSchema = z.object({
-  targetKind: z.literal('identity'),
-  /** Host the principal was observed on. */
-  device: deviceHintsSchema,
-  identity: identityRefSchema,
-  fields: z.object({ kind: identityKindSchema }).partial(),
-});
+const identityClaimSchema = z
+  .object({
+    targetKind: z.literal('identity'),
+    /**
+     * Host the principal was observed on. Null for a directory-export claim
+     * (P4-M3): the directory asserts the principal exists, not where — only
+     * domain-scoped principals may be host-less (a local account without a
+     * host is meaningless, ADR-0022).
+     */
+    device: deviceHintsSchema.nullable(),
+    identity: identityRefSchema,
+    fields: z.object({ kind: identityKindSchema }).partial(),
+  })
+  .refine((c) => c.device !== null || c.identity.scope === 'domain', {
+    message: 'a host-less identity claim must be domain-scoped',
+  });
 
 const roleAssignmentClaimSchema = z.object({
   targetKind: z.literal('roleAssignment'),

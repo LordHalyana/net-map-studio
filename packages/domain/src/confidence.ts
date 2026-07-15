@@ -18,6 +18,8 @@ export const confidenceContributorSchema = z.enum([
   'bannerInference',
   'trafficObservation',
   'supplementalText',
+  /** P4-M3: a principal asserted by an authoritative directory export (LDIF). */
+  'directoryExport',
 ]);
 export type ConfidenceContributor = z.infer<typeof confidenceContributorSchema>;
 
@@ -31,6 +33,7 @@ export const CONFIDENCE_CONTRIBUTOR_SCORES: Record<ConfidenceContributor, Confid
   bannerInference: 0.4,
   trafficObservation: 0.3,
   supplementalText: 0.15,
+  directoryExport: 0.85,
 };
 
 export function contributorScore(contributor: ConfidenceContributor): Confidence {
