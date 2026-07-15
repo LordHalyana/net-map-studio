@@ -7,7 +7,11 @@ import type { FastifyInstance } from 'fastify';
 import type { EgressAuditRecord, EgressSettings } from '@netplan/domain';
 import { buildApp } from '../src/app.js';
 import { createDb } from '../src/db/index.js';
-import { EgressBlockedError, createEgressDoor, type EgressProvider } from '../src/egress/door.js';
+import {
+  EgressBlockedError,
+  createEgressDoor,
+  type ThreatIntelProvider,
+} from '../src/egress/door.js';
 import { stubProvider } from '../src/egress/providers/stub.js';
 import { makeProject } from '@netplan/domain/fixtures';
 import { projects } from '../src/db/schema.js';
@@ -128,7 +132,7 @@ describe('M1: egress settings & the disclosure gate', () => {
 });
 
 describe('M1: the door blocks, audits and executes', () => {
-  function createDoor(providers?: EgressProvider[]) {
+  function createDoor(providers?: ThreatIntelProvider[]) {
     const { db } = createDb(':memory:');
     const project = makeProject();
     db.insert(projects).values(project).run();
@@ -138,7 +142,7 @@ describe('M1: the door blocks, audits and executes', () => {
 
   it('with egress off, a stub call is blocked before the provider runs and audited as blocked', async () => {
     let executed = 0;
-    const spyProvider: EgressProvider = {
+    const spyProvider: ThreatIntelProvider = {
       id: 'stub',
       version: '0.0.0',
       requiresEgress: true,
@@ -205,7 +209,7 @@ describe('M1: the door blocks, audits and executes', () => {
   });
 
   it('a provider failure is audited as an error', async () => {
-    const failing: EgressProvider = {
+    const failing: ThreatIntelProvider = {
       id: 'stub',
       version: '0.0.0',
       requiresEgress: true,
@@ -336,6 +340,9 @@ describe('M1 DoD: no network client exists in server code outside the door modul
     ['node:dns import', /from ['"]node:dns['"]/],
     ['undici import', /['"]undici['"]/],
     ['axios import', /['"]axios['"]/],
+    ['got import', /['"]got['"]/],
+    ['node-fetch import', /['"]node-fetch['"]/],
+    ['ws import', /['"]ws['"]/],
     ['WebSocket client', /new WebSocket\s*\(/],
   ];
 

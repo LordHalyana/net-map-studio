@@ -8,14 +8,17 @@ import {
   indicatorTypeSchema,
   newId,
   projectIdSchema,
+  threatIntelRequestSchema,
   type EgressAuditRecord,
   type EgressCallOutcome,
   type EgressSettings,
   type IndicatorType,
+  type ThreatIntelRequest,
   type ThreatIntelResponse,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
-import { egressAuditRecords, egressSettings, projects } from '../db/schema.js';
+import { requireProject } from '../db/require-project.js';
+import { egressAuditRecords, egressSettings } from '../db/schema.js';
 import { OperationError } from '../engine/store.js';
 import { stubProvider } from './providers/stub.js';
 
@@ -30,14 +33,13 @@ import { stubProvider } from './providers/stub.js';
  * the door shut and are not outbound calls, so they don't appear here.
  */
 
-/** What a caller asks the door to send — the exact query is what gets audited. */
-export const egressLookupRequestSchema = z.object({
-  indicatorType: indicatorTypeSchema,
-  query: z.string().min(1),
-});
-export type EgressLookupRequest = z.infer<typeof egressLookupRequestSchema>;
+/**
+ * What a caller asks the door to send — the domain's ThreatIntelRequest
+ * (ADR-0017 single source); the exact query is what gets audited.
+ */
+export type EgressLookupRequest = ThreatIntelRequest;
 
-export interface EgressProviderResult {
+export interface ThreatIntelProviderResult {
   /** The raw response body, verbatim — stored as Evidence by callers (ADR-0028). */
   raw: string;
   /** The provider's answer in the canonical ThreatIntelResponse shape (P4-M2). */
@@ -45,18 +47,21 @@ export interface EgressProviderResult {
 }
 
 /**
- * A provider behind the door — the ThreatIntelProvider seam (ADR-0027).
+ * The ThreatIntelProvider seam (ADR-0027): a provider behind the door.
  * `requiresEgress: true` means execute() would leave the machine and is gated
  * by the per-project opt-in; the M1 stub is canned but declares itself
  * egress-requiring so the gate is exercised. Online providers
  * (VirusTotal-style, self-hosted MISP) are future implementations of this
  * interface — do not build them in Phase 4 (plan §4).
  */
-export interface EgressProvider {
+export interface ThreatIntelProvider {
   id: string;
   version: string;
   requiresEgress: boolean;
-  execute(request: EgressLookupRequest, ctx: { projectId: string }): Promise<EgressProviderResult>;
+  execute(
+    request: EgressLookupRequest,
+    ctx: { projectId: string },
+  ): Promise<ThreatIntelProviderResult>;
 }
 
 /** A call the door refused: egress off, or the indicator type not opted in. */
@@ -95,28 +100,19 @@ export interface EgressCallResult {
 
 export type EgressDoor = ReturnType<typeof createEgressDoor>;
 
-export function createEgressDoor(db: Db, options: { providers?: EgressProvider[] } = {}) {
-  const providers = new Map<string, EgressProvider>(
+export function createEgressDoor(db: Db, options: { providers?: ThreatIntelProvider[] } = {}) {
+  const providers = new Map<string, ThreatIntelProvider>(
     (options.providers ?? [stubProvider]).map((p) => [p.id, p]),
   );
 
-  function requireProject(projectId: string): void {
-    const row = db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .get();
-    if (!row) throw new OperationError('NOT_FOUND', `Project ${projectId} not found`);
-  }
-
-  function getProvider(id: string): EgressProvider {
+  function getProvider(id: string): ThreatIntelProvider {
     const provider = providers.get(id);
     if (!provider) throw new OperationError('INVALID', `Unknown egress provider: ${id}`);
     return provider;
   }
 
   function getSettings(projectId: string): EgressSettings {
-    requireProject(projectId);
+    requireProject(db, projectId);
     const row = db
       .select()
       .from(egressSettings)
@@ -190,10 +186,14 @@ export function createEgressDoor(db: Db, options: { providers?: EgressProvider[]
     providerId: string,
     rawRequest: EgressLookupRequest,
   ): Promise<EgressCallResult> {
-    const request = egressLookupRequestSchema.parse(rawRequest);
+    const request = threatIntelRequestSchema.parse(rawRequest);
     const provider = getProvider(providerId);
     const settings = getSettings(projectId);
 
+    // The gates bind what LEAVES the machine (ADR-0027/Q10): zero-egress
+    // providers skip them by design — an ip/domain lookup against the local
+    // feed reveals nothing to anyone, and the shut-door mode must stay fully
+    // usable. Their trace is the enrichment Evidence, not an audit row.
     if (provider.requiresEgress) {
       if (!settings.enabled) {
         const message = 'Egress is disabled for this project — the door is shut';
@@ -234,7 +234,7 @@ export function createEgressDoor(db: Db, options: { providers?: EgressProvider[]
   }
 
   function listAudit(projectId: string): EgressAuditRecord[] {
-    requireProject(projectId);
+    requireProject(db, projectId);
     return db
       .select()
       .from(egressAuditRecords)
@@ -244,5 +244,5 @@ export function createEgressDoor(db: Db, options: { providers?: EgressProvider[]
       .map((row) => egressAuditRecordSchema.parse(row));
   }
 
-  return { getSettings, updateSettings, call, listAudit, getProvider };
+  return { getSettings, updateSettings, call, listAudit };
 }

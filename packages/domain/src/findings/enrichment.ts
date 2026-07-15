@@ -84,6 +84,17 @@ export interface EnrichmentInput {
   payload: EnrichmentPayload;
 }
 
+/**
+ * The wire shape of one stored enrichment (server responses, web rendering):
+ * an EnrichmentInput plus staleness computed against the reader's "now".
+ */
+export const enrichmentViewSchema = z.object({
+  evidenceId: evidenceIdSchema,
+  payload: enrichmentPayloadSchema,
+  stale: z.boolean(),
+});
+export type EnrichmentView = z.infer<typeof enrichmentViewSchema>;
+
 /** Parse a stored enrichment Evidence blob; null when it isn't one. */
 export function parseEnrichmentEvidence(
   evidenceId: string,

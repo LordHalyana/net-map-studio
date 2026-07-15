@@ -1,21 +1,19 @@
 import { z } from 'zod';
 import {
-  changeSetRecordSchema,
   egressAuditRecordSchema,
   egressSettingsSchema,
-  enrichmentPayloadSchema,
-  evidenceIdSchema,
+  enrichmentViewSchema,
   localFeedEntrySchema,
   threatIntelLocalFeedSchema,
-  type ChangeSetRecord,
   type EgressAuditRecord,
   type EgressSettings,
+  type EnrichmentView,
   type IndicatorType,
   type LocalFeedEntry,
   type ThreatIntelLocalFeed,
 } from '@netplan/domain';
 
-/** Egress door + threat-intel + proposal API surface (P4) — conventions of client.ts. */
+/** Egress door + threat-intel API surface (P4) — conventions of client.ts. */
 
 const BASE = '/api';
 
@@ -39,12 +37,7 @@ async function api<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): P
   return schema.parse(await response.json());
 }
 
-export const enrichmentViewSchema = z.object({
-  evidenceId: evidenceIdSchema,
-  payload: enrichmentPayloadSchema,
-  stale: z.boolean(),
-});
-export type EnrichmentView = z.infer<typeof enrichmentViewSchema>;
+export type { EnrichmentView } from '@netplan/domain';
 
 export function getEgressSettings(projectId: string): Promise<EgressSettings> {
   return api(`/projects/${projectId}/egress/settings`, egressSettingsSchema);
@@ -93,16 +86,5 @@ export function fetchEnrichment(
   return api(`/projects/${projectId}/enrichments`, enrichmentViewSchema, {
     method: 'POST',
     body: JSON.stringify(body),
-  });
-}
-
-export function listChangeSets(projectId: string): Promise<ChangeSetRecord[]> {
-  return api(`/projects/${projectId}/changesets`, z.array(changeSetRecordSchema));
-}
-
-export function registerChangeSet(projectId: string, label: string): Promise<ChangeSetRecord> {
-  return api(`/projects/${projectId}/changesets`, changeSetRecordSchema, {
-    method: 'POST',
-    body: JSON.stringify({ label }),
   });
 }

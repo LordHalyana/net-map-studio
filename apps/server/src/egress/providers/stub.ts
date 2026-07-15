@@ -1,5 +1,9 @@
 import { threatIntelResponseSchema } from '@netplan/domain';
-import type { EgressLookupRequest, EgressProvider, EgressProviderResult } from '../door.js';
+import type {
+  EgressLookupRequest,
+  ThreatIntelProvider,
+  ThreatIntelProviderResult,
+} from '../door.js';
 
 /**
  * The M1 stub provider (plan §2 M1): declares itself egress-requiring so the
@@ -7,11 +11,11 @@ import type { EgressLookupRequest, EgressProvider, EgressProviderResult } from '
  * returns canned responses — no packet ever leaves. Online providers
  * (VirusTotal-style, self-hosted MISP) are seams; do not build them (plan §4).
  */
-export const stubProvider: EgressProvider = {
+export const stubProvider: ThreatIntelProvider = {
   id: 'stub',
   version: '1.0.0',
   requiresEgress: true,
-  execute(request: EgressLookupRequest): Promise<EgressProviderResult> {
+  execute(request: EgressLookupRequest): Promise<ThreatIntelProviderResult> {
     const response = threatIntelResponseSchema.parse({
       verdict: 'unknown',
       score: null,

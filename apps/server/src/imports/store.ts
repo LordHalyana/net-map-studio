@@ -135,13 +135,18 @@ export function createImportStore(
     }
   }
 
-  /** Enqueue a parse with backpressure; the API response leaves before it runs. */
-  function enqueueParse(job: ImportJob, evidenceRecord: Evidence, content: string): void {
+  /** Backpressure (P4-M5): reject new work when queued + running hit the bound. */
+  function ensureQueueCapacity(): void {
     if (active.size >= limits.maxQueuedParses) {
       throw new ParseLimitError(
         `Import queue is full (${limits.maxQueuedParses} jobs) — retry when current imports finish`,
       );
     }
+  }
+
+  /** Enqueue a parse with backpressure; the API response leaves before it runs. */
+  function enqueueParse(job: ImportJob, evidenceRecord: Evidence, content: string): void {
+    ensureQueueCapacity();
     active.add(job.id);
     let release: () => void = () => undefined;
     const tracker = new Promise<void>((resolve) => {
@@ -315,11 +320,7 @@ export function createImportStore(
     const encoding = contentClass === 'binaryCapture' ? ('base64' as const) : ('utf8' as const);
 
     // backpressure before anything persists — a full queue rejects the upload
-    if (active.size >= limits.maxQueuedParses) {
-      throw new ParseLimitError(
-        `Import queue is full (${limits.maxQueuedParses} jobs) — retry when current imports finish`,
-      );
-    }
+    ensureQueueCapacity();
 
     const job = importJobSchema.parse({
       id: newId(importJobIdSchema),

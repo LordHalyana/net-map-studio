@@ -13,7 +13,7 @@ import {
   newId,
   parseEnrichmentEvidence,
   type EnrichmentInput,
-  type Evidence,
+  type EnrichmentView,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
 import { evidence as evidenceTable, evidenceBlobs, importJobs } from '../db/schema.js';
@@ -38,12 +38,7 @@ export const fetchEnrichmentBodySchema = z.object({
 });
 export type FetchEnrichmentBody = z.input<typeof fetchEnrichmentBodySchema>;
 
-export interface EnrichmentView {
-  evidenceId: Evidence['id'];
-  payload: EnrichmentInput['payload'];
-  /** Computed against "now" at read time — presentation, never a detection input. */
-  stale: boolean;
-}
+export type { EnrichmentView } from '@netplan/domain';
 
 export type EnrichmentService = ReturnType<typeof createEnrichmentService>;
 

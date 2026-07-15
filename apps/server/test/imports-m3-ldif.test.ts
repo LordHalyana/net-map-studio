@@ -100,8 +100,9 @@ describe('P4-M3: LDIF directory-export adapter', () => {
 
     // alice (user), svc-backup (serviceAccount), Domain Admins (group), bob
     // (person, base64 + folded name); the computer account is skipped
-    expect(detail.observations).toHaveLength(4);
-    for (const obs of detail.observations as Observation[]) {
+    const parsedObservations: Observation[] = detail.observations;
+    expect(parsedObservations).toHaveLength(4);
+    for (const obs of parsedObservations) {
       expect(obs.claim.targetKind).toBe('identity');
       expect(obs.evidenceId).toBe(evidenceId);
       expect(obs.contributor).toBe('directoryExport');

@@ -317,6 +317,28 @@ describe('M2: hash-first — IP/domain egress lookups are gated per type', () =>
     expect(allowed.statusCode).toBe(201);
   });
 
+  it('ip/domain lookups against the local feed work with the door shut — zero-egress by design', async () => {
+    // The per-type opt-in gates what LEAVES (Q10); a local lookup reveals
+    // nothing to anyone, so the shut-door mode stays fully usable (ADR-0027).
+    const app = await createApp();
+    const projectId = await createProject(app);
+    await putFeed(app, projectId, [
+      { indicatorType: 'ip', indicator: '203.0.113.7', verdict: 'malicious' },
+    ]);
+    const res = await fetchEnrichment(app, projectId, {
+      indicatorType: 'ip',
+      query: '203.0.113.7',
+    });
+    expect(res.statusCode).toBe(201);
+    const view: EnrichmentView = res.json();
+    expect(view.payload.response.verdict).toBe('malicious');
+
+    const audit: EgressAuditRecord[] = await app
+      .inject({ method: 'GET', url: `/projects/${projectId}/egress/audit` })
+      .then((r) => r.json());
+    expect(audit).toEqual([]);
+  });
+
   it('with egress off, an egress-requiring provider fetch is blocked entirely', async () => {
     const app = await createApp();
     const projectId = await createProject(app);

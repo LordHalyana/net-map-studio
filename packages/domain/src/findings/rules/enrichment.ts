@@ -17,6 +17,22 @@ function adverse(enrichment: EnrichmentInput): boolean {
   return verdict === 'malicious' || verdict === 'suspicious';
 }
 
+/** Malicious keeps the rule's critical default; suspicious lands one notch down. */
+function adverseSeverityOverride(enrichment: EnrichmentInput): 'high' | undefined {
+  return enrichment.payload.response.verdict === 'suspicious' ? 'high' : undefined;
+}
+
+/** The shared explanation tail: provenance line plus the provider's own detail. */
+function enrichmentExplanationSuffix(enrichment: EnrichmentInput): string {
+  const { payload } = enrichment;
+  return (
+    enrichmentProvenanceLine(payload) +
+    (payload.response.detail ? ` Provider detail: ${payload.response.detail}` : '')
+  );
+}
+
+const REFETCH_STEP = 'Re-fetch the enrichment through the egress door if it is stale.';
+
 export const enrichmentFileHashRule: Rule = {
   id: 'enrichment.fileHashMatch',
   ruleVersion: '1.0.0',
@@ -43,14 +59,13 @@ export const enrichmentFileHashRule: Rule = {
           evidenceRefs: [enrichment.evidenceId, ...inventoryEvidence(inv)],
           contributingProvenanceRows: [],
           baseConfidence: 0.9,
-          severityOverride: payload.response.verdict === 'suspicious' ? 'high' : undefined,
+          severityOverride: adverseSeverityOverride(enrichment),
           explanation:
             `"${candidate.path}" matches an indicator rated ${payload.response.verdict} by threat intel. ` +
-            `${enrichmentProvenanceLine(payload)}` +
-            (payload.response.detail ? ` Provider detail: ${payload.response.detail}` : ''),
+            enrichmentExplanationSuffix(enrichment),
           verificationSteps: [
             'Isolate and triage the device; verify the file hash independently.',
-            'Re-fetch the enrichment through the egress door if it is stale.',
+            REFETCH_STEP,
           ],
         });
       }
@@ -89,14 +104,14 @@ export const enrichmentDestinationRule: Rule = {
         evidenceRefs: [enrichment.evidenceId],
         contributingProvenanceRows: [],
         baseConfidence: flow.confidence,
-        severityOverride: payload.response.verdict === 'suspicious' ? 'high' : undefined,
+        severityOverride: adverseSeverityOverride(enrichment),
         explanation:
           `${source.name} communicated with ${flow.destination.value}, an indicator rated ` +
-          `${payload.response.verdict} by threat intel. ${enrichmentProvenanceLine(payload)}` +
-          (payload.response.detail ? ` Provider detail: ${payload.response.detail}` : ''),
+          `${payload.response.verdict} by threat intel. ` +
+          enrichmentExplanationSuffix(enrichment),
         verificationSteps: [
           'Review the Flow (count, first/last seen) and correlate with other devices.',
-          'Re-fetch the enrichment through the egress door if it is stale.',
+          REFETCH_STEP,
         ],
       });
     }

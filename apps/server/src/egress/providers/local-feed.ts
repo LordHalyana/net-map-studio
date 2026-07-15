@@ -8,9 +8,13 @@ import {
 } from '@netplan/domain';
 import { z } from 'zod';
 import type { Db } from '../../db/index.js';
-import { projects, threatIntelLocalFeeds } from '../../db/schema.js';
-import { OperationError } from '../../engine/store.js';
-import type { EgressLookupRequest, EgressProvider, EgressProviderResult } from '../door.js';
+import { requireProject } from '../../db/require-project.js';
+import { threatIntelLocalFeeds } from '../../db/schema.js';
+import type {
+  EgressLookupRequest,
+  ThreatIntelProvider,
+  ThreatIntelProviderResult,
+} from '../door.js';
 
 /**
  * The local/offline threat-intel feed (P4-M2, ADR-0027/0028): the operator
@@ -26,17 +30,8 @@ export const putLocalFeedBodySchema = z.object({
 export type LocalFeedStore = ReturnType<typeof createLocalFeedStore>;
 
 export function createLocalFeedStore(db: Db) {
-  function requireProject(projectId: string): void {
-    const row = db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .get();
-    if (!row) throw new OperationError('NOT_FOUND', `Project ${projectId} not found`);
-  }
-
   function get(projectId: string): ThreatIntelLocalFeed {
-    requireProject(projectId);
+    requireProject(db, projectId);
     const row = db
       .select()
       .from(threatIntelLocalFeeds)
@@ -51,7 +46,7 @@ export function createLocalFeedStore(db: Db) {
   }
 
   function put(projectId: string, entries: LocalFeedEntry[]): ThreatIntelLocalFeed {
-    requireProject(projectId);
+    requireProject(db, projectId);
     const next = threatIntelLocalFeedSchema.parse({
       projectId,
       entries,
@@ -67,7 +62,7 @@ export function createLocalFeedStore(db: Db) {
   return { get, put };
 }
 
-export function createLocalFeedProvider(store: LocalFeedStore): EgressProvider {
+export function createLocalFeedProvider(store: LocalFeedStore): ThreatIntelProvider {
   return {
     id: 'local-feed',
     version: '1.0.0',
@@ -75,7 +70,7 @@ export function createLocalFeedProvider(store: LocalFeedStore): EgressProvider {
     execute(
       request: EgressLookupRequest,
       ctx: { projectId: string },
-    ): Promise<EgressProviderResult> {
+    ): Promise<ThreatIntelProviderResult> {
       const feed = store.get(ctx.projectId);
       const entry = feed.entries.find(
         (e) =>

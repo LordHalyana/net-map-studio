@@ -980,6 +980,8 @@ export function createEngine(db: Db) {
         // P4-M6: the sign-off transition. No one-way transition graph is
         // enforced here — undo/redo must re-apply reverse transitions; the
         // real invariant is the apply gate (only `approved` ChangeSets apply).
+        // `reviewedAt` always stamps the latest transition (an undo IS a new
+        // review event); the full history lives in the operation log.
         const row = tx
           .select()
           .from(changeSets)

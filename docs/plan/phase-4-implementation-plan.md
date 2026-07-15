@@ -151,6 +151,7 @@ Build the single guarded chokepoint (ADR-0027) with a **stub provider** — no r
 | Firewall/switch config import          | would extend Observation `targetKind` to PolicyRule/Link — not additive | Deferred (design Q12)      |
 | LLDP/CDP neighbour topology import     | same — Link is not an Observation `targetKind`                          | Deferred                   |
 | Additional native directory formats    | LDIF adapter shape generalises (Entra CSV, `Get-ADUser` JSON)           | Additive later             |
+| NetFlow-IPFIX / nfdump flow exports    | Zeek conn.log adapter is the flow-adapter shape; same flow claim        | Additive later             |
 | Additional additive adapters           | Nessus/OpenVAS vuln-scan → `Service`; drops into pipeline               | Additive later             |
 | Fully data-defined custom rules        | `RuleConfig` seam present; logic stays code (ADR-0024)                  | Extensibility phase        |
 | Higher scale tier / distributed queue  | worker kept queue-shaped; SMB tier unchanged                            | Gated behind measurements  |
