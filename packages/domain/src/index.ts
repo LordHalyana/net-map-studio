@@ -15,4 +15,5 @@ export * from './baseline-validation.js';
 export * from './bundle.js';
 export * from './invert.js';
 export * from './seams.js';
+export * from './egress.js';
 export * from './findings/index.js';

@@ -23,6 +23,11 @@ import { buildFindingsReport, findingsToCsvRows } from './export/findings-report
 import { isFindingsRedactionProfile, redactFindings, type FindingView } from '@netplan/domain';
 import { ParseLimitError } from './imports/guards.js';
 import { importResolutionActionSchema } from '@netplan/domain';
+import {
+  EgressBlockedError,
+  createEgressDoor,
+  updateEgressSettingsBodySchema,
+} from './egress/door.js';
 
 export interface AppOptions {
   dbFile?: string;
@@ -62,6 +67,8 @@ declare module 'fastify' {
     registeredRoutes: string[];
     /** The import pipeline (ADR-0019); exposed so tests can await worker quiescence. */
     importStore: import('./imports/store.js').ImportStore;
+    /** The single guarded egress chokepoint (ADR-0027). */
+    egressDoor: import('./egress/door.js').EgressDoor;
   }
 }
 
@@ -79,7 +86,9 @@ export async function buildApp(options: AppOptions = {}) {
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
   const findingsService = createFindingsService(db, engine, importStore, provenanceStore);
+  const egressDoor = createEgressDoor(db);
   app.decorate('importStore', importStore);
+  app.decorate('egressDoor', egressDoor);
 
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
@@ -91,6 +100,9 @@ export async function buildApp(options: AppOptions = {}) {
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ParseLimitError) {
       return reply.status(413).send({ error: error.message, code: 'LIMIT' });
+    }
+    if (error instanceof EgressBlockedError) {
+      return reply.status(403).send({ error: error.message, code: 'EGRESS_BLOCKED' });
     }
     if (error instanceof OperationError) {
       const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : 400;
@@ -315,6 +327,24 @@ export async function buildApp(options: AppOptions = {}) {
       configHash: report.configHash,
     });
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+  });
+
+  // ---------- The egress door (ADR-0027): settings, disclosure gate, audit trail ----------
+
+  app.get('/projects/:id/egress/settings', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return egressDoor.getSettings(id);
+  });
+
+  app.put('/projects/:id/egress/settings', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = updateEgressSettingsBodySchema.parse(request.body ?? {});
+    return egressDoor.updateSettings(id, body);
+  });
+
+  app.get('/projects/:id/egress/audit', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return egressDoor.listAudit(id);
   });
 
   app.get('/projects/:id/evidence', async (request) => {

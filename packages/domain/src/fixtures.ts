@@ -3,6 +3,10 @@ import {
   addressSchema,
   baselineIdSchema,
   baselineSchema,
+  defaultEgressSettings,
+  egressAuditRecordIdSchema,
+  egressAuditRecordSchema,
+  egressSettingsSchema,
   evidenceIdSchema,
   evidenceSchema,
   fieldProvenanceIdSchema,
@@ -42,6 +46,8 @@ import {
   type Address,
   type Baseline,
   type Device,
+  type EgressAuditRecord,
+  type EgressSettings,
   type Evidence,
   type FieldProvenance,
   type FindingDisposition,
@@ -331,6 +337,32 @@ export function makeFindingDisposition(
     fingerprint: 'fixture-fingerprint',
     status: 'new',
     notes: '',
+    ...overrides,
+  });
+}
+
+export function makeEgressSettings(
+  projectId: ProjectId,
+  overrides: Partial<EgressSettings> = {},
+): EgressSettings {
+  return egressSettingsSchema.parse({
+    ...defaultEgressSettings(projectId, '2026-07-15T00:00:00.000Z'),
+    ...overrides,
+  });
+}
+
+export function makeEgressAuditRecord(
+  projectId: ProjectId,
+  overrides: Partial<EgressAuditRecord> = {},
+): EgressAuditRecord {
+  return egressAuditRecordSchema.parse({
+    id: newId(egressAuditRecordIdSchema),
+    projectId,
+    timestamp: '2026-07-15T00:00:00.000Z',
+    providerId: 'stub',
+    indicatorType: 'fileHash',
+    query: 'a'.repeat(64),
+    outcome: 'success',
     ...overrides,
   });
 }

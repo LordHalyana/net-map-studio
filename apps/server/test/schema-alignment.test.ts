@@ -15,6 +15,8 @@ import {
   zoneSchema,
 } from '@netplan/domain';
 import {
+  egressAuditRecordSchema,
+  egressSettingsSchema,
   evidenceSchema,
   fieldProvenanceSchema,
   findingDispositionSchema,
@@ -29,6 +31,8 @@ import {
   makeAddress,
   makeBaseline,
   makeDevice,
+  makeEgressAuditRecord,
+  makeEgressSettings,
   makeEvidence,
   makeFieldProvenance,
   makeFindingDisposition,
@@ -47,6 +51,8 @@ import {
   makeZone,
 } from '@netplan/domain/fixtures';
 import {
+  egressAuditRecords as egressAuditRecordsTable,
+  egressSettings as egressSettingsTable,
   entityTables,
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
@@ -184,6 +190,43 @@ describe('findings tables align with domain Zod schemas (ADR-0023, plan M2)', ()
     expect(
       findingDispositionSchema.parse(db.select().from(findingDispositionsTable).get()),
     ).toEqual(disposition);
+  });
+});
+
+describe('egress tables align with domain Zod schemas (ADR-0027, plan P4-M1)', () => {
+  const settings = makeEgressSettings(project.id);
+  const auditRecord = makeEgressAuditRecord(project.id, { outcome: 'blocked', detail: 'shut' });
+
+  const egressCases = [
+    ['egressSettings', egressSettingsTable, egressSettingsSchema, settings],
+    ['egressAuditRecord', egressAuditRecordsTable, egressAuditRecordSchema, auditRecord],
+  ] as const;
+
+  it.each(egressCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
+    const columnKeys = Object.keys(getTableColumns(table)).sort();
+    const schemaKeys = Object.keys(schema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it.each(egressCases)(
+    '%s domain fixture satisfies the drizzle select schema',
+    (_name, table, _schema, fixture) => {
+      const selectSchema = createSelectSchema(table);
+      expect(selectSchema.safeParse(fixture).success).toBe(true);
+    },
+  );
+
+  it('egress fixtures round-trip through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(egressSettingsTable).values(settings).run();
+    db.insert(egressAuditRecordsTable).values(auditRecord).run();
+    expect(egressSettingsSchema.parse(db.select().from(egressSettingsTable).get())).toEqual(
+      settings,
+    );
+    expect(egressAuditRecordSchema.parse(db.select().from(egressAuditRecordsTable).get())).toEqual(
+      auditRecord,
+    );
   });
 });
 

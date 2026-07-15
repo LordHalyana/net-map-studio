@@ -2,6 +2,7 @@ import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   BaselineScope,
   ConfidenceContributor,
+  EgressCallOutcome,
   EvidenceContentClass,
   EvidenceRetention,
   ExpectedService,
@@ -14,6 +15,7 @@ import type {
   IdentityKind,
   IdentityScope,
   ImportJobStatus,
+  IndicatorType,
   LifecycleState,
   LinkEndpoint,
   ObservationClaim,
@@ -410,6 +412,40 @@ export const findingDispositions = sqliteTable('finding_dispositions', {
   fingerprint: text('fingerprint').notNull(),
   status: text('status').$type<FindingStatus>().notNull(),
   notes: text('notes').notNull(),
+});
+
+/**
+ * The egress door's per-project state (ADR-0027): shut by default, opened only
+ * behind the acknowledged disclosure, with the graded indicator-type opt-ins.
+ */
+export const egressSettings = sqliteTable('egress_settings', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  disclosureAcknowledgedAt: text('disclosure_acknowledged_at'),
+  allowedIndicatorTypes: text('allowed_indicator_types', { mode: 'json' })
+    .$type<IndicatorType[]>()
+    .notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * One row per call through the egress door (ADR-0027), blocked attempts
+ * included — evidence-grade provenance of what was asked of whom. Append-only:
+ * no update or delete path exists.
+ */
+export const egressAuditRecords = sqliteTable('egress_audit_records', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  timestamp: text('timestamp').notNull(),
+  providerId: text('provider_id').notNull(),
+  indicatorType: text('indicator_type').$type<IndicatorType>().notNull(),
+  query: text('query').notNull(),
+  outcome: text('outcome').$type<EgressCallOutcome>().notNull(),
+  detail: text('detail').notNull(),
 });
 
 export const entityTables = {

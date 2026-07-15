@@ -50,6 +50,13 @@
       "when": 1784117667998,
       "tag": "0006_thin_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784152558777,
+      "tag": "0007_dusty_sauron",
+      "breakpoints": true
     }
   ]
 }
