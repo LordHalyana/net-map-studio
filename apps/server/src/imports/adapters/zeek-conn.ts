@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { ObservationDraft, Protocol } from '@netplan/domain';
 import { ParseLimitError } from '../guards.js';
 import type { Adapter, AdapterContext } from './types.js';
@@ -33,20 +34,20 @@ function toProtocol(value: string | undefined): Protocol {
   return 'other';
 }
 
-function toPort(value: string | number | undefined): number | null {
-  if (value === undefined) return null;
+function toPort(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isInteger(num) || num < 0 || num > 65535) return null;
   return num;
 }
 
-function toNumber(value: string | number | undefined): number | null {
-  if (value === undefined) return null;
+function toNumber(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const num = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(num) ? num : null;
 }
 
-function rowFrom(record: Record<string, string | number | undefined>): ConnRow | null {
+function rowFrom(record: Record<string, unknown>): ConnRow | null {
   const origHost = record['id.orig_h'];
   const respHost = record['id.resp_h'];
   if (typeof origHost !== 'string' || typeof respHost !== 'string') return null;
@@ -98,8 +99,9 @@ function parseJsonLines(content: string, ctx: AdapterContext): ConnRow[] {
     } catch {
       throw new Error(`Invalid JSON-lines conn.log entry: ${line.slice(0, 80)}`);
     }
-    if (typeof parsed !== 'object' || parsed === null) continue;
-    const row = rowFrom(parsed as Record<string, string | number | undefined>);
+    const record = z.record(z.string(), z.unknown()).safeParse(parsed);
+    if (!record.success) continue;
+    const row = rowFrom(record.data);
     if (row) rows.push(row);
   }
   return rows;
