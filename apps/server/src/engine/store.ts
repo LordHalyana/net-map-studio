@@ -94,6 +94,11 @@ export interface LogEntry {
   createdAt: string;
 }
 
+export interface SearchResult {
+  entityType: Exclude<SettableEntityType, 'project'>;
+  entity: Site | Zone | Device | Interface | Address | Network | Link | Service | PolicyRule;
+}
+
 /** An undoable unit: a single operation or a whole ChangeSet (ADR-0010). */
 interface Unit {
   unitId: string;
@@ -874,6 +879,209 @@ export function createEngine(db: Db) {
     return result.data;
   }
 
+  // ---------- reads: search & relationships ----------
+
+  function search(projectId: string, query: string): SearchResult[] {
+    const state = getState(projectId);
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    const hit = (...values: (string | number | null)[]) =>
+      values.some((v) => v != null && String(v).toLowerCase().includes(needle));
+
+    const results: SearchResult[] = [];
+    for (const site of state.sites) {
+      if (hit(site.name, site.description)) results.push({ entityType: 'site', entity: site });
+    }
+    for (const zone of state.zones) {
+      if (hit(zone.name, zone.description)) results.push({ entityType: 'zone', entity: zone });
+    }
+    for (const device of state.devices) {
+      if (
+        hit(
+          device.name,
+          device.vendor,
+          device.model,
+          device.customTypeLabel,
+          device.notes,
+          ...device.tags,
+        )
+      ) {
+        results.push({ entityType: 'device', entity: device });
+      }
+    }
+    for (const iface of state.interfaces) {
+      if (hit(iface.name)) results.push({ entityType: 'interface', entity: iface });
+    }
+    for (const address of state.addresses) {
+      if (hit(address.value)) results.push({ entityType: 'address', entity: address });
+    }
+    for (const network of state.networks) {
+      if (hit(network.name, network.cidr, network.vlanId, network.description)) {
+        results.push({ entityType: 'network', entity: network });
+      }
+    }
+    for (const service of state.services) {
+      if (hit(service.name, service.process, service.portStart, service.portEnd)) {
+        results.push({ entityType: 'service', entity: service });
+      }
+    }
+    for (const link of state.links) {
+      if (hit(link.label, link.notes)) results.push({ entityType: 'link', entity: link });
+    }
+    for (const rule of state.policyRules) {
+      if (hit(rule.name, rule.justification, rule.owner, rule.notes)) {
+        results.push({ entityType: 'policyRule', entity: rule });
+      }
+    }
+    return results;
+  }
+
+  function getEntityWithRelationships(
+    projectId: string,
+    entityType: SettableEntityType,
+    entityId: string,
+  ): { entity: unknown; relationships: Record<string, unknown> } {
+    const state = getState(projectId);
+    const linksTouching = (interfaceIds: Set<string>) =>
+      state.links.filter((l) => interfaceIds.has(l.source.id) || interfaceIds.has(l.target.id));
+    const rulesTouching = (kinds: Endpoint['kind'][], id: string) =>
+      state.policyRules.filter((r) =>
+        [r.source, r.destination].some((e) => kinds.includes(e.kind) && e.id === id),
+      );
+    const interfaceWithDetail = (iface: Interface) => ({
+      ...iface,
+      addresses: state.addresses.filter((a) => a.interfaceId === iface.id),
+      network: state.networks.find((n) => n.id === iface.networkId) ?? null,
+    });
+
+    switch (entityType) {
+      case 'project':
+        return { entity: state.project, relationships: { sites: state.sites } };
+      case 'site': {
+        const entity = state.sites.find((s) => s.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `site ${entityId} not found`);
+        return {
+          entity,
+          relationships: { zones: state.zones.filter((z) => z.siteId === entityId) },
+        };
+      }
+      case 'zone': {
+        const entity = state.zones.find((z) => z.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `zone ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            site: state.sites.find((s) => s.id === entity.siteId) ?? null,
+            devices: state.devices.filter((d) => d.zoneId === entityId),
+            policyRules: rulesTouching(['zone'], entityId),
+          },
+        };
+      }
+      case 'device': {
+        const entity = state.devices.find((d) => d.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `device ${entityId} not found`);
+        const ifaces = state.interfaces.filter((i) => i.deviceId === entityId);
+        return {
+          entity,
+          relationships: {
+            zone: state.zones.find((z) => z.id === entity.zoneId) ?? null,
+            interfaces: ifaces.map(interfaceWithDetail),
+            services: state.services.filter((s) => s.deviceId === entityId),
+            links: linksTouching(new Set(ifaces.map((i) => i.id))),
+            policyRules: rulesTouching(['device'], entityId),
+          },
+        };
+      }
+      case 'interface': {
+        const entity = state.interfaces.find((i) => i.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `interface ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
+            network: state.networks.find((n) => n.id === entity.networkId) ?? null,
+            addresses: state.addresses.filter((a) => a.interfaceId === entityId),
+            links: linksTouching(new Set([entityId])),
+            policyRules: rulesTouching(['interface'], entityId),
+          },
+        };
+      }
+      case 'address': {
+        const entity = state.addresses.find((a) => a.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `address ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            interface: state.interfaces.find((i) => i.id === entity.interfaceId) ?? null,
+          },
+        };
+      }
+      case 'network': {
+        const entity = state.networks.find((n) => n.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `network ${entityId} not found`);
+        const members = state.interfaces.filter((i) => i.networkId === entityId);
+        return {
+          entity,
+          relationships: {
+            members: members.map((iface) => ({
+              ...iface,
+              device: state.devices.find((d) => d.id === iface.deviceId) ?? null,
+            })),
+            policyRules: rulesTouching(['network', 'subnet'], entityId),
+          },
+        };
+      }
+      case 'link': {
+        const entity = state.links.find((l) => l.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `link ${entityId} not found`);
+        const resolve = (id: string) => {
+          const iface = state.interfaces.find((i) => i.id === id) ?? null;
+          return iface ? interfaceWithDetail(iface) : null;
+        };
+        return {
+          entity,
+          relationships: { source: resolve(entity.source.id), target: resolve(entity.target.id) },
+        };
+      }
+      case 'service': {
+        const entity = state.services.find((s) => s.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `service ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
+            policyRules: state.policyRules.filter((r) => r.serviceId === entityId),
+          },
+        };
+      }
+      case 'policyRule': {
+        const entity = state.policyRules.find((r) => r.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `policyRule ${entityId} not found`);
+        const resolveEndpoint = (e: Endpoint): unknown => {
+          switch (e.kind) {
+            case 'interface':
+              return state.interfaces.find((i) => i.id === e.id) ?? null;
+            case 'device':
+              return state.devices.find((d) => d.id === e.id) ?? null;
+            case 'zone':
+              return state.zones.find((z) => z.id === e.id) ?? null;
+            case 'network':
+            case 'subnet':
+              return state.networks.find((n) => n.id === e.id) ?? null;
+          }
+        };
+        return {
+          entity,
+          relationships: {
+            service: state.services.find((s) => s.id === entity.serviceId) ?? null,
+            source: resolveEndpoint(entity.source),
+            destination: resolveEndpoint(entity.destination),
+          },
+        };
+      }
+    }
+  }
+
   return {
     createProject,
     listProjects,
@@ -886,6 +1094,8 @@ export function createEngine(db: Db) {
     undo,
     redo,
     availability,
+    search,
+    getEntityWithRelationships,
   };
 }
 
