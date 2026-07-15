@@ -56,6 +56,16 @@ export async function buildApp(options: AppOptions = {}) {
     if (error instanceof z.ZodError) {
       return reply.status(400).send({ error: 'Validation failed', issues: error.issues });
     }
+    // Fastify's own errors (body parsing, 404s, …) carry a proper status code.
+    if (
+      error instanceof Error &&
+      'statusCode' in error &&
+      typeof error.statusCode === 'number' &&
+      error.statusCode >= 400 &&
+      error.statusCode < 500
+    ) {
+      return reply.status(error.statusCode).send({ error: error.message });
+    }
     app.log.error(error);
     return reply.status(500).send({ error: 'Internal server error' });
   });

@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import {
   mutationResponseSchema,
+  operationLogEntrySchema,
   projectSchema,
   projectStateSchema,
+  undoRedoAvailabilitySchema,
   type ChangeSet,
   type MutationResponse,
   type Operation,
+  type OperationLogEntry,
   type Project,
   type ProjectState,
+  type UndoRedoAvailability,
 } from '@netplan/domain';
 
 const BASE = '/api';
@@ -59,8 +63,15 @@ export const postOperation = (
     body: JSON.stringify(payload),
   });
 
+export const getLog = (projectId: string): Promise<OperationLogEntry[]> =>
+  api(`/projects/${projectId}/log`, z.array(operationLogEntrySchema));
+
+export const getAvailability = (projectId: string): Promise<UndoRedoAvailability> =>
+  api(`/projects/${projectId}/availability`, undoRedoAvailabilitySchema);
+
+// note: body must be present — a bare POST with a JSON content-type is rejected
 export const postUndo = (projectId: string): Promise<MutationResponse> =>
-  api(`/projects/${projectId}/undo`, mutationResponseSchema, { method: 'POST' });
+  api(`/projects/${projectId}/undo`, mutationResponseSchema, { method: 'POST', body: '{}' });
 
 export const postRedo = (projectId: string): Promise<MutationResponse> =>
-  api(`/projects/${projectId}/redo`, mutationResponseSchema, { method: 'POST' });
+  api(`/projects/${projectId}/redo`, mutationResponseSchema, { method: 'POST', body: '{}' });

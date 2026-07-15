@@ -717,6 +717,44 @@ button:disabled {
   font-size: 12px;
 }
 
+/* ---------- activity log (ADR-0010 audit trail) ---------- */
+
+.activity-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.activity-log__row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 0;
+  border-top: 1px solid var(--border);
+}
+
+.activity-log__seq {
+  color: var(--text-dim);
+  width: 42px;
+}
+
+.activity-log__row--undo .activity-log__text {
+  color: var(--warn);
+}
+
+.activity-log__row--redo .activity-log__text {
+  color: var(--accent);
+}
+
+.activity-log__text {
+  flex: 1;
+}
+
+.activity-log__time {
+  color: var(--text-dim);
+}
+
 /* ---------- boot screens ---------- */
 
 .boot-error,

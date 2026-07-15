@@ -3,8 +3,9 @@ import { useAppStore } from '../state/store';
 import { ConnectForm } from './ConnectForm';
 import { LinkDetails } from './LinkDetails';
 import { RulesPanel } from './RulesPanel';
+import { ActivityLog } from './ActivityLog';
 
-type Tab = 'details' | 'rules';
+type Tab = 'details' | 'rules' | 'activity';
 
 export function ContextPanel() {
   const connectMode = useAppStore((s) => s.connectMode);
@@ -41,8 +42,22 @@ export function ContextPanel() {
         >
           Rules
         </button>
+        <button
+          type="button"
+          className={tab === 'activity' ? 'toggle--on' : ''}
+          data-testid="context-tab-activity"
+          onClick={() => setTab('activity')}
+        >
+          Activity
+        </button>
       </div>
-      {tab === 'details' || connectMode ? details : <RulesPanel />}
+      {connectMode || tab === 'details' ? (
+        details
+      ) : tab === 'rules' ? (
+        <RulesPanel />
+      ) : (
+        <ActivityLog />
+      )}
     </section>
   );
 }

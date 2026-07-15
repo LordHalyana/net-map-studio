@@ -45,3 +45,17 @@ export const mutationResponseSchema = z.object({
   state: projectStateSchema,
 });
 export type MutationResponse = z.infer<typeof mutationResponseSchema>;
+
+/** One row of the append-only operation log (ADR-0010) as served over the wire. */
+export const operationLogEntrySchema = z.object({
+  seq: z.number().int(),
+  id: z.uuidv7(),
+  projectId: z.uuidv7(),
+  changeSetId: z.uuidv7().nullable(),
+  kind: z.string(),
+  role: z.enum(['do', 'undo', 'redo']),
+  targetUnitId: z.string().nullable(),
+  payload: operationSchema,
+  createdAt: z.iso.datetime(),
+});
+export type OperationLogEntry = z.infer<typeof operationLogEntrySchema>;

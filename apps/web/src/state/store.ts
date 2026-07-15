@@ -8,6 +8,7 @@ import type {
 } from '@netplan/domain';
 import {
   createProject,
+  getAvailability,
   getGraph,
   listProjects,
   postOperation,
@@ -93,8 +94,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     bootstrapPromise ??= (async () => {
       const projects = await listProjects();
       const project = projects[0] ?? (await createProject('Untitled Project'));
-      const graph = await getGraph(project.id);
-      set({ project, graph });
+      const [graph, availability] = await Promise.all([
+        getGraph(project.id),
+        getAvailability(project.id),
+      ]);
+      set({ project, graph, availability });
     })().catch((error: unknown) => {
       bootstrapPromise = null; // allow a retry after a failed boot
       throw error;
