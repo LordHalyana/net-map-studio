@@ -1,6 +1,12 @@
 import {
   addressIdSchema,
   addressSchema,
+  evidenceIdSchema,
+  evidenceSchema,
+  importJobIdSchema,
+  importJobSchema,
+  observationIdSchema,
+  observationSchema,
   deviceIdSchema,
   deviceSchema,
   interfaceIdSchema,
@@ -22,6 +28,9 @@ import {
   zoneSchema,
   type Address,
   type Device,
+  type Evidence,
+  type ImportJob,
+  type Observation,
   type Interface,
   type Link,
   type Network,
@@ -123,6 +132,61 @@ export function makeService(projectId: ProjectId, overrides: Partial<Service> = 
     protocol: 'tcp',
     portStart: 443,
     portEnd: 443,
+    ...overrides,
+  });
+}
+
+export function makeImportJob(projectId: ProjectId, overrides: Partial<ImportJob> = {}): ImportJob {
+  return importJobSchema.parse({
+    id: newId(importJobIdSchema),
+    projectId,
+    status: 'review',
+    parserName: 'fixture',
+    parserVersion: '1',
+    schemaVersion: '1',
+    changeSetId: null,
+    startedAt: '2026-07-15T00:00:00.000Z',
+    finishedAt: null,
+    error: null,
+    ...overrides,
+  });
+}
+
+export function makeEvidence(job: ImportJob, overrides: Partial<Evidence> = {}): Evidence {
+  return evidenceSchema.parse({
+    id: newId(evidenceIdSchema),
+    projectId: job.projectId,
+    importJobId: job.id,
+    filename: 'scan.json',
+    sha256: 'a'.repeat(64),
+    sizeBytes: 128,
+    contentClass: 'structured',
+    retention: 'inline',
+    chunkRef: null,
+    parserName: job.parserName,
+    parserVersion: job.parserVersion,
+    collectedAt: null,
+    importedAt: '2026-07-15T00:00:00.000Z',
+    ...overrides,
+  });
+}
+
+export function makeObservation(
+  evidence: Evidence,
+  overrides: Partial<Observation> = {},
+): Observation {
+  return observationSchema.parse({
+    id: newId(observationIdSchema),
+    projectId: evidence.projectId,
+    importJobId: evidence.importJobId,
+    evidenceId: evidence.id,
+    contributor: 'exactMacMatch',
+    observedAt: '2026-07-15T00:00:00.000Z',
+    claim: {
+      targetKind: 'device',
+      device: { mac: 'aa:bb:cc:dd:ee:ff', hostname: 'web01' },
+      fields: { name: 'web01', os: 'Ubuntu 24.04' },
+    },
     ...overrides,
   });
 }

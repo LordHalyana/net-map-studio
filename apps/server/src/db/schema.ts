@@ -1,5 +1,15 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import type { LifecycleState, LinkEndpoint, PolicyEndpoint, Position } from '@netplan/domain';
+import type {
+  ConfidenceContributor,
+  EvidenceContentClass,
+  EvidenceRetention,
+  ImportJobStatus,
+  LifecycleState,
+  LinkEndpoint,
+  ObservationClaim,
+  PolicyEndpoint,
+  Position,
+} from '@netplan/domain';
 
 /**
  * Persistence mapping for the domain schemas (ADR-0007, ADR-0017). The Zod
@@ -164,6 +174,72 @@ export const policyRules = sqliteTable('policy_rules', {
   reviewDate: text('review_date'),
   lifecycleState: lifecycleState(),
   notes: text('notes').notNull(),
+});
+
+/**
+ * The import spine (ADR-0019, ADR-0020): ImportJob lifecycle, read-only
+ * Evidence records with split-by-class blob retention, and the neutral
+ * Observations adapters emit. Blobs live in their own table — the evidence
+ * record (and its hash) always survives even when a blob is dropped.
+ */
+export const importJobs = sqliteTable('import_jobs', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  status: text('status').$type<ImportJobStatus>().notNull(),
+  parserName: text('parser_name').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  schemaVersion: text('schema_version').notNull(),
+  changeSetId: text('change_set_id'),
+  startedAt: text('started_at').notNull(),
+  finishedAt: text('finished_at'),
+  error: text('error'),
+});
+
+export const evidence = sqliteTable('evidence', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  importJobId: text('import_job_id')
+    .notNull()
+    .references(() => importJobs.id),
+  filename: text('filename').notNull(),
+  sha256: text('sha256').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  contentClass: text('content_class').$type<EvidenceContentClass>().notNull(),
+  retention: text('retention').$type<EvidenceRetention>().notNull(),
+  chunkRef: text('chunk_ref'),
+  parserName: text('parser_name').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  collectedAt: text('collected_at'),
+  importedAt: text('imported_at').notNull(),
+});
+
+/** Raw evidence bytes, write-once (ADR-0019). Absent when retention is hashOnly. */
+export const evidenceBlobs = sqliteTable('evidence_blobs', {
+  evidenceId: text('evidence_id')
+    .primaryKey()
+    .references(() => evidence.id),
+  encoding: text('encoding').$type<'utf8' | 'base64'>().notNull(),
+  content: text('content').notNull(),
+});
+
+export const observations = sqliteTable('observations', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  importJobId: text('import_job_id')
+    .notNull()
+    .references(() => importJobs.id),
+  evidenceId: text('evidence_id')
+    .notNull()
+    .references(() => evidence.id),
+  contributor: text('contributor').$type<ConfidenceContributor>().notNull(),
+  observedAt: text('observed_at'),
+  claim: text('claim', { mode: 'json' }).$type<ObservationClaim>().notNull(),
 });
 
 /**

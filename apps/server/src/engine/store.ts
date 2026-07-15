@@ -41,9 +41,13 @@ import {
   addresses,
   changeSets,
   devices,
+  evidence,
+  evidenceBlobs,
+  importJobs,
   interfaces,
   links,
   networks,
+  observations,
   operationLog,
   policyRules,
   projects,
@@ -231,6 +235,18 @@ export function createEngine(db: Db) {
   function deleteProject(projectId: string): void {
     requireProject(projectId);
     db.transaction((tx) => {
+      const evidenceIds = tx
+        .select({ id: evidence.id })
+        .from(evidence)
+        .where(eq(evidence.projectId, projectId))
+        .all()
+        .map((r) => r.id);
+      for (const evidenceId of evidenceIds) {
+        tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, evidenceId)).run();
+      }
+      tx.delete(observations).where(eq(observations.projectId, projectId)).run();
+      tx.delete(evidence).where(eq(evidence.projectId, projectId)).run();
+      tx.delete(importJobs).where(eq(importJobs.projectId, projectId)).run();
       tx.delete(operationLog).where(eq(operationLog.projectId, projectId)).run();
       tx.delete(changeSets).where(eq(changeSets.projectId, projectId)).run();
       tx.delete(policyRules).where(eq(policyRules.projectId, projectId)).run();

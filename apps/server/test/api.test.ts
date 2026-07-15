@@ -216,6 +216,11 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       'POST /projects/:id/operations', // the single mutation surface
       'POST /projects/:id/undo', // engine-mediated
       'POST /projects/:id/redo', // engine-mediated
+      // Evidence ingest (ADR-0019): writes the import spine only (jobs,
+      // evidence, observations). Entity tables are untouched until the
+      // reconciled ChangeSet commits through /operations-equivalent engine
+      // paths (ADR-0021).
+      'POST /projects/:id/imports',
     ]);
 
     const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

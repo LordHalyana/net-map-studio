@@ -9,6 +9,8 @@ import {
 import {
   makeAddress,
   makeDevice,
+  makeEvidence,
+  makeImportJob,
   makeInterface,
   makeLink,
   makeNetwork,
@@ -66,6 +68,48 @@ describe('.netplan bundle (ADR-0016)', () => {
     const bundle = makeBundle(sampleState(), NOW);
     expect(bundle.evidence).toEqual([]);
     expect(bundle.manifest).toEqual({ files: [] });
+  });
+
+  it('round-trips an evidence subtree with a hash manifest (ADR-0019)', () => {
+    const state = sampleState();
+    const job = makeImportJob(state.project.id, { status: 'committed' });
+    const inline = makeEvidence(job, { filename: 'scan.xml' });
+    const dropped = makeEvidence(job, {
+      filename: 'capture.pcap',
+      contentClass: 'binaryCapture',
+      retention: 'hashOnly',
+      sha256: 'b'.repeat(64),
+    });
+    const bundle = makeBundle(state, NOW, {
+      evidence: [
+        { record: inline, encoding: 'utf8', content: '<xml/>' },
+        { record: dropped, encoding: 'base64', content: null },
+      ],
+      importJobs: [job],
+    });
+
+    const parsed = netplanBundleSchema.parse(JSON.parse(JSON.stringify(bundle)));
+    expect(parsed.evidence).toHaveLength(2);
+    expect(parsed.evidence[0]?.content).toBe('<xml/>');
+    // provenance survives the dropped blob: hash + manifest entry remain
+    expect(parsed.evidence[1]?.content).toBeNull();
+    expect(parsed.manifest.files).toEqual([
+      { path: `evidence/${inline.id}/scan.xml`, sha256: inline.sha256 },
+      { path: `evidence/${dropped.id}/capture.pcap`, sha256: dropped.sha256 },
+    ]);
+    expect(parsed.importJobs).toEqual([job]);
+  });
+
+  it('still parses a version-1 bundle without the evidence subtree', () => {
+    const v1 = JSON.parse(JSON.stringify(makeBundle(sampleState(), NOW)));
+    v1.version = 1;
+    delete v1.evidence;
+    delete v1.importJobs;
+    delete v1.manifest;
+    const parsed = netplanBundleSchema.parse(v1);
+    expect(parsed.evidence).toEqual([]);
+    expect(parsed.importJobs).toEqual([]);
+    expect(parsed.manifest).toEqual({ files: [] });
   });
 
   it('rejects a bundle with an unknown format marker', () => {

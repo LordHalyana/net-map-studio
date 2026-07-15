@@ -13,19 +13,28 @@ import {
   siteSchema,
   zoneSchema,
 } from '@netplan/domain';
+import { evidenceSchema, importJobSchema, observationSchema } from '@netplan/domain';
 import {
   makeAddress,
   makeDevice,
+  makeEvidence,
+  makeImportJob,
   makeInterface,
   makeLink,
   makeNetwork,
+  makeObservation,
   makePolicyRule,
   makeProject,
   makeService,
   makeSite,
   makeZone,
 } from '@netplan/domain/fixtures';
-import { entityTables } from '../src/db/schema.js';
+import {
+  entityTables,
+  evidence as evidenceTable,
+  importJobs as importJobsTable,
+  observations as observationsTable,
+} from '../src/db/schema.js';
 import { createDb } from '../src/db/index.js';
 
 /**
@@ -74,6 +83,43 @@ describe('drizzle tables align with domain Zod schemas', () => {
       expect(selectSchema.safeParse(fixture).success).toBe(true);
     },
   );
+});
+
+describe('import-spine tables align with domain Zod schemas (ADR-0017, plan M1)', () => {
+  const job = makeImportJob(project.id);
+  const evidenceFixture = makeEvidence(job);
+  const observation = makeObservation(evidenceFixture);
+
+  const importCases = [
+    ['importJob', importJobsTable, importJobSchema, job],
+    ['evidence', evidenceTable, evidenceSchema, evidenceFixture],
+    ['observation', observationsTable, observationSchema, observation],
+  ] as const;
+
+  it.each(importCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
+    const columnKeys = Object.keys(getTableColumns(table)).sort();
+    const schemaKeys = Object.keys(schema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it.each(importCases)(
+    '%s domain fixture satisfies the drizzle select schema',
+    (_name, table, _schema, fixture) => {
+      const selectSchema = createSelectSchema(table);
+      expect(selectSchema.safeParse(fixture).success).toBe(true);
+    },
+  );
+
+  it('import-spine fixtures round-trip through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(importJobsTable).values(job).run();
+    db.insert(evidenceTable).values(evidenceFixture).run();
+    db.insert(observationsTable).values(observation).run();
+    expect(importJobSchema.parse(db.select().from(importJobsTable).get())).toEqual(job);
+    expect(evidenceSchema.parse(db.select().from(evidenceTable).get())).toEqual(evidenceFixture);
+    expect(observationSchema.parse(db.select().from(observationsTable).get())).toEqual(observation);
+  });
 });
 
 describe('entities round-trip through SQLite unchanged', () => {

@@ -207,6 +207,28 @@ export const serviceSchema = z.object({
 });
 export type Service = z.infer<typeof serviceSchema>;
 
+/**
+ * ADR-0022: a modelled Identity is local to one host or a domain principal
+ * observed on hosts. The discriminator exists from day one so the P4
+ * directory adapter is additive.
+ */
+export const identityScopeSchema = z.enum(['local', 'domain']);
+export type IdentityScope = z.infer<typeof identityScopeSchema>;
+
+export const identityKindSchema = z.enum(['user', 'group', 'serviceAccount']);
+export type IdentityKind = z.infer<typeof identityKindSchema>;
+
+/** The privilege half of a RoleAssignment (design §3.9). */
+export const rolePrivilegeSchema = z.enum([
+  'localAdministrator',
+  'sudoer',
+  'remoteDesktopUser',
+  'serviceLogon',
+  'groupMember',
+  'other',
+]);
+export type RolePrivilege = z.infer<typeof rolePrivilegeSchema>;
+
 export const policyDirectionSchema = z.enum(['inbound', 'outbound', 'bidirectional']);
 export const policyActionSchema = z.enum(['allow', 'deny', 'reject', 'monitor']);
 
