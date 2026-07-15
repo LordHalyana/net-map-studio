@@ -64,8 +64,14 @@ export const importJobStatusSchema = z.enum([
   'committed',
   'rolledBack',
   'failed',
+  /** P4-M5: parse stopped by the operator before anything committed; resumable. */
+  'cancelled',
 ]);
 export type ImportJobStatus = z.infer<typeof importJobStatusSchema>;
+
+/** Worker progress granularity (P4-M5): where inside a run a job currently is. */
+export const importProgressStageSchema = z.enum(['queued', 'parsing', 'building', 'persisting']);
+export type ImportProgressStage = z.infer<typeof importProgressStageSchema>;
 
 /** One run of the import pipeline, with its rollback boundary (ADR-0021). */
 export const importJobSchema = z.object({
@@ -80,6 +86,8 @@ export const importJobSchema = z.object({
   startedAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),
   error: z.string().nullable(),
+  /** Non-null only while the worker is actively on the job (P4-M5). */
+  progressStage: importProgressStageSchema.nullable().default(null),
 });
 export type ImportJob = z.infer<typeof importJobSchema>;
 

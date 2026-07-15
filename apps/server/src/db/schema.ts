@@ -15,6 +15,7 @@ import type {
   IdentityKind,
   IdentityScope,
   ImportJobStatus,
+  ImportProgressStage,
   IndicatorType,
   LifecycleState,
   LocalFeedEntry,
@@ -282,6 +283,7 @@ export const importJobs = sqliteTable('import_jobs', {
   startedAt: text('started_at').notNull(),
   finishedAt: text('finished_at'),
   error: text('error'),
+  progressStage: text('progress_stage').$type<ImportProgressStage>(),
 });
 
 export const evidence = sqliteTable('evidence', {

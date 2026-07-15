@@ -227,6 +227,10 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       'POST /projects/:id/imports/:jobId/resolve',
       'POST /projects/:id/imports/:jobId/commit',
       'POST /projects/:id/imports/:jobId/rollback',
+      // Worker control (P4-M5): cancel/resume touch only the import spine —
+      // nothing has committed when they apply, so entity tables are untouched.
+      'POST /projects/:id/imports/:jobId/cancel',
+      'POST /projects/:id/imports/:jobId/resume',
       // Manual override (M8): one SetField through engine.applyChangeSetWith
       // plus its provenance row — the same spine, fully undoable.
       'POST /projects/:id/provenance/override',

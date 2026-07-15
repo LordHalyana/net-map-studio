@@ -276,6 +276,18 @@ export async function buildApp(options: AppOptions = {}) {
     return importStore.resolveConflict(params.id, params.jobId, body.conflictId, body.action);
   });
 
+  // Worker control (P4-M5): cancel stops a queued/running parse before
+  // anything commits; resume re-runs it from the stored Evidence blob.
+  app.post('/projects/:id/imports/:jobId/cancel', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    return importStore.cancel(params.id, params.jobId);
+  });
+
+  app.post('/projects/:id/imports/:jobId/resume', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    return importStore.resume(params.id, params.jobId);
+  });
+
   app.post('/projects/:id/imports/:jobId/commit', async (request) => {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);

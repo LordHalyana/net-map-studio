@@ -46,6 +46,7 @@ import { OperationError, type Engine, type EngineTx } from '../engine/store.js';
 import { insertProvenanceRows } from './provenance.js';
 import {
   DEFAULT_PARSE_LIMITS,
+  JobCancelledError,
   ParseLimitError,
   checkFileSize,
   guardedGunzip,
@@ -110,6 +111,81 @@ export function createImportStore(
   /** In-flight parse jobs, so tests and shutdown can await quiescence. */
   const inFlight = new Set<Promise<void>>();
 
+  /**
+   * The parse queue (P4-M5): a bounded FIFO with a concurrency cap — the
+   * queue-shaped seam ADR-0019 asks for. Swapping in worker threads or a
+   * distributed queue replaces `pump` and nothing above it.
+   */
+  const queue: Array<{ jobId: string; run: () => Promise<void> }> = [];
+  let running = 0;
+  /** Jobs the operator asked to cancel; checked at every budget checkpoint. */
+  const cancelRequested = new Set<string>();
+  /** Jobs currently queued or running — the set resume() must respect. */
+  const active = new Set<string>();
+
+  function pump(): void {
+    while (running < limits.maxConcurrentParses && queue.length > 0) {
+      const task = queue.shift();
+      if (!task) break;
+      running += 1;
+      void task.run().finally(() => {
+        running -= 1;
+        pump();
+      });
+    }
+  }
+
+  /** Enqueue a parse with backpressure; the API response leaves before it runs. */
+  function enqueueParse(job: ImportJob, evidenceRecord: Evidence, content: string): void {
+    if (active.size >= limits.maxQueuedParses) {
+      throw new ParseLimitError(
+        `Import queue is full (${limits.maxQueuedParses} jobs) — retry when current imports finish`,
+      );
+    }
+    active.add(job.id);
+    let release: () => void = () => undefined;
+    const tracker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    inFlight.add(tracker);
+    queue.push({
+      jobId: job.id,
+      run: async () => {
+        try {
+          if (cancelRequested.has(job.id)) {
+            finishCancel(job.id);
+          } else {
+            await runParse(job, evidenceRecord, content);
+          }
+        } finally {
+          active.delete(job.id);
+          cancelRequested.delete(job.id);
+          release();
+          inFlight.delete(tracker);
+        }
+      },
+    });
+    setImmediate(pump);
+  }
+
+  function finishCancel(jobId: string): void {
+    db.transaction((tx) => {
+      // cancellation can land after observations were staged but before the
+      // job flipped to review on a prior run — leave no partial rows behind
+      tx.delete(importProposals).where(eq(importProposals.importJobId, jobId)).run();
+      tx.delete(observations).where(eq(observations.importJobId, jobId)).run();
+      tx.update(importJobs)
+        .set({
+          status: 'cancelled',
+          progressStage: null,
+          error: null,
+          finishedAt: new Date().toISOString(),
+        })
+        .where(eq(importJobs.id, jobId))
+        .run();
+    });
+  }
+
   function requireProject(projectId: string): void {
     const row = db
       .select({ id: projects.id })
@@ -143,7 +219,11 @@ export function createImportStore(
   function setStatus(
     jobId: string,
     status: ImportJobStatus,
-    patch: { error?: string | null; finishedAt?: string | null } = {},
+    patch: {
+      error?: string | null;
+      finishedAt?: string | null;
+      progressStage?: ImportJob['progressStage'];
+    } = {},
   ): void {
     db.update(importJobs)
       .set({ status, ...patch })
@@ -156,11 +236,20 @@ export function createImportStore(
     evidenceRecord: Evidence,
     content: string,
   ): Promise<void> {
-    setStatus(job.id, 'parsing');
+    setStatus(job.id, 'parsing', { progressStage: 'parsing' });
     const adapter = getAdapter(job.parserName);
     try {
-      const budget = startBudget(limits);
+      const budget = startBudget(limits, Date.now, {
+        jobId: job.id,
+        isCancelled: () => cancelRequested.has(job.id),
+      });
       const drafts = await adapter.parse(content, { budget, limits });
+      if (drafts.length > limits.maxObservations) {
+        throw new ParseLimitError(
+          `Parse produced ${drafts.length} observations, over the ${limits.maxObservations} bound — aggregate harder or split the capture`,
+        );
+      }
+      setStatus(job.id, 'parsing', { progressStage: 'building' });
       const rows = drafts.map((draft) => {
         const parsed = observationDraftSchema.parse(draft);
         return observationSchema.parse({
@@ -175,19 +264,29 @@ export function createImportStore(
       const state = engine.getState(job.projectId);
       const candidates = buildCandidates(rows);
       const proposal = buildProposal(state, job, candidates, new Date().toISOString());
+      budget.check(); // last cancellation window before anything persists
+      setStatus(job.id, 'parsing', { progressStage: 'persisting' });
       db.transaction((tx) => {
         for (const row of rows) tx.insert(observations).values(row).run();
         tx.insert(importProposals).values(proposal).run();
       });
-      setStatus(job.id, 'review');
+      setStatus(job.id, 'review', { progressStage: null });
     } catch (error) {
+      if (error instanceof JobCancelledError) {
+        finishCancel(job.id);
+        return;
+      }
       const message =
         error instanceof ParseLimitError
           ? error.message
           : error instanceof Error
             ? `Parse failed: ${error.message}`
             : 'Parse failed';
-      setStatus(job.id, 'failed', { error: message, finishedAt: new Date().toISOString() });
+      setStatus(job.id, 'failed', {
+        error: message,
+        finishedAt: new Date().toISOString(),
+        progressStage: null,
+      });
     }
   }
 
@@ -215,6 +314,13 @@ export function createImportStore(
       contentClass === 'structured' || body.retainRaw ? ('inline' as const) : ('hashOnly' as const);
     const encoding = contentClass === 'binaryCapture' ? ('base64' as const) : ('utf8' as const);
 
+    // backpressure before anything persists — a full queue rejects the upload
+    if (active.size >= limits.maxQueuedParses) {
+      throw new ParseLimitError(
+        `Import queue is full (${limits.maxQueuedParses} jobs) — retry when current imports finish`,
+      );
+    }
+
     const job = importJobSchema.parse({
       id: newId(importJobIdSchema),
       projectId,
@@ -226,6 +332,7 @@ export function createImportStore(
       startedAt: now,
       finishedAt: null,
       error: null,
+      progressStage: 'queued',
     });
     const record = evidenceSchema.parse({
       id: newId(evidenceIdSchema),
@@ -253,15 +360,67 @@ export function createImportStore(
       }
     });
 
-    const content = bytes.toString(encoding);
-    // Yield to the event loop first: the API response leaves before parsing starts.
-    const task = new Promise<void>((resolve) => setImmediate(resolve))
-      .then(() => runParse(job, record, content))
-      .finally(() => {
-        inFlight.delete(task);
-      });
-    inFlight.add(task);
+    enqueueParse(job, record, bytes.toString(encoding));
     return job;
+  }
+
+  /**
+   * Cancel a queued or running parse (P4-M5). Cooperative: the running job
+   * stops at its next budget checkpoint; nothing has committed by then, so
+   * cancellation never leaves a partial import. Queued jobs cancel instantly.
+   */
+  function cancel(projectId: string, jobId: string): ImportJob {
+    const job = getJob(projectId, jobId);
+    if (job.status !== 'pending' && job.status !== 'parsing') {
+      throw new OperationError('CONFLICT', `ImportJob ${jobId} is ${job.status}, not cancellable`);
+    }
+    cancelRequested.add(jobId);
+    const queuedIndex = queue.findIndex((t) => t.jobId === jobId);
+    if (queuedIndex !== -1) {
+      // not started yet — run the (now trivial) task in place to release trackers
+      const [task] = queue.splice(queuedIndex, 1);
+      if (task) void task.run();
+    } else if (!active.has(jobId)) {
+      // not queued, not running: an interrupted job from a previous process
+      cancelRequested.delete(jobId);
+      finishCancel(jobId);
+    }
+    return getJob(projectId, jobId);
+  }
+
+  /**
+   * Resume a cancelled (or crash-interrupted pending/parsing) job (P4-M5) by
+   * re-running the parse from the stored read-only Evidence blob — resumability
+   * is a corollary of hash-anchored evidence retention (ADR-0019).
+   */
+  function resume(projectId: string, jobId: string): ImportJob {
+    const job = getJob(projectId, jobId);
+    if (active.has(jobId)) {
+      throw new OperationError('CONFLICT', `ImportJob ${jobId} is already queued or running`);
+    }
+    if (job.status !== 'cancelled' && job.status !== 'pending' && job.status !== 'parsing') {
+      throw new OperationError('CONFLICT', `ImportJob ${jobId} is ${job.status}, not resumable`);
+    }
+    const record = listEvidence(projectId, jobId)[0];
+    if (!record) throw new OperationError('NOT_FOUND', `ImportJob ${jobId} has no evidence`);
+    const blob = getEvidenceBlob(projectId, record.id);
+    if (!blob) {
+      throw new OperationError(
+        'CONFLICT',
+        `Cannot resume ${jobId}: evidence blob was not retained (retention: hashOnly)`,
+      );
+    }
+    // the blob stores exactly what adapters were handed (utf8 text, or base64
+    // text for binary captures) — resume re-feeds it verbatim
+    cancelRequested.delete(jobId);
+    db.transaction((tx) => {
+      // a crash-interrupted run may have staged rows; the re-run replaces them
+      tx.delete(importProposals).where(eq(importProposals.importJobId, jobId)).run();
+      tx.delete(observations).where(eq(observations.importJobId, jobId)).run();
+    });
+    setStatus(jobId, 'pending', { progressStage: 'queued', error: null, finishedAt: null });
+    enqueueParse(getJob(projectId, jobId), record, blob.content);
+    return getJob(projectId, jobId);
   }
 
   /** Await all in-flight parse work (tests, graceful shutdown). */
@@ -554,6 +713,8 @@ export function createImportStore(
   return {
     limits,
     createJob,
+    cancel,
+    resume,
     whenIdle,
     getJob,
     listJobs,
