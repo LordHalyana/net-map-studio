@@ -53,6 +53,7 @@ import {
   type ParseLimits,
 } from './guards.js';
 import { fixtureAdapter } from './adapters/fixture.js';
+import { deviceStateAdapter } from './adapters/device-state.js';
 import type { Adapter } from './adapters/types.js';
 
 /** Wire input of POST /projects/:id/imports. */
@@ -91,7 +92,7 @@ export function createImportStore(
 ) {
   const limits: ParseLimits = { ...DEFAULT_PARSE_LIMITS, ...options.limits };
   const adapters = new Map<string, Adapter>(
-    (options.adapters ?? [fixtureAdapter]).map((a) => [a.name, a]),
+    (options.adapters ?? [fixtureAdapter, deviceStateAdapter]).map((a) => [a.name, a]),
   );
   /** In-flight parse jobs, so tests and shutdown can await quiescence. */
   const inFlight = new Set<Promise<void>>();

@@ -14,6 +14,7 @@
   "dependencies": {
     "@fastify/static": "^10.1.0",
     "@netplan/domain": "workspace:*",
+    "@netplan/import-contract": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",

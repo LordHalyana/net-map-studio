@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-07-14T22:00:00Z",
+  "hosts": [
+    {
+      "deviceId": "4c4c4544-0042-3010-8052-b4c04f4d3733",
+      "hostname": "web01",
+      "os": { "name": "Ubuntu Server", "version": "24.04", "kernel": "6.8.0" },
+      "collectedAt": "2026-07-14T21:58:00Z",
+      "interfaces": [
+        {
+          "name": "eth0",
+          "kind": "ethernet",
+          "mac": "AA:BB:CC:00:00:01",
+          "addresses": [
+            { "value": "10.0.0.10", "kind": "ipv4", "prefixLength": 24 },
+            { "value": "fe80::1a2b:3c4d:5e6f:0001", "kind": "ipv6" }
+          ]
+        }
+      ],
+      "routes": [{ "destination": "0.0.0.0/0", "gateway": "10.0.0.1", "interface": "eth0" }],
+      "arp": [{ "ip": "10.0.0.1", "mac": "aa:bb:cc:ff:ff:01" }],
+      "connections": [
+        {
+          "protocol": "tcp",
+          "localAddress": "10.0.0.10",
+          "localPort": 51544,
+          "remoteAddress": "10.0.0.20",
+          "remotePort": 5432,
+          "state": "ESTABLISHED",
+          "process": "node"
+        }
+      ],
+      "listeningPorts": [
+        { "protocol": "tcp", "address": "0.0.0.0", "port": 443, "process": "nginx", "pid": 1201 },
+        { "protocol": "tcp", "address": "0.0.0.0", "port": 22, "process": "sshd", "pid": 802 }
+      ],
+      "localUsers": [{ "name": "ubuntu" }, { "name": "deploy", "serviceAccount": true }],
+      "localGroups": [{ "name": "sudo", "members": ["ubuntu"] }],
+      "administrators": [],
+      "sudoers": ["ubuntu", "CORP\\alice"],
+      "collection": { "scope": ["interfaces", "connections", "users"], "errors": [] }
+    },
+    {
+      "deviceId": "9d1c33aa-71b2-4b5e-9f00-2266aa77cc01",
+      "hostname": "db01",
+      "os": { "name": "Debian", "version": "12" },
+      "collectedAt": "2026-07-14T21:59:00Z",
+      "interfaces": [
+        {
+          "name": "ens18",
+          "mac": "aa:bb:cc:00:00:02",
+          "addresses": [{ "value": "10.0.0.20", "kind": "ipv4" }]
+        }
+      ],
+      "routes": [],
+      "arp": [],
+      "connections": [],
+      "listeningPorts": [
+        { "protocol": "tcp", "address": "0.0.0.0", "port": 5432, "process": "postgres" }
+      ],
+      "localUsers": [{ "name": "postgres", "serviceAccount": true }],
+      "localGroups": [],
+      "administrators": [],
+      "sudoers": [],
+      "collection": { "scope": ["interfaces", "listeningPorts"], "errors": [] },
+      "packages": [{ "name": "postgresql-16", "version": "16.3-1", "anythingGoesHere": true }]
+    },
+    {
+      "deviceId": "S-1-5-21-win-ws-0042",
+      "hostname": "WS-FINANCE-07",
+      "os": { "name": "Windows 11 Pro", "version": "23H2" },
+      "collectedAt": "2026-07-14T22:00:00Z",
+      "interfaces": [
+        {
+          "name": "Ethernet",
+          "mac": "aa:bb:cc:00:00:03",
+          "addresses": [{ "value": "10.0.1.31", "kind": "ipv4" }]
+        }
+      ],
+      "routes": [],
+      "arp": [],
+      "connections": [
+        {
+          "protocol": "tcp",
+          "localAddress": "10.0.1.31",
+          "localPort": 50123,
+          "remoteAddress": "10.0.0.10",
+          "remotePort": 443,
+          "process": "chrome"
+        }
+      ],
+      "listeningPorts": [],
+      "localUsers": [{ "name": "finance07" }],
+      "localGroups": [
+        { "name": "Administrators", "members": ["finance07", "CORP\\alice", "CORP\\Domain Admins"] }
+      ],
+      "administrators": ["finance07", "CORP\\alice", "CORP\\Domain Admins"],
+      "sudoers": [],
+      "collection": {
+        "scope": ["interfaces", "users", "connections"],
+        "errors": [{ "context": "scheduledTasks", "message": "access denied" }]
+      }
+    }
+  ]
+}
