@@ -221,6 +221,12 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       // reconciled ChangeSet commits through /operations-equivalent engine
       // paths (ADR-0021).
       'POST /projects/:id/imports',
+      // Reconciliation (ADR-0021): resolve rewrites the pending (unapplied)
+      // ChangeSet; commit/rollback apply it through engine.applyChangeSetWith
+      // — the same apply core as /operations, logged identically.
+      'POST /projects/:id/imports/:jobId/resolve',
+      'POST /projects/:id/imports/:jobId/commit',
+      'POST /projects/:id/imports/:jobId/rollback',
     ]);
 
     const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

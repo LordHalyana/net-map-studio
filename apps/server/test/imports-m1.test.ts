@@ -143,7 +143,7 @@ describe('M1: worker limits (ADR-0019)', () => {
     const engine = createEngine(db);
     const project = makeProject();
     engine.createProject(project);
-    const store = createImportStore(db, { limits: { maxFileBytes: 64 } });
+    const store = createImportStore(db, engine, { limits: { maxFileBytes: 64 } });
 
     expect(() =>
       store.createJob(project.id, {
@@ -164,7 +164,7 @@ describe('M1: worker limits (ADR-0019)', () => {
     const engine = createEngine(db);
     const project = makeProject();
     engine.createProject(project);
-    const store = createImportStore(db, { limits: { maxDecompressionRatio: 10 } });
+    const store = createImportStore(db, engine, { limits: { maxDecompressionRatio: 10 } });
 
     // 16MB of zeros compresses to ~16KB: ratio far beyond 10
     const bomb = gzipSync(Buffer.alloc(16 * 1024 * 1024));

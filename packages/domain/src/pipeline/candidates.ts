@@ -282,6 +282,12 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
         if (value !== undefined) addFieldValue(acc.fields, field, value, observation);
       }
     }
+    // an observed MAC/IP/hostname address is itself an identity hint for its host
+    if (claim.targetKind === 'address') {
+      if (claim.kind === 'mac') acc.macs.add(claim.value);
+      if (claim.kind === 'ipv4' || claim.kind === 'ipv6') acc.ips.add(claim.value);
+      if (claim.kind === 'hostname') acc.hostnames.add(claim.value);
+    }
   }
 
   const devices: DeviceCandidate[] = correlator.all().map((acc) => {

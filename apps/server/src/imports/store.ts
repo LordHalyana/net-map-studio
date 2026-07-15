@@ -2,19 +2,32 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import {
+  applyResolution,
+  buildCandidates,
+  buildProposal,
+  changeSetIdSchema,
   evidenceIdSchema,
   evidenceSchema,
+  generateProvenanceRows,
   importJobIdSchema,
   importJobSchema,
+  importProposalSchema,
+  importResolutionActionSchema,
+  invertOperation,
   newId,
   observationDraftSchema,
   observationIdSchema,
   observationSchema,
+  operationIdSchema,
+  operationSchema,
+  projectIdSchema,
   evidenceManifestPath,
   type BundleEvidenceFile,
   type Evidence,
   type ImportJob,
   type ImportJobStatus,
+  type ImportProposal,
+  type ImportResolutionAction,
   type NetplanBundle,
   type Observation,
 } from '@netplan/domain';
@@ -22,11 +35,15 @@ import type { Db } from '../db/index.js';
 import {
   evidence as evidenceTable,
   evidenceBlobs,
+  fieldProvenance,
   importJobs,
+  importProposals,
   observations,
+  operationLog,
   projects,
 } from '../db/schema.js';
-import { OperationError } from '../engine/store.js';
+import { OperationError, type Engine } from '../engine/store.js';
+import { insertProvenanceRows } from './provenance.js';
 import {
   DEFAULT_PARSE_LIMITS,
   ParseLimitError,
@@ -55,6 +72,7 @@ export interface ImportJobDetail {
   job: ImportJob;
   evidence: Evidence[];
   observations: Observation[];
+  proposal: ImportProposal | null;
 }
 
 export type ImportStore = ReturnType<typeof createImportStore>;
@@ -68,6 +86,7 @@ function isBinaryCapture(filename: string): boolean {
 
 export function createImportStore(
   db: Db,
+  engine: Engine,
   options: { limits?: Partial<ParseLimits>; adapters?: Adapter[] } = {},
 ) {
   const limits: ParseLimits = { ...DEFAULT_PARSE_LIMITS, ...options.limits };
@@ -138,8 +157,13 @@ export function createImportStore(
           evidenceId: evidenceRecord.id,
         });
       });
+      // build the proposed ChangeSet against the committed graph (ADR-0021)
+      const state = engine.getState(job.projectId);
+      const candidates = buildCandidates(rows);
+      const proposal = buildProposal(state, job, candidates, new Date().toISOString());
       db.transaction((tx) => {
         for (const row of rows) tx.insert(observations).values(row).run();
+        tx.insert(importProposals).values(proposal).run();
       });
       setStatus(job.id, 'review');
     } catch (error) {
@@ -271,13 +295,162 @@ export function createImportStore(
       .map((row) => observationSchema.parse(row));
   }
 
+  function getProposal(projectId: string, jobId: string): ImportProposal | null {
+    const row = db
+      .select()
+      .from(importProposals)
+      .where(and(eq(importProposals.importJobId, jobId), eq(importProposals.projectId, projectId)))
+      .get();
+    return row ? importProposalSchema.parse(row) : null;
+  }
+
   function getJobDetail(projectId: string, jobId: string): ImportJobDetail {
     const job = getJob(projectId, jobId);
     return {
       job,
       evidence: listEvidence(projectId, jobId),
       observations: listObservations(projectId, jobId),
+      proposal: getProposal(projectId, jobId),
     };
+  }
+
+  // ---------- reconciliation: resolve → commit → rollback (ADR-0021) ----------
+
+  function requireReviewJob(projectId: string, jobId: string): ImportJob {
+    const job = getJob(projectId, jobId);
+    if (job.status !== 'review') {
+      throw new OperationError('CONFLICT', `ImportJob ${jobId} is ${job.status}, not review`);
+    }
+    return job;
+  }
+
+  function requireProposal(projectId: string, jobId: string): ImportProposal {
+    const proposal = getProposal(projectId, jobId);
+    if (!proposal) throw new OperationError('NOT_FOUND', `ImportJob ${jobId} has no proposal`);
+    return proposal;
+  }
+
+  /** Rewrite the pending ChangeSet by resolving one conflict (ADR-0021). */
+  function resolveConflict(
+    projectId: string,
+    jobId: string,
+    conflictId: string,
+    action: ImportResolutionAction,
+  ): ImportProposal {
+    requireReviewJob(projectId, jobId);
+    const proposal = requireProposal(projectId, jobId);
+    if (!proposal.conflicts.some((c) => c.id === conflictId)) {
+      throw new OperationError('NOT_FOUND', `Conflict ${conflictId} not found`);
+    }
+    importResolutionActionSchema.parse(action);
+    const state = engine.getState(projectId);
+    const candidates = buildCandidates(listObservations(projectId, jobId));
+    const next = importProposalSchema.parse({
+      ...applyResolution(proposal, state, candidates, conflictId, action),
+      updatedAt: new Date().toISOString(),
+    });
+    db.update(importProposals).set(next).where(eq(importProposals.importJobId, jobId)).run();
+    return next;
+  }
+
+  /**
+   * Apply the edited ChangeSet through the engine (the only entity write
+   * path, ADR-0010), writing provenance rows and the job transition in the
+   * same transaction. The applied ChangeSet is the rollback boundary.
+   */
+  function commit(projectId: string, jobId: string): ImportJobDetail {
+    const job = requireReviewJob(projectId, jobId);
+    const proposal = requireProposal(projectId, jobId);
+    const pending = proposal.conflicts.filter((c) => c.resolution === 'pending');
+    if (pending.length > 0) {
+      throw new OperationError(
+        'CONFLICT',
+        `Cannot commit: ${pending.length} unresolved conflict(s) — the queue never auto-merges`,
+      );
+    }
+    const now = new Date().toISOString();
+    const observationRows = listObservations(projectId, jobId);
+    const candidates = buildCandidates(observationRows);
+    const provenanceRows = generateProvenanceRows(
+      proposal,
+      candidates,
+      new Map(observationRows.map((o) => [o.id, o])),
+      job,
+      now,
+    );
+    const finishJob = (tx: Parameters<Parameters<Db['transaction']>[0]>[0]) => {
+      insertProvenanceRows(tx, provenanceRows);
+      tx.update(importJobs)
+        .set({ status: 'committed', changeSetId: proposal.changeSetId, finishedAt: now })
+        .where(eq(importJobs.id, jobId))
+        .run();
+    };
+
+    if (proposal.operations.length === 0) {
+      // everything was merged without field changes or ignored — nothing to
+      // apply, but provenance and the job transition still land atomically
+      engine.withTransaction((tx) => finishJob(tx));
+    } else {
+      engine.applyChangeSetWith(
+        {
+          id: changeSetIdSchema.parse(proposal.changeSetId),
+          projectId: proposal.projectId,
+          label: proposal.label,
+          operations: proposal.operations,
+        },
+        finishJob,
+      );
+    }
+    return getJobDetail(projectId, jobId);
+  }
+
+  /** Rollback = inverting the import's ChangeSet as one unit (ADR-0010/0021). */
+  function rollback(projectId: string, jobId: string): ImportJobDetail {
+    const job = getJob(projectId, jobId);
+    if (job.status !== 'committed') {
+      throw new OperationError('CONFLICT', `ImportJob ${jobId} is ${job.status}, not committed`);
+    }
+    const now = new Date().toISOString();
+    const finishJob = (tx: Parameters<Parameters<Db['transaction']>[0]>[0]) => {
+      // the imported values are being restored — their provenance goes with them
+      tx.delete(fieldProvenance).where(eq(fieldProvenance.importJobId, jobId)).run();
+      tx.update(importJobs)
+        .set({ status: 'rolledBack', finishedAt: now })
+        .where(eq(importJobs.id, jobId))
+        .run();
+    };
+
+    if (job.changeSetId === null) {
+      engine.withTransaction((tx) => finishJob(tx));
+      return getJobDetail(projectId, jobId);
+    }
+
+    const applied = db
+      .select()
+      .from(operationLog)
+      .where(
+        and(eq(operationLog.projectId, projectId), eq(operationLog.changeSetId, job.changeSetId)),
+      )
+      .orderBy(asc(operationLog.seq))
+      .all()
+      .filter((row) => row.role === 'do')
+      .map((row) => operationSchema.parse(row.payload));
+
+    const inverse = applied
+      .slice()
+      .reverse()
+      .map((op) => invertOperation(op, newId(operationIdSchema)));
+
+    engine.applyChangeSetWith(
+      {
+        id: newId(changeSetIdSchema),
+        projectId: projectIdSchema.parse(projectId),
+        label: `Rollback of import ${jobId.slice(0, 8)}`,
+        operations: inverse,
+      },
+      finishJob,
+    );
+    return getJobDetail(projectId, jobId);
   }
 
   function getEvidenceBlob(
@@ -366,6 +539,10 @@ export function createImportStore(
     listEvidence,
     listObservations,
     getJobDetail,
+    getProposal,
+    resolveConflict,
+    commit,
+    rollback,
     getEvidenceBlob,
     exportAttachments,
     verifyEvidenceHashes,

@@ -54,6 +54,7 @@ import {
   flows,
   identities,
   importJobs,
+  importProposals,
   interfaces,
   links,
   networks,
@@ -146,6 +147,8 @@ const referenceFields: Partial<
   identity: { deviceId: 'device' },
   roleAssignment: { identityId: 'identity', deviceId: 'device' },
 };
+
+export type EngineTx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 export type Engine = ReturnType<typeof createEngine>;
 
@@ -295,6 +298,7 @@ export function createEngine(db: Db) {
         tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, evidenceId)).run();
       }
       tx.delete(observations).where(eq(observations.projectId, projectId)).run();
+      tx.delete(importProposals).where(eq(importProposals.projectId, projectId)).run();
       tx.delete(evidence).where(eq(evidence.projectId, projectId)).run();
       tx.delete(importJobs).where(eq(importJobs.projectId, projectId)).run();
       tx.delete(fieldProvenance).where(eq(fieldProvenance.projectId, projectId)).run();
@@ -318,7 +322,7 @@ export function createEngine(db: Db) {
 
   // ---------- shared checks ----------
 
-  type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+  type Tx = EngineTx;
 
   function exists(
     tx: Tx,
@@ -981,7 +985,12 @@ export function createEngine(db: Db) {
     return { appliedOperations: [applied], availability: availability(parsed.projectId) };
   }
 
-  function applyChangeSet(changeSet: ChangeSet): ApplyResult {
+  /**
+   * Apply a ChangeSet, optionally with extra writes in the same transaction —
+   * the import commit path (ADR-0021) uses `also` to write provenance rows
+   * and the ImportJob status atomically with the entity mutations.
+   */
+  function applyChangeSetWith(changeSet: ChangeSet, also?: (tx: Tx) => void): ApplyResult {
     const result = changeSetSchema.safeParse(changeSet);
     if (!result.success) {
       throw new OperationError('INVALID', `Invalid ChangeSet: ${result.error.message}`);
@@ -1000,13 +1009,24 @@ export function createEngine(db: Db) {
           createdAt: new Date().toISOString(),
         })
         .run();
-      return parsed.operations.map((op) => {
+      const ops = parsed.operations.map((op) => {
         const enriched = applyOne(tx, op);
         appendLog(tx, enriched, 'do', parsed.id, null);
         return enriched;
       });
+      also?.(tx);
+      return ops;
     });
     return { appliedOperations: applied, availability: availability(parsed.projectId) };
+  }
+
+  function applyChangeSet(changeSet: ChangeSet): ApplyResult {
+    return applyChangeSetWith(changeSet);
+  }
+
+  /** Run arbitrary writes in one transaction (import-spine bookkeeping only). */
+  function withTransaction<T>(fn: (tx: Tx) => T): T {
+    return db.transaction((tx) => fn(tx));
   }
 
   function undo(projectId: string): ApplyResult | null {
@@ -1353,6 +1373,8 @@ export function createEngine(db: Db) {
     getLog,
     applyOperation,
     applyChangeSet,
+    applyChangeSetWith,
+    withTransaction,
     undo,
     redo,
     availability,

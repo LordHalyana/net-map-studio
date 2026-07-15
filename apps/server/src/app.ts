@@ -17,7 +17,9 @@ import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
 import { createImportBodySchema, createImportStore } from './imports/store.js';
+import { createProvenanceStore } from './imports/provenance.js';
 import { ParseLimitError } from './imports/guards.js';
+import { importResolutionActionSchema } from '@netplan/domain';
 
 export interface AppOptions {
   dbFile?: string;
@@ -68,7 +70,8 @@ export async function buildApp(options: AppOptions = {}) {
   });
   const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
-  const importStore = createImportStore(db);
+  const importStore = createImportStore(db, engine);
+  const provenanceStore = createProvenanceStore(db);
   app.decorate('importStore', importStore);
 
   const registeredRoutes: string[] = [];
@@ -223,6 +226,36 @@ export async function buildApp(options: AppOptions = {}) {
   app.get('/projects/:id/imports/:jobId', async (request) => {
     const params = z.object({ id: z.uuidv7(), jobId: z.uuidv7() }).parse(request.params);
     return importStore.getJobDetail(params.id, params.jobId);
+  });
+
+  const jobParamsSchema = z.object({ id: z.uuidv7(), jobId: z.uuidv7() });
+
+  // Reconciliation (ADR-0021): resolving edits the pending ChangeSet; commit
+  // applies it through the engine; rollback inverts it as one unit.
+  app.post('/projects/:id/imports/:jobId/resolve', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const body = z
+      .object({ conflictId: z.uuidv7(), action: importResolutionActionSchema })
+      .parse(request.body ?? {});
+    return importStore.resolveConflict(params.id, params.jobId, body.conflictId, body.action);
+  });
+
+  app.post('/projects/:id/imports/:jobId/commit', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const detail = importStore.commit(params.id, params.jobId);
+    return { ...detail, state: engine.getState(params.id) };
+  });
+
+  app.post('/projects/:id/imports/:jobId/rollback', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const detail = importStore.rollback(params.id, params.jobId);
+    return { ...detail, state: engine.getState(params.id) };
+  });
+
+  // Per-field provenance (ADR-0008), the inspector's evidence trace (M8)
+  app.get('/projects/:id/provenance/:entityType/:entityId', async (request) => {
+    const params = entityParamsSchema.parse(request.params);
+    return provenanceStore.listForEntity(params.id, params.entityType, params.entityId);
   });
 
   app.get('/projects/:id/evidence/:evidenceId', async (request) => {

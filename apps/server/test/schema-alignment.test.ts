@@ -19,6 +19,7 @@ import {
   flowSchema,
   identitySchema,
   importJobSchema,
+  importProposalSchema,
   observationSchema,
   roleAssignmentSchema,
 } from '@netplan/domain';
@@ -46,6 +47,7 @@ import {
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
   importJobs as importJobsTable,
+  importProposals as importProposalsTable,
   observations as observationsTable,
 } from '../src/db/schema.js';
 import { createDb } from '../src/db/index.js';
@@ -121,6 +123,12 @@ describe('import-spine tables align with domain Zod schemas (ADR-0017, plan M1)'
   it.each(importCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
     const columnKeys = Object.keys(getTableColumns(table)).sort();
     const schemaKeys = Object.keys(schema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('importProposal table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(importProposalsTable)).sort();
+    const schemaKeys = Object.keys(importProposalSchema.shape).sort();
     expect(columnKeys).toEqual(schemaKeys);
   });
 

@@ -5,6 +5,8 @@ import type {
   EvidenceRetention,
   FieldValue,
   FlowEndpoint,
+  ImportConflict,
+  Operation,
   IdentityKind,
   IdentityScope,
   ImportJobStatus,
@@ -302,6 +304,25 @@ export const evidenceBlobs = sqliteTable('evidence_blobs', {
     .references(() => evidence.id),
   encoding: text('encoding').$type<'utf8' | 'base64'>().notNull(),
   content: text('content').notNull(),
+});
+
+/**
+ * The pending proposal per ImportJob (ADR-0021): a first-class, not-yet-applied
+ * ChangeSet the reconciliation UI reads and rewrites before commit.
+ */
+export const importProposals = sqliteTable('import_proposals', {
+  importJobId: text('import_job_id')
+    .primaryKey()
+    .references(() => importJobs.id),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  changeSetId: text('change_set_id').notNull(),
+  label: text('label').notNull(),
+  operations: text('operations', { mode: 'json' }).$type<Operation[]>().notNull(),
+  entityIds: text('entity_ids', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+  conflicts: text('conflicts', { mode: 'json' }).$type<ImportConflict[]>().notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 export const observations = sqliteTable('observations', {
