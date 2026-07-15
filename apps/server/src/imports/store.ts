@@ -57,6 +57,7 @@ import { deviceStateAdapter } from './adapters/device-state.js';
 import { ldifAdapter } from './adapters/ldif.js';
 import { nmapXmlAdapter } from './adapters/nmap-xml.js';
 import { tsharkFlowsAdapter } from './adapters/tshark-flows.js';
+import { zeekConnAdapter } from './adapters/zeek-conn.js';
 import type { Adapter } from './adapters/types.js';
 
 /** Wire input of POST /projects/:id/imports. */
@@ -102,6 +103,7 @@ export function createImportStore(
         nmapXmlAdapter,
         tsharkFlowsAdapter,
         ldifAdapter,
+        zeekConnAdapter,
       ]
     ).map((a) => [a.name, a]),
   );
