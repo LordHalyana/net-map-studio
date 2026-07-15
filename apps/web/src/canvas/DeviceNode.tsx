@@ -21,16 +21,23 @@ const lifecycleShort: Record<Device['lifecycleState'], string> = {
  * evidence-count (wired but empty until Phase 2 — design §3.2C).
  */
 export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
-  const { device, memberships, showTint } = data;
+  const { device, memberships, showTint, confidence, evidenceCount, identityChips, diffState } =
+    data;
   const glyph = findLibraryItem(device.deviceType)?.glyph ?? '▢';
   const typeLabel =
     device.deviceType === 'custom' && device.customTypeLabel
       ? device.customTypeLabel
       : device.deviceType;
+  const diffClass =
+    diffState === 'added'
+      ? ' device-node--diff-added'
+      : diffState === 'removed'
+        ? ' device-node--diff-removed'
+        : '';
 
   return (
     <div
-      className={`device-node${selected ? ' device-node--selected' : ''}`}
+      className={`device-node${selected ? ' device-node--selected' : ''}${diffClass}`}
       data-testid={`device-node-${device.name}`}
     >
       <Handle type="source" position={Position.Top} id="membership" className="hidden-handle" />
@@ -71,10 +78,35 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
         >
           {lifecycleShort[device.lifecycleState]}
         </span>
-        {/* Phase-2 seams: populated once provenance/evidence exist (ADR-0008) */}
-        <span className="device-node__confidence" data-testid="badge-confidence" />
-        <span className="device-node__evidence" data-testid="badge-evidence" />
+        {/* Provenance badges (ADR-0008, plan M8): winning confidence + evidence count */}
+        <span
+          className="device-node__confidence"
+          data-testid="badge-confidence"
+          title={confidence !== null ? `Confidence: ${Math.round(confidence * 100)}%` : undefined}
+        >
+          {confidence !== null ? `${Math.round(confidence * 100)}%` : ''}
+        </span>
+        <span
+          className="device-node__evidence"
+          data-testid="badge-evidence"
+          title={evidenceCount > 0 ? `${evidenceCount} evidence file(s)` : undefined}
+        >
+          {evidenceCount > 0 ? `⎘${evidenceCount}` : ''}
+        </span>
       </div>
+      {identityChips.length > 0 && (
+        <div className="device-node__identities" data-testid="device-identities">
+          {identityChips.map((chip) => (
+            <span
+              key={chip.id}
+              className={`identity-chip identity-chip--${chip.scope}`}
+              title={`${chip.scope} identity: ${chip.label}`}
+            >
+              {chip.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 });

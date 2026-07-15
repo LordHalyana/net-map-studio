@@ -63,8 +63,34 @@ export function LibraryPanel() {
     dispatch(opCreateEntity(project.id, { entityType: 'zone', entity: zone }));
   }
 
+  const view = useAppStore((s) => s.view);
+  const setView = useAppStore((s) => s.setView);
+
   return (
     <nav className="library-panel" data-testid="library-panel">
+      <section className="library-category primary-nav" data-testid="primary-nav">
+        <ul>
+          {(
+            [
+              ['canvas', '🗺', 'Canvas'],
+              ['imports', '⇪', 'Imports and Evidence'],
+              ['identities', '👤', 'Users and Roles'],
+            ] as const
+          ).map(([key, glyph, label]) => (
+            <li key={key}>
+              <button
+                type="button"
+                className={`library-item${view === key ? ' library-item--active' : ''}`}
+                data-testid={`nav-${key}`}
+                onClick={() => setView(key)}
+              >
+                <span className="library-item__glyph">{glyph}</span>
+                {label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
       <h2 className="panel-title">Components</h2>
       <section className="library-category">
         <h3>Structure</h3>

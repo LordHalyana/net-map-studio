@@ -213,9 +213,16 @@ export function buildProposal(
   const opBase = () => ({ id: newId(operationIdSchema), projectId });
 
   // --- devices ---
+  let deviceIndex = 0;
   for (const candidate of candidates.devices) {
     const deviceId = newId(deviceIdSchema);
     entityIds[candidate.key] = deviceId;
+    // grid-stagger so a multi-host import doesn't stack nodes on the canvas
+    const position = {
+      x: 80 + (deviceIndex % 6) * 190,
+      y: 140 + Math.floor(deviceIndex / 6) * 130,
+    };
+    deviceIndex += 1;
     const name =
       winningString(candidate.fields, 'name') ??
       candidate.hints.hostnames[0] ??
@@ -232,6 +239,7 @@ export function buildProposal(
       os: winningString(candidate.fields, 'os') ?? '',
       location: winningString(candidate.fields, 'location') ?? '',
       lifecycleState: candidate.impliedOnly ? 'inferred' : 'observed',
+      position,
     });
     op({ ...opBase(), kind: 'CreateEntity', payload: { entityType: 'device', entity } });
 

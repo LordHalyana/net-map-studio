@@ -17,7 +17,7 @@ import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
 import { createImportBodySchema, createImportStore } from './imports/store.js';
-import { createProvenanceStore } from './imports/provenance.js';
+import { createProvenanceStore, overrideFieldBodySchema } from './imports/provenance.js';
 import { ParseLimitError } from './imports/guards.js';
 import { importResolutionActionSchema } from '@netplan/domain';
 
@@ -74,7 +74,7 @@ export async function buildApp(options: AppOptions = {}) {
   const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
-  const provenanceStore = createProvenanceStore(db);
+  const provenanceStore = createProvenanceStore(db, engine);
   app.decorate('importStore', importStore);
 
   const registeredRoutes: string[] = [];
@@ -259,6 +259,25 @@ export async function buildApp(options: AppOptions = {}) {
   app.get('/projects/:id/provenance/:entityType/:entityId', async (request) => {
     const params = entityParamsSchema.parse(request.params);
     return provenanceStore.listForEntity(params.id, params.entityType, params.entityId);
+  });
+
+  app.get('/projects/:id/provenance', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return provenanceStore.listForProject(id);
+  });
+
+  // Manual override (M8): a SetField Operation + a manual provenance row,
+  // applied through the engine in one transaction — undoable like any edit.
+  app.post('/projects/:id/provenance/override', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = overrideFieldBodySchema.parse(request.body ?? {});
+    const result = provenanceStore.overrideField(id, body);
+    return { ...result, state: engine.getState(id) };
+  });
+
+  app.get('/projects/:id/evidence', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return importStore.listEvidence(id);
   });
 
   app.get('/projects/:id/evidence/:evidenceId', async (request) => {

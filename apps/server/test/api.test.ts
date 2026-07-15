@@ -227,6 +227,9 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       'POST /projects/:id/imports/:jobId/resolve',
       'POST /projects/:id/imports/:jobId/commit',
       'POST /projects/:id/imports/:jobId/rollback',
+      // Manual override (M8): one SetField through engine.applyChangeSetWith
+      // plus its provenance row — the same spine, fully undoable.
+      'POST /projects/:id/provenance/override',
     ]);
 
     const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

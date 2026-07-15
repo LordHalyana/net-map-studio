@@ -46,17 +46,24 @@ function CanvasInner() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
 
+  const canvasMode = useAppStore((s) => s.canvasMode);
+  const provenance = useAppStore((s) => s.provenance);
+
   const flow = useMemo(
     () =>
       graph
         ? graphToFlow(graph, {
             logical: layers.logical,
             physical: layers.physical,
+            observed: layers.observed,
+            identities: layers.identities,
+            mode: canvasMode,
+            provenance,
             collapsedSites,
             collapsedZones,
           })
         : { nodes: [], edges: [] },
-    [graph, layers, collapsedSites, collapsedZones],
+    [graph, layers, canvasMode, provenance, collapsedSites, collapsedZones],
   );
 
   // Adopt graph-derived nodes, preserving drag/selection state AND object

@@ -2,6 +2,7 @@ import { useAppStore } from '../state/store';
 import { deleteDevicesChangeSet, duplicateDevicesChangeSet } from '../state/ops';
 import { DeviceInspector } from './DeviceInspector';
 import { NetworkInspector, SiteInspector, ZoneInspector } from './StructureInspectors';
+import { IdentityInspector } from './UsersRolesPanel';
 
 export function InspectorPanel() {
   const selection = useAppStore((s) => s.selection);
@@ -63,6 +64,8 @@ export function InspectorPanel() {
   } else if (selection.entityType === 'zone') {
     const zone = graph.zones.find((z) => z.id === id);
     if (zone) content = <ZoneInspector zone={zone} graph={graph} />;
+  } else if (selection.entityType === 'identity' && id) {
+    content = <IdentityInspector identityId={id} />;
   }
 
   return (

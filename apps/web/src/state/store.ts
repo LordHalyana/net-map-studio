@@ -3,6 +3,9 @@ import {
   netplanBundleSchema,
   projectSchema,
   type ChangeSet,
+  type FieldProvenance,
+  type ImportJob,
+  type ImportResolutionAction,
   type Operation,
   type Project,
   type ProjectState,
@@ -17,10 +20,21 @@ import {
   postRedo,
   postUndo,
 } from '../api/client';
+import {
+  commitImport,
+  createImport,
+  getImportDetail,
+  listImports,
+  listProjectProvenance,
+  resolveImportConflict,
+  rollbackImport,
+  type ImportJobDetail,
+  type UploadImportInput,
+} from '../api/imports';
 import { applyOperationOptimistic } from './reducer';
 
 export interface Selection {
-  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule';
+  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity';
   ids: string[];
 }
 
@@ -29,9 +43,19 @@ export interface LayerState {
   logical: boolean;
   /** Show physical topology: Link/bundle edges. */
   physical: boolean;
+  /** Show observed traffic: aggregated Flow bundles (Phase 2). */
+  observed: boolean;
+  /** Identity overlay (§3.9): chips on devices, off by default. */
+  identities: boolean;
 }
 
-export type ContextTab = 'details' | 'rules' | 'activity';
+export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff';
+
+/** Which primary workspace fills the central region (design §3.2B). */
+export type WorkspaceView = 'canvas' | 'imports' | 'identities';
+
+/** AS-IS / TO-BE / Diff rendering mode (ADR-0009, design §3.10). */
+export type CanvasMode = 'asIs' | 'toBe' | 'diff';
 
 /**
  * Connect mode (design §3.3): pick a source Interface, pick a destination,
@@ -64,6 +88,13 @@ interface AppState {
   connectMode: boolean;
   connectDraft: ConnectDraft;
   connectNotice: string | null;
+  view: WorkspaceView;
+  canvasMode: CanvasMode;
+  /** Whole-project provenance sidecar mirror — feeds badges and the inspector. */
+  provenance: FieldProvenance[];
+  importJobs: ImportJob[];
+  selectedImport: ImportJobDetail | null;
+  importNotice: string | null;
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
   dispatch: (payload: Operation | ChangeSet) => void;
@@ -75,6 +106,17 @@ interface AppState {
   setContextTab: (tab: ContextTab) => void;
   toggleLogicalLayer: () => void;
   togglePhysicalLayer: () => void;
+  toggleObservedLayer: () => void;
+  toggleIdentityOverlay: () => void;
+  setView: (view: WorkspaceView) => void;
+  setCanvasMode: (mode: CanvasMode) => void;
+  refreshProvenance: () => Promise<void>;
+  refreshImports: () => Promise<void>;
+  uploadImport: (input: UploadImportInput) => Promise<void>;
+  selectImport: (jobId: string | null) => Promise<void>;
+  resolveConflict: (conflictId: string, action: ImportResolutionAction) => Promise<void>;
+  commitSelectedImport: () => Promise<void>;
+  rollbackSelectedImport: () => Promise<void>;
   toggleSiteCollapsed: (siteId: string) => void;
   toggleZoneCollapsed: (zoneId: string) => void;
   toggleConnectMode: () => void;
@@ -96,23 +138,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
-  layers: { logical: true, physical: true },
+  layers: { logical: true, physical: true, observed: true, identities: false },
   collapsedSites: [],
   collapsedZones: [],
   contextTab: 'details',
   connectMode: false,
   connectDraft: emptyDraft,
   connectNotice: null,
+  view: 'canvas',
+  canvasMode: 'toBe',
+  provenance: [],
+  importJobs: [],
+  selectedImport: null,
+  importNotice: null,
 
   bootstrap: () => {
     bootstrapPromise ??= (async () => {
       const projects = await listProjects();
       const project = projects[0] ?? (await createProject('Untitled Project'));
-      const [graph, availability] = await Promise.all([
+      const [graph, availability, provenance] = await Promise.all([
         getGraph(project.id),
         getAvailability(project.id),
+        listProjectProvenance(project.id),
       ]);
-      set({ project, graph, availability });
+      set({ project, graph, availability, provenance });
     })().catch((error: unknown) => {
       bootstrapPromise = null; // allow a retry after a failed boot
       throw error;
@@ -123,7 +172,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   reload: async () => {
     const project = get().project;
     if (!project) return;
-    set({ graph: await getGraph(project.id) });
+    const [graph, provenance] = await Promise.all([
+      getGraph(project.id),
+      listProjectProvenance(project.id),
+    ]);
+    set({ graph, provenance });
   },
 
   dispatch: (payload) => {
@@ -204,6 +257,130 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleLogicalLayer: () => set({ layers: { ...get().layers, logical: !get().layers.logical } }),
 
   togglePhysicalLayer: () => set({ layers: { ...get().layers, physical: !get().layers.physical } }),
+
+  toggleObservedLayer: () => set({ layers: { ...get().layers, observed: !get().layers.observed } }),
+
+  toggleIdentityOverlay: () =>
+    set({ layers: { ...get().layers, identities: !get().layers.identities } }),
+
+  setView: (view) => set({ view }),
+
+  setCanvasMode: (mode) => set({ canvasMode: mode }),
+
+  refreshProvenance: async () => {
+    const project = get().project;
+    if (!project) return;
+    set({ provenance: await listProjectProvenance(project.id) });
+  },
+
+  // ---------- imports & reconciliation (ADR-0019/0021, plan M7) ----------
+
+  refreshImports: async () => {
+    const project = get().project;
+    if (!project) return;
+    set({ importJobs: await listImports(project.id) });
+  },
+
+  uploadImport: async (input) => {
+    const project = get().project;
+    if (!project) return;
+    set({ importNotice: null });
+    try {
+      const job = await createImport(project.id, input);
+      set({ importJobs: [...get().importJobs, job] });
+      // poll the background worker until it leaves pending/parsing
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const detail = await getImportDetail(project.id, job.id);
+        if (detail.job.status !== 'pending' && detail.job.status !== 'parsing') {
+          set({
+            selectedImport: detail,
+            importJobs: get().importJobs.map((j) => (j.id === job.id ? detail.job : j)),
+            ...(detail.job.status === 'review' &&
+            detail.proposal &&
+            detail.proposal.conflicts.length > 0
+              ? { contextTab: 'conflicts' as const }
+              : {}),
+          });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      set({ importNotice: 'Import is still parsing — check the job list.' });
+    } catch (error) {
+      set({ importNotice: error instanceof Error ? error.message : 'Import failed' });
+    }
+  },
+
+  selectImport: async (jobId) => {
+    const project = get().project;
+    if (!project || jobId === null) {
+      set({ selectedImport: null });
+      return;
+    }
+    set({ selectedImport: await getImportDetail(project.id, jobId) });
+  },
+
+  /** Resolving a conflict rewrites the pending ChangeSet (ADR-0021). */
+  resolveConflict: async (conflictId, action) => {
+    const project = get().project;
+    const selected = get().selectedImport;
+    if (!project || !selected) return;
+    set({ importNotice: null });
+    try {
+      const proposal = await resolveImportConflict(project.id, selected.job.id, conflictId, action);
+      set({ selectedImport: { ...selected, proposal } });
+    } catch (error) {
+      set({ importNotice: error instanceof Error ? error.message : 'Resolve failed' });
+    }
+  },
+
+  commitSelectedImport: async () => {
+    const project = get().project;
+    const selected = get().selectedImport;
+    if (!project || !selected) return;
+    set({ importNotice: null });
+    try {
+      const result = await commitImport(project.id, selected.job.id);
+      set({
+        graph: result.state,
+        selectedImport: {
+          job: result.job,
+          evidence: result.evidence,
+          observations: result.observations,
+          proposal: result.proposal,
+        },
+        importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
+        availability: await getAvailability(project.id),
+        provenance: await listProjectProvenance(project.id),
+      });
+    } catch (error) {
+      set({ importNotice: error instanceof Error ? error.message : 'Commit failed' });
+    }
+  },
+
+  rollbackSelectedImport: async () => {
+    const project = get().project;
+    const selected = get().selectedImport;
+    if (!project || !selected) return;
+    set({ importNotice: null });
+    try {
+      const result = await rollbackImport(project.id, selected.job.id);
+      set({
+        graph: result.state,
+        selectedImport: {
+          job: result.job,
+          evidence: result.evidence,
+          observations: result.observations,
+          proposal: result.proposal,
+        },
+        importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
+        availability: await getAvailability(project.id),
+        provenance: await listProjectProvenance(project.id),
+      });
+    } catch (error) {
+      set({ importNotice: error instanceof Error ? error.message : 'Rollback failed' });
+    }
+  },
 
   toggleSiteCollapsed: (siteId) => {
     const current = get().collapsedSites;

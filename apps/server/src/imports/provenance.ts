@@ -1,11 +1,20 @@
 import { and, asc, eq } from 'drizzle-orm';
 import {
+  changeSetIdSchema,
+  fieldProvenanceIdSchema,
   fieldProvenanceSchema,
+  fieldValueSchema,
+  newId,
+  operationIdSchema,
+  projectIdSchema,
+  settableEntityTypeSchema,
   type FieldProvenance,
   type SettableEntityType,
 } from '@netplan/domain';
+import { z } from 'zod';
 import type { Db } from '../db/index.js';
 import { fieldProvenance } from '../db/schema.js';
+import type { ApplyResult, Engine } from '../engine/store.js';
 
 /**
  * The attribute-provenance sidecar (ADR-0008). Rows are only ever written
@@ -22,7 +31,16 @@ export function insertProvenanceRows(tx: Tx, rows: readonly FieldProvenance[]): 
   }
 }
 
-export function createProvenanceStore(db: Db) {
+/** Wire input of POST /projects/:id/provenance/override (M8). */
+export const overrideFieldBodySchema = z.object({
+  entityType: settableEntityTypeSchema,
+  entityId: z.uuidv7(),
+  field: z.string().min(1),
+  value: fieldValueSchema,
+});
+export type OverrideFieldBody = z.infer<typeof overrideFieldBodySchema>;
+
+export function createProvenanceStore(db: Db, engine: Engine) {
   function listForEntity(
     projectId: string,
     entityType: SettableEntityType,
@@ -66,7 +84,69 @@ export function createProvenanceStore(db: Db) {
     return rows[rows.length - 1] ?? null;
   }
 
-  return { listForEntity, listForProject, winningRow };
+  /**
+   * Manual override (M8, acceptance #6): one SetField Operation — undoable
+   * like any other — plus a manual provenance row in the same transaction.
+   * The previously accepted imported rows flip to `overridden`.
+   */
+  function overrideField(projectId: string, body: OverrideFieldBody): ApplyResult {
+    const now = new Date().toISOString();
+    return engine.applyChangeSetWith(
+      {
+        id: newId(changeSetIdSchema),
+        projectId: projectIdSchema.parse(projectId),
+        label: `Override ${body.entityType}.${body.field}`,
+        operations: [
+          {
+            id: newId(operationIdSchema),
+            projectId: projectIdSchema.parse(projectId),
+            kind: 'SetField',
+            entityType: body.entityType,
+            entityId: body.entityId,
+            field: body.field,
+            value: body.value,
+            previousValue: null,
+          },
+        ],
+      },
+      (tx) => {
+        tx.update(fieldProvenance)
+          .set({ status: 'overridden' })
+          .where(
+            and(
+              eq(fieldProvenance.projectId, projectId),
+              eq(fieldProvenance.entityType, body.entityType),
+              eq(fieldProvenance.entityId, body.entityId),
+              eq(fieldProvenance.field, body.field),
+              eq(fieldProvenance.status, 'accepted'),
+            ),
+          )
+          .run();
+        tx.insert(fieldProvenance)
+          .values(
+            fieldProvenanceSchema.parse({
+              id: newId(fieldProvenanceIdSchema),
+              projectId,
+              entityType: body.entityType,
+              entityId: body.entityId,
+              field: body.field,
+              sourceType: 'manual',
+              evidenceId: null,
+              importJobId: null,
+              observationId: null,
+              confidence: 1,
+              parserVersion: 'manual',
+              status: 'accepted',
+              observedValue: body.value,
+              observedAt: now,
+            }),
+          )
+          .run();
+      },
+    );
+  }
+
+  return { listForEntity, listForProject, winningRow, overrideField };
 }
 
 export type ProvenanceStore = ReturnType<typeof createProvenanceStore>;

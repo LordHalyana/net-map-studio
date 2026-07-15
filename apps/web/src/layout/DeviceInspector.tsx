@@ -25,6 +25,7 @@ import {
   opSetMembership,
 } from '../state/ops';
 import { FieldSection, SelectField, TextAreaField, TextField } from './fields';
+import { ProvenanceSection } from './ProvenanceSection';
 
 function enumOptions(values: readonly string[]) {
   return values.map((value) => ({ value, label: value }));
@@ -114,6 +115,25 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         >
           Delete
         </button>
+        {device.lifecycleState !== 'removedInProposal' ? (
+          <button
+            type="button"
+            data-testid="remove-in-proposal"
+            title="TO-BE proposal (ADR-0009): flag for removal without deleting the AS-IS object"
+            onClick={() => setField('lifecycleState', 'removedInProposal', device.lifecycleState)}
+          >
+            Remove in proposal
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="restore-in-proposal"
+            title="Clear the removal flag"
+            onClick={() => setField('lifecycleState', 'observed', device.lifecycleState)}
+          >
+            Restore
+          </button>
+        )}
       </div>
 
       <FieldSection title="Device">
@@ -164,6 +184,12 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           label="Model"
           value={device.model}
           onCommit={(v) => setField('model', v, device.model)}
+        />
+        <TextField
+          label="OS"
+          value={device.os}
+          testId="device-os-input"
+          onCommit={(v) => setField('os', v, device.os)}
         />
         <TextField
           label="Serial"
@@ -226,6 +252,8 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           + Add interface
         </button>
       </FieldSection>
+
+      <ProvenanceSection entityType="device" entityId={device.id} />
 
       <FieldSection title="Tags & notes">
         <TextField
