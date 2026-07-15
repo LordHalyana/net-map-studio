@@ -608,7 +608,7 @@ The first usable release is complete when an operator can:
 
 ## 6. Open Questions
 
-> Q1–Q6, Q11 and Q13 were resolved during Phase 2 planning (see `docs/plan/phase-2-implementation-plan.md` and the cited ADRs). The remainder stay open for Phase 3/4.
+> Q1–Q6, Q11 and Q13 were resolved during Phase 2 planning (see `docs/plan/phase-2-implementation-plan.md` and the cited ADRs). Q10 and Q12 were addressed during Phase 4 planning (see `docs/plan/phase-4-implementation-plan.md` and ADR-0026–0028). The remainder stay open.
 
 1. ~~Will the first deployment be single-operator local use, shared on-premises use or both?~~ **Resolved (ADR-0001):** single-operator, local-first; multi-user deferred.
 2. ~~Should the product be a standalone NetPlan Studio application, or should it remain split into a collection/normalization service and a separate proposal-design frontend?~~ **Resolved (ADR-0002):** single app — local web server + browser SPA.
@@ -619,9 +619,9 @@ The first usable release is complete when an operator can:
 7. Does the operator need multi-site and multi-customer tenancy in the first release?
 8. Which report formats are contractually required for client delivery?
 9. Should findings use an existing classification framework, a product-specific taxonomy or both?
-10. Will external threat-intelligence services be permitted under the client's privacy and data-processing requirements?
+10. ~~Will external threat-intelligence services be permitted under the client's privacy and data-processing requirements?~~ **Resolved (ADR-0027):** yes, but only through the single guarded egress door — off by default, per-project opt-in behind a disclosure, audited; local/offline feeds always viable (the only implementation shipped in Phase 4); **hash-first**, with IP/domain lookups gated behind a second explicit per-type opt-in.
 11. ~~Are Active Directory, Entra ID, LDAP or local-only identities expected in the first identity-import version?~~ **Resolved (ADR-0022):** local identities only in P2; observed-domain principals via `Identity.scope`; directory adapter → P4.
-12. Should the application support firewall-vendor configuration export, or only vendor-neutral policy modelling?
+12. **Still deferred (Phase-4 planning):** vendor-neutral policy modelling only. Firewall/switch config _import_ would create PolicyRules and Links from evidence — neither is an Observation `targetKind` — so it is a pipeline extension, not an additive adapter, and stays out of Phase 4 (see the Phase-4 seams table).
 13. ~~Which approval steps are required before an inferred device or finding becomes part of the verified AS-IS model?~~ **Resolved (ADR-0021):** reconciliation edits a pending ChangeSet before commit; committed objects are AS-IS as Observed/Inferred; manual verification is a badge, not a gate.
 14. Is the visual concept's three-role model sufficient for the MVP, or are separate Engineer, Security Analyst, Reviewer and Operator roles required immediately?
 15. What data must be redacted by default when exporting a report outside the engineering team?
