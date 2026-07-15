@@ -57,6 +57,13 @@ export interface DetectionDraft {
    * When omitted, the engine derives confidence from `contributingProvenanceRows`.
    */
   baseConfidence?: Confidence;
+  /**
+   * A rule-specific certainty factor in [0, 1] (M3): dampens the
+   * provenance-derived confidence when the detection *logic itself* is
+   * heuristic even on trustworthy inputs (e.g. a fuzzy masquerading match).
+   * Defaults to 1 (the rule adds no doubt of its own).
+   */
+  certaintyFactor?: Confidence;
   /** Rare per-finding severity bump; the rule default is used otherwise. */
   severityOverride?: Severity;
   explanation: string;

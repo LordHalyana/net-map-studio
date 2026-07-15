@@ -1,4 +1,4 @@
-import { combineConfidence, type Confidence } from '../confidence.js';
+import { combineConfidence, confidenceSchema, type Confidence } from '../confidence.js';
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
 import { hashConfig, resolveRuleSettings, type EngineConfig, type RuleSettings } from './config.js';
@@ -23,10 +23,14 @@ export interface AnalysisContext {
 }
 
 /**
- * Confidence derived from the provenance a detection rests on (ADR-0023, M3):
- * corroborated fields score higher via `combineConfidence`. A draft that names
- * no provenance rows falls back to its own `baseConfidence` (flow/coverage
- * findings), or 0 when it asserts neither.
+ * Confidence derived from the provenance a detection rests on (ADR-0023, M3),
+ * kept strictly independent of Severity. Corroborated fields score higher via
+ * `combineConfidence` (a two-source, exact-MAC finding beats a single OS
+ * guess); a draft that names no provenance rows falls back to its own
+ * `baseConfidence` (flow/coverage findings), or 0 when it asserts neither.
+ *
+ * The rule's own `certaintyFactor` then dampens the result: a heuristic rule is
+ * less than certain even on trustworthy inputs.
  */
 export function deriveConfidence(
   draft: DetectionDraft,
@@ -35,8 +39,9 @@ export function deriveConfidence(
   const scores = draft.contributingProvenanceRows
     .map((id) => provenance.find((row) => row.id === id)?.confidence)
     .filter((c): c is Confidence => c !== undefined);
-  if (scores.length > 0) return combineConfidence(scores);
-  return draft.baseConfidence ?? 0;
+  const base = scores.length > 0 ? combineConfidence(scores) : (draft.baseConfidence ?? 0);
+  const factor = draft.certaintyFactor ?? 1;
+  return confidenceSchema.parse(base * factor);
 }
 
 function assemble(
