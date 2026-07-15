@@ -15,6 +15,7 @@ export const findingIdSchema = z.uuidv7().brand<'FindingId'>();
 export type FindingId = z.infer<typeof findingIdSchema>;
 
 export const severitySchema = z.enum(['info', 'low', 'medium', 'high', 'critical']);
+export type Severity = z.infer<typeof severitySchema>;
 
 /**
  * NetPlan Studio application Access Role (design §3.9) — who may do what in
