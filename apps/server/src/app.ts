@@ -16,6 +16,10 @@ import { toCsv } from './export/csv.js';
 import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
+import { createImportBodySchema, createImportStore } from './imports/store.js';
+import { createProvenanceStore, overrideFieldBodySchema } from './imports/provenance.js';
+import { ParseLimitError } from './imports/guards.js';
+import { importResolutionActionSchema } from '@netplan/domain';
 
 export interface AppOptions {
   dbFile?: string;
@@ -53,17 +57,25 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** Every registered route as "METHOD /url" — lets tests prove no write route bypasses the engine. */
     registeredRoutes: string[];
+    /** The import pipeline (ADR-0019); exposed so tests can await worker quiescence. */
+    importStore: import('./imports/store.js').ImportStore;
   }
 }
 
 export async function buildApp(options: AppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
+    // Evidence uploads (ADR-0019) can be tens of MB; the import worker's own
+    // file-size limits are the real gate, this just lets requests reach them.
+    bodyLimit: 128 * 1024 * 1024,
     // Runs before routing; injected/test requests use bare paths and pass through.
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
   const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
+  const importStore = createImportStore(db, engine);
+  const provenanceStore = createProvenanceStore(db, engine);
+  app.decorate('importStore', importStore);
 
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
@@ -73,6 +85,9 @@ export async function buildApp(options: AppOptions = {}) {
   });
 
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ParseLimitError) {
+      return reply.status(413).send({ error: error.message, code: 'LIMIT' });
+    }
     if (error instanceof OperationError) {
       const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : 400;
       return reply.status(status).send({ error: error.message, code: error.code });
@@ -183,7 +198,7 @@ export async function buildApp(options: AppOptions = {}) {
     if (fields.length > 0) {
       state = applyRedaction(state, { name: 'query', fields });
     }
-    return makeBundle(state, new Date().toISOString());
+    return makeBundle(state, new Date().toISOString(), importStore.exportAttachments(id));
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -191,8 +206,90 @@ export async function buildApp(options: AppOptions = {}) {
     if (!parsed.success) {
       throw new OperationError('INVALID', `Invalid .netplan bundle: ${parsed.error.message}`);
     }
+    importStore.verifyEvidenceHashes(parsed.data);
     const project = engine.importState(parsed.data.project);
+    importStore.restoreAttachments(parsed.data);
     return reply.status(201).send(project);
+  });
+
+  // ---------- Evidence imports (ADR-0019): ingest, then parse off the request path ----------
+
+  app.post('/projects/:id/imports', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = createImportBodySchema.parse(request.body ?? {});
+    const job = importStore.createJob(id, body);
+    return reply.status(202).send(job);
+  });
+
+  app.get('/projects/:id/imports', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return importStore.listJobs(id);
+  });
+
+  app.get('/projects/:id/imports/:jobId', async (request) => {
+    const params = z.object({ id: z.uuidv7(), jobId: z.uuidv7() }).parse(request.params);
+    return importStore.getJobDetail(params.id, params.jobId);
+  });
+
+  const jobParamsSchema = z.object({ id: z.uuidv7(), jobId: z.uuidv7() });
+
+  // Reconciliation (ADR-0021): resolving edits the pending ChangeSet; commit
+  // applies it through the engine; rollback inverts it as one unit.
+  app.post('/projects/:id/imports/:jobId/resolve', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const body = z
+      .object({ conflictId: z.uuidv7(), action: importResolutionActionSchema })
+      .parse(request.body ?? {});
+    return importStore.resolveConflict(params.id, params.jobId, body.conflictId, body.action);
+  });
+
+  app.post('/projects/:id/imports/:jobId/commit', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const detail = importStore.commit(params.id, params.jobId);
+    return { ...detail, state: engine.getState(params.id) };
+  });
+
+  app.post('/projects/:id/imports/:jobId/rollback', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    const detail = importStore.rollback(params.id, params.jobId);
+    return { ...detail, state: engine.getState(params.id) };
+  });
+
+  // Per-field provenance (ADR-0008), the inspector's evidence trace (M8)
+  app.get('/projects/:id/provenance/:entityType/:entityId', async (request) => {
+    const params = entityParamsSchema.parse(request.params);
+    return provenanceStore.listForEntity(params.id, params.entityType, params.entityId);
+  });
+
+  app.get('/projects/:id/provenance', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return provenanceStore.listForProject(id);
+  });
+
+  // Manual override (M8): a SetField Operation + a manual provenance row,
+  // applied through the engine in one transaction — undoable like any edit.
+  app.post('/projects/:id/provenance/override', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = overrideFieldBodySchema.parse(request.body ?? {});
+    const result = provenanceStore.overrideField(id, body);
+    return { ...result, state: engine.getState(id) };
+  });
+
+  app.get('/projects/:id/evidence', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return importStore.listEvidence(id);
+  });
+
+  app.get('/projects/:id/evidence/:evidenceId', async (request) => {
+    const params = z.object({ id: z.uuidv7(), evidenceId: z.uuidv7() }).parse(request.params);
+    const blob = importStore.getEvidenceBlob(params.id, params.evidenceId);
+    if (!blob) {
+      throw new OperationError(
+        'NOT_FOUND',
+        `Evidence ${params.evidenceId} has no stored blob (retention: hashOnly)`,
+      );
+    }
+    return blob;
   });
 
   const csvEntityTypes = z.enum([

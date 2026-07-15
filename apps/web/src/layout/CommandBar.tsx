@@ -16,6 +16,10 @@ export function CommandBar() {
   const connectMode = useAppStore((s) => s.connectMode);
   const toggleConnectMode = useAppStore((s) => s.toggleConnectMode);
   const togglePhysicalLayer = useAppStore((s) => s.togglePhysicalLayer);
+  const toggleObservedLayer = useAppStore((s) => s.toggleObservedLayer);
+  const toggleIdentityOverlay = useAppStore((s) => s.toggleIdentityOverlay);
+  const canvasMode = useAppStore((s) => s.canvasMode);
+  const setCanvasMode = useAppStore((s) => s.setCanvasMode);
   const graph = useAppStore((s) => s.graph);
   const dispatch = useAppStore((s) => s.dispatch);
 
@@ -77,6 +81,43 @@ export function CommandBar() {
         >
           ─ Physical {layers.physical ? 'on' : 'off'}
         </button>
+        <button
+          type="button"
+          data-testid="toggle-observed-layer"
+          className={layers.observed ? 'toggle--on' : ''}
+          onClick={toggleObservedLayer}
+          title="Show or hide observed traffic (aggregated Flow bundles)"
+        >
+          ≈ Observed {layers.observed ? 'on' : 'off'}
+        </button>
+        <button
+          type="button"
+          data-testid="toggle-identity-overlay"
+          className={layers.identities ? 'toggle--on' : ''}
+          onClick={toggleIdentityOverlay}
+          title="Identity overlay (§3.9): show modelled principals on their hosts"
+        >
+          👤 Identities {layers.identities ? 'on' : 'off'}
+        </button>
+        <span className="command-bar__modes" title="AS-IS / TO-BE / Diff (ADR-0009)">
+          {(
+            [
+              ['asIs', 'AS-IS'],
+              ['toBe', 'TO-BE'],
+              ['diff', 'Diff'],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              data-testid={`mode-${mode}`}
+              className={canvasMode === mode ? 'toggle--on' : ''}
+              onClick={() => setCanvasMode(mode)}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
         <button
           type="button"
           data-testid="auto-arrange"

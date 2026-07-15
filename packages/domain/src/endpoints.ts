@@ -10,14 +10,35 @@ import { deviceIdSchema, interfaceIdSchema, networkIdSchema, zoneIdSchema } from
  * distinction from `network` is authoring intent (address range vs. named
  * network), both resolve against the Network table.
  */
+const interfaceEndpoint = z.object({ kind: z.literal('interface'), id: interfaceIdSchema });
+const deviceEndpoint = z.object({ kind: z.literal('device'), id: deviceIdSchema });
+const networkEndpoint = z.object({ kind: z.literal('network'), id: networkIdSchema });
+const zoneEndpoint = z.object({ kind: z.literal('zone'), id: zoneIdSchema });
+const subnetEndpoint = z.object({ kind: z.literal('subnet'), id: networkIdSchema });
+
 export const endpointSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('interface'), id: interfaceIdSchema }),
-  z.object({ kind: z.literal('device'), id: deviceIdSchema }),
-  z.object({ kind: z.literal('network'), id: networkIdSchema }),
-  z.object({ kind: z.literal('zone'), id: zoneIdSchema }),
-  z.object({ kind: z.literal('subnet'), id: networkIdSchema }),
+  interfaceEndpoint,
+  deviceEndpoint,
+  networkEndpoint,
+  zoneEndpoint,
+  subnetEndpoint,
 ]);
 export type Endpoint = z.infer<typeof endpointSchema>;
+
+/**
+ * A Flow endpoint (ADR-0019/0020): entity reference when the endpoint is a
+ * known object, or an `external` address literal when it is not — an observed
+ * communication must never invent a Device for an unknown peer.
+ */
+export const flowEndpointSchema = z.discriminatedUnion('kind', [
+  interfaceEndpoint,
+  deviceEndpoint,
+  networkEndpoint,
+  zoneEndpoint,
+  subnetEndpoint,
+  z.object({ kind: z.literal('external'), value: z.string().min(1) }),
+]);
+export type FlowEndpoint = z.infer<typeof flowEndpointSchema>;
 
 /** A Link terminates on Interfaces only (ADR-0012): port-level fidelity. */
 export const linkEndpointSchema = z.object({

@@ -4,6 +4,7 @@ import {
   criticalitySchema,
   deviceTypeSchema,
   interfaceKindSchema,
+  lifecycleStateSchema,
   networkIdSchema,
   zoneIdSchema,
   type Address,
@@ -11,6 +12,7 @@ import {
   type Interface,
   type ProjectState,
 } from '@netplan/domain';
+import { getLog } from '../api/client';
 import { useAppStore } from '../state/store';
 import {
   buildAddress,
@@ -25,6 +27,7 @@ import {
   opSetMembership,
 } from '../state/ops';
 import { FieldSection, SelectField, TextAreaField, TextField } from './fields';
+import { ProvenanceSection } from './ProvenanceSection';
 
 function enumOptions(values: readonly string[]) {
   return values.map((value) => ({ value, label: value }));
@@ -78,6 +81,37 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
     event.target.value = '';
   }
 
+  /**
+   * Clearing a removal flag restores what the object was before — a
+   * manually-verified trust badge must survive the round trip (ADR-0021).
+   * The Operation log knows the previous state; fall back to `observed`.
+   */
+  async function restoreFromProposal() {
+    let previous: unknown = 'observed';
+    try {
+      const log = await getLog(projectId);
+      for (const entry of log) {
+        if (
+          entry.role === 'do' &&
+          entry.payload.kind === 'SetField' &&
+          entry.payload.entityId === device.id &&
+          entry.payload.field === 'lifecycleState' &&
+          entry.payload.value === 'removedInProposal'
+        ) {
+          previous = entry.payload.previousValue;
+        }
+      }
+    } catch {
+      // log unavailable — the observed fallback still clears the flag
+    }
+    const target = lifecycleStateSchema.safeParse(previous);
+    setField(
+      'lifecycleState',
+      target.success && target.data !== 'removedInProposal' ? target.data : 'observed',
+      device.lifecycleState,
+    );
+  }
+
   function addInterface() {
     const names = new Set(interfaces.map((i) => i.name));
     let index = interfaces.length;
@@ -114,6 +148,25 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         >
           Delete
         </button>
+        {device.lifecycleState !== 'removedInProposal' ? (
+          <button
+            type="button"
+            data-testid="remove-in-proposal"
+            title="TO-BE proposal (ADR-0009): flag for removal without deleting the AS-IS object"
+            onClick={() => setField('lifecycleState', 'removedInProposal', device.lifecycleState)}
+          >
+            Remove in proposal
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="restore-in-proposal"
+            title="Clear the removal flag (restores the previous lifecycle state)"
+            onClick={() => void restoreFromProposal()}
+          >
+            Restore
+          </button>
+        )}
       </div>
 
       <FieldSection title="Device">
@@ -164,6 +217,12 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           label="Model"
           value={device.model}
           onCommit={(v) => setField('model', v, device.model)}
+        />
+        <TextField
+          label="OS"
+          value={device.os}
+          testId="device-os-input"
+          onCommit={(v) => setField('os', v, device.os)}
         />
         <TextField
           label="Serial"
@@ -226,6 +285,8 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           + Add interface
         </button>
       </FieldSection>
+
+      <ProvenanceSection entityType="device" entityId={device.id} />
 
       <FieldSection title="Tags & notes">
         <TextField

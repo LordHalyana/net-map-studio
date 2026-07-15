@@ -13,10 +13,13 @@ import {
 import {
   addressSchema,
   deviceSchema,
+  flowSchema,
+  identitySchema,
   interfaceSchema,
   linkSchema,
   networkSchema,
   policyRuleSchema,
+  roleAssignmentSchema,
   serviceSchema,
   siteSchema,
   zoneSchema,
@@ -43,6 +46,9 @@ export const entityPayloadSchema = z.discriminatedUnion('entityType', [
   z.object({ entityType: z.literal('address'), entity: addressSchema }),
   z.object({ entityType: z.literal('network'), entity: networkSchema }),
   z.object({ entityType: z.literal('service'), entity: serviceSchema }),
+  z.object({ entityType: z.literal('flow'), entity: flowSchema }),
+  z.object({ entityType: z.literal('identity'), entity: identitySchema }),
+  z.object({ entityType: z.literal('roleAssignment'), entity: roleAssignmentSchema }),
 ]);
 export type EntityPayload = z.infer<typeof entityPayloadSchema>;
 export type GenericEntityType = EntityPayload['entityType'];
@@ -59,11 +65,15 @@ export const settableEntityTypeSchema = z.enum([
   'service',
   'link',
   'policyRule',
+  'flow',
+  'identity',
+  'roleAssignment',
 ]);
 export type SettableEntityType = z.infer<typeof settableEntityTypeSchema>;
 
 /** Field values travel through the operation log, so they must be JSON. */
-const fieldValueSchema = z.json();
+export const fieldValueSchema = z.json();
+export type FieldValue = z.infer<typeof fieldValueSchema>;
 
 export const createEntityOpSchema = z.object({
   ...opBase,

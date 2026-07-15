@@ -18,6 +18,9 @@ export const serviceIdSchema = z.uuidv7().brand<'ServiceId'>();
 export const policyRuleIdSchema = z.uuidv7().brand<'PolicyRuleId'>();
 export const operationIdSchema = z.uuidv7().brand<'OperationId'>();
 export const changeSetIdSchema = z.uuidv7().brand<'ChangeSetId'>();
+export const flowIdSchema = z.uuidv7().brand<'FlowId'>();
+export const identityIdSchema = z.uuidv7().brand<'IdentityId'>();
+export const roleAssignmentIdSchema = z.uuidv7().brand<'RoleAssignmentId'>();
 
 export type ProjectId = z.infer<typeof projectIdSchema>;
 export type SiteId = z.infer<typeof siteIdSchema>;
@@ -31,6 +34,9 @@ export type ServiceId = z.infer<typeof serviceIdSchema>;
 export type PolicyRuleId = z.infer<typeof policyRuleIdSchema>;
 export type OperationId = z.infer<typeof operationIdSchema>;
 export type ChangeSetId = z.infer<typeof changeSetIdSchema>;
+export type FlowId = z.infer<typeof flowIdSchema>;
+export type IdentityId = z.infer<typeof identityIdSchema>;
+export type RoleAssignmentId = z.infer<typeof roleAssignmentIdSchema>;
 
 /** Mint a new UUIDv7 for the given branded id schema: `newId(deviceIdSchema)`. */
 export function newId<S extends z.ZodType<string>>(schema: S): z.output<S> {

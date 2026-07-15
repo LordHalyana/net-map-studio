@@ -52,6 +52,12 @@ function addEntity(state: ProjectState, payload: EntityPayload): ProjectState {
       return { ...state, networks: [...state.networks, payload.entity] };
     case 'service':
       return { ...state, services: [...state.services, payload.entity] };
+    case 'flow':
+      return { ...state, flows: [...state.flows, payload.entity] };
+    case 'identity':
+      return { ...state, identities: [...state.identities, payload.entity] };
+    case 'roleAssignment':
+      return { ...state, roleAssignments: [...state.roleAssignments, payload.entity] };
   }
 }
 
@@ -72,6 +78,12 @@ function removeEntity(state: ProjectState, payload: EntityPayload): ProjectState
       return { ...state, networks: state.networks.filter((e) => e.id !== id) };
     case 'service':
       return { ...state, services: state.services.filter((e) => e.id !== id) };
+    case 'flow':
+      return { ...state, flows: state.flows.filter((e) => e.id !== id) };
+    case 'identity':
+      return { ...state, identities: state.identities.filter((e) => e.id !== id) };
+    case 'roleAssignment':
+      return { ...state, roleAssignments: state.roleAssignments.filter((e) => e.id !== id) };
   }
 }
 
@@ -108,6 +120,12 @@ function setField(
       return { ...state, services: patch(state.services) };
     case 'policyRule':
       return { ...state, policyRules: patch(state.policyRules) };
+    case 'flow':
+      return { ...state, flows: patch(state.flows) };
+    case 'identity':
+      return { ...state, identities: patch(state.identities) };
+    case 'roleAssignment':
+      return { ...state, roleAssignments: patch(state.roleAssignments) };
     default:
       return state;
   }

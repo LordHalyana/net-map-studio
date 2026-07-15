@@ -1,6 +1,20 @@
 import {
   addressIdSchema,
   addressSchema,
+  evidenceIdSchema,
+  evidenceSchema,
+  fieldProvenanceIdSchema,
+  fieldProvenanceSchema,
+  flowIdSchema,
+  flowSchema,
+  identityIdSchema,
+  identitySchema,
+  importJobIdSchema,
+  importJobSchema,
+  observationIdSchema,
+  observationSchema,
+  roleAssignmentIdSchema,
+  roleAssignmentSchema,
   deviceIdSchema,
   deviceSchema,
   interfaceIdSchema,
@@ -22,6 +36,13 @@ import {
   zoneSchema,
   type Address,
   type Device,
+  type Evidence,
+  type FieldProvenance,
+  type Flow,
+  type Identity,
+  type ImportJob,
+  type Observation,
+  type RoleAssignment,
   type Interface,
   type Link,
   type Network,
@@ -123,6 +144,126 @@ export function makeService(projectId: ProjectId, overrides: Partial<Service> = 
     protocol: 'tcp',
     portStart: 443,
     portEnd: 443,
+    ...overrides,
+  });
+}
+
+export function makeImportJob(projectId: ProjectId, overrides: Partial<ImportJob> = {}): ImportJob {
+  return importJobSchema.parse({
+    id: newId(importJobIdSchema),
+    projectId,
+    status: 'review',
+    parserName: 'fixture',
+    parserVersion: '1',
+    schemaVersion: '1',
+    changeSetId: null,
+    startedAt: '2026-07-15T00:00:00.000Z',
+    finishedAt: null,
+    error: null,
+    ...overrides,
+  });
+}
+
+export function makeEvidence(job: ImportJob, overrides: Partial<Evidence> = {}): Evidence {
+  return evidenceSchema.parse({
+    id: newId(evidenceIdSchema),
+    projectId: job.projectId,
+    importJobId: job.id,
+    filename: 'scan.json',
+    sha256: 'a'.repeat(64),
+    sizeBytes: 128,
+    contentClass: 'structured',
+    retention: 'inline',
+    chunkRef: null,
+    parserName: job.parserName,
+    parserVersion: job.parserVersion,
+    collectedAt: null,
+    importedAt: '2026-07-15T00:00:00.000Z',
+    ...overrides,
+  });
+}
+
+export function makeObservation(
+  evidence: Evidence,
+  overrides: Partial<Observation> = {},
+): Observation {
+  return observationSchema.parse({
+    id: newId(observationIdSchema),
+    projectId: evidence.projectId,
+    importJobId: evidence.importJobId,
+    evidenceId: evidence.id,
+    contributor: 'exactMacMatch',
+    observedAt: '2026-07-15T00:00:00.000Z',
+    claim: {
+      targetKind: 'device',
+      device: { mac: 'aa:bb:cc:dd:ee:ff', hostname: 'web01' },
+      fields: { name: 'web01', os: 'Ubuntu 24.04' },
+    },
+    ...overrides,
+  });
+}
+
+export function makeFlow(projectId: ProjectId, overrides: Partial<Flow> = {}): Flow {
+  return flowSchema.parse({
+    id: newId(flowIdSchema),
+    projectId,
+    source: { kind: 'external', value: '203.0.113.7' },
+    destination: { kind: 'external', value: '10.0.0.10' },
+    protocol: 'tcp',
+    port: 443,
+    firstSeen: '2026-07-14T00:00:00.000Z',
+    lastSeen: '2026-07-15T00:00:00.000Z',
+    observationCount: 3,
+    confidence: 0.3,
+    lifecycleState: 'observed',
+    ...overrides,
+  });
+}
+
+export function makeIdentity(projectId: ProjectId, overrides: Partial<Identity> = {}): Identity {
+  return identitySchema.parse({
+    id: newId(identityIdSchema),
+    projectId,
+    scope: 'local',
+    name: 'alice',
+    lifecycleState: 'observed',
+    ...overrides,
+  });
+}
+
+export function makeRoleAssignment(
+  identity: Identity,
+  overrides: Partial<RoleAssignment> = {},
+): RoleAssignment {
+  return roleAssignmentSchema.parse({
+    id: newId(roleAssignmentIdSchema),
+    projectId: identity.projectId,
+    identityId: identity.id,
+    privilege: 'localAdministrator',
+    lifecycleState: 'observed',
+    ...overrides,
+  });
+}
+
+export function makeFieldProvenance(
+  observation: Observation,
+  overrides: Partial<FieldProvenance> = {},
+): FieldProvenance {
+  return fieldProvenanceSchema.parse({
+    id: newId(fieldProvenanceIdSchema),
+    projectId: observation.projectId,
+    entityType: 'device',
+    entityId: newId(deviceIdSchema),
+    field: 'name',
+    sourceType: 'imported',
+    evidenceId: observation.evidenceId,
+    importJobId: observation.importJobId,
+    observationId: observation.id,
+    confidence: 0.85,
+    parserVersion: '1.0.0',
+    status: 'accepted',
+    observedValue: 'web01',
+    observedAt: '2026-07-15T00:00:00.000Z',
     ...overrides,
   });
 }

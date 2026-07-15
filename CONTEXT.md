@@ -31,24 +31,24 @@ _Avoid_: Port, NIC, adapter.
 A MAC, IPv4, IPv6, hostname or alias assigned to an Interface.
 
 **Network**:
-A subnet, VLAN, SSID, routing domain or address pool. A *logical* grouping expressed as membership on an Interface, never as physical containment.
+A subnet, VLAN, SSID, routing domain or address pool. A _logical_ grouping expressed as membership on an Interface, never as physical containment.
 _Avoid_: Subnet (when a VLAN/SSID is also meant), segment.
 
 ### Connections
 
 **Connection**:
-The render-time umbrella for anything drawn as an edge on the canvas. It is *only* a visual/authoring concept — there is no single Connection object. Every connection is really a Link, a Flow or a PolicyRule.
+The render-time umbrella for anything drawn as an edge on the canvas. It is _only_ a visual/authoring concept — there is no single Connection object. Every connection is really a Link, a Flow or a PolicyRule.
 _Avoid_: Edge (in domain talk), line, wire.
 
 **Link**:
 A structural relationship between two Interfaces — a physical cable, wireless association, or layer-2/3 adjacency. Low-cardinality, manually or physically defined. Endpoints are always Interfaces.
 
 **Flow**:
-An *observed* communication from a source to a destination, derived from evidence and carrying first-seen, last-seen, count and confidence. High-cardinality.
+An _observed_ communication from a source to a destination, derived from evidence and carrying first-seen, last-seen, count and confidence. High-cardinality.
 _Avoid_: Traffic, connection (in the TCP sense), conversation.
 
 **PolicyRule**:
-An *intended* allow / deny / reject / monitor rule with direction, action, logging, owner and justification. Validated for conflicts, shadowing and segmentation bypass.
+An _intended_ allow / deny / reject / monitor rule with direction, action, logging, owner and justification. Validated for conflicts, shadowing and segmentation bypass.
 _Avoid_: ACL entry, firewall rule (when the abstract intent is meant), policy.
 
 **Endpoint**:
@@ -61,14 +61,14 @@ _Avoid_: Port (alone), app.
 ### Identity & access
 
 **Identity**:
-A *modelled* Windows or Linux user, group, service account or domain principal found in (or entered about) the environment being mapped. Describes the network, not who may use NetPlan Studio.
+A _modelled_ Windows or Linux user, group, service account or domain principal found in (or entered about) the environment being mapped. Describes the network, not who may use NetPlan Studio.
 _Avoid_: User (unqualified), account.
 
 **RoleAssignment**:
 A mapping between an Identity, a privilege, a Device and a scope (e.g. local administrator on host X).
 
 **Access Role**:
-A NetPlan Studio *application* permission set (Administrator, Network Engineer, Security Analyst, Operator, Reviewer, Viewer) governing who may do what in the tool. Kept strictly separate from a modelled Identity.
+A NetPlan Studio _application_ permission set (Administrator, Network Engineer, Security Analyst, Operator, Reviewer, Viewer) governing who may do what in the tool. Kept strictly separate from a modelled Identity.
 _Avoid_: Role (unqualified — always say Access Role or RoleAssignment), permission.
 
 ### Evidence & analysis
@@ -77,14 +77,30 @@ _Avoid_: Role (unqualified — always say Access Role or RoleAssignment), permis
 An imported source artifact — file, line/chunk reference, timestamp and parser metadata — that a fact can be traced back to. Stored read-only after ingestion.
 _Avoid_: Source, data, import (the file).
 
+**Adapter**:
+A parser that maps one evidence format (Nmap XML, tshark flow summary, device-state JSON) into canonical Observations. Adapters never create entities directly; they only emit Observations.
+_Avoid_: Parser (when the format→Observation mapping is meant), importer, connector.
+
+**Import Contract** (the **Device-State Report**):
+The versioned, NetPlan-Studio-authored JSON schema the client's extraction scripts must emit, validated by the standalone validator CLI. The one input format NetPlan Studio owns rather than adapts to.
+_Avoid_: Export format, script output.
+
+**Observation**:
+A neutral, per-source _claim_ an Adapter emits about a Device, Interface, Address, Service, Flow or Identity — carrying a confidence contributor and an Evidence reference, before normalization, deduplication and scoring. Distinct from the committed entity it may become.
+_Avoid_: Record (unqualified), reading, sample.
+
+**Aggregation**:
+Collapsing many raw observations of the same communication into a single Flow keyed by `(source, destination, service)` with count, first-seen and last-seen. Why the canvas renders one edge, not thousands.
+_Avoid_: Rollup, summarization (when Flow aggregation is meant).
+
 **Provenance**:
-The record, per *field*, of where a value came from: source type, Evidence reference, confidence, parser version, and whether it was accepted, rejected or manually overridden. The reason "trace every property to its evidence" is possible.
+The record, per _field_, of where a value came from: source type, Evidence reference, confidence, parser version, and whether it was accepted, rejected or manually overridden. The reason "trace every property to its evidence" is possible.
 
 **Confidence**:
-How *certain* a value or correlation is (e.g. exact MAC match = strong, single Netcat result = low). Always a distinct value from Severity.
+How _certain_ a value or correlation is (e.g. exact MAC match = strong, single Netcat result = low). Always a distinct value from Severity.
 
 **Severity**:
-How *serious* a Finding is if true. Deliberately independent of Confidence — a high-severity finding can be low-confidence.
+How _serious_ a Finding is if true. Deliberately independent of Confidence — a high-severity finding can be low-confidence.
 
 **Reconciliation**:
 The review step where conflicting or duplicate observations of the same real thing are resolved by an operator: merge, keep separate, replace or ignore. The system never silently merges.
@@ -122,10 +138,10 @@ The rendered difference between AS-IS and a TO-BE proposal — additions, remova
 ### Grouping (a cross-cutting distinction)
 
 **Containment**:
-Single-parent *physical* nesting (Site › Zone › Device). Rendered as collapsible container nodes. A Device has exactly one physical parent.
+Single-parent _physical_ nesting (Site › Zone › Device). Rendered as collapsible container nodes. A Device has exactly one physical parent.
 
 **Membership**:
-Many-valued *logical* belonging (a Device's Interface in a Network). Rendered as network-nodes or overlays — never as Containment, so a dual-homed Device in two VLANs is expressible.
+Many-valued _logical_ belonging (a Device's Interface in a Network). Rendered as network-nodes or overlays — never as Containment, so a dual-homed Device in two VLANs is expressible.
 
 ### Output
 

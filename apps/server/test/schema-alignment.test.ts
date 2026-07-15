@@ -14,18 +14,42 @@ import {
   zoneSchema,
 } from '@netplan/domain';
 import {
+  evidenceSchema,
+  fieldProvenanceSchema,
+  flowSchema,
+  identitySchema,
+  importJobSchema,
+  importProposalSchema,
+  observationSchema,
+  roleAssignmentSchema,
+} from '@netplan/domain';
+import {
   makeAddress,
   makeDevice,
+  makeEvidence,
+  makeFieldProvenance,
+  makeFlow,
+  makeIdentity,
+  makeImportJob,
   makeInterface,
   makeLink,
   makeNetwork,
+  makeObservation,
   makePolicyRule,
   makeProject,
+  makeRoleAssignment,
   makeService,
   makeSite,
   makeZone,
 } from '@netplan/domain/fixtures';
-import { entityTables } from '../src/db/schema.js';
+import {
+  entityTables,
+  evidence as evidenceTable,
+  fieldProvenance as fieldProvenanceTable,
+  importJobs as importJobsTable,
+  importProposals as importProposalsTable,
+  observations as observationsTable,
+} from '../src/db/schema.js';
 import { createDb } from '../src/db/index.js';
 
 /**
@@ -46,6 +70,9 @@ const iface2 = makeInterface(device2, { name: 'ge-0/0/1' });
 const link = makeLink(iface, iface2);
 const service = makeService(project.id);
 const rule = makePolicyRule(network, network2);
+const flow = makeFlow(project.id, { serviceId: service.id });
+const identity = makeIdentity(project.id, { deviceId: device.id });
+const roleAssignment = makeRoleAssignment(identity, { deviceId: device.id });
 
 const cases = [
   ['project', projectSchema, project],
@@ -58,6 +85,9 @@ const cases = [
   ['link', linkSchema, link],
   ['service', serviceSchema, service],
   ['policyRule', policyRuleSchema, rule],
+  ['flow', flowSchema, flow],
+  ['identity', identitySchema, identity],
+  ['roleAssignment', roleAssignmentSchema, roleAssignment],
 ] as const;
 
 describe('drizzle tables align with domain Zod schemas', () => {
@@ -74,6 +104,56 @@ describe('drizzle tables align with domain Zod schemas', () => {
       expect(selectSchema.safeParse(fixture).success).toBe(true);
     },
   );
+});
+
+describe('import-spine tables align with domain Zod schemas (ADR-0017, plan M1)', () => {
+  const job = makeImportJob(project.id);
+  const evidenceFixture = makeEvidence(job);
+  const observation = makeObservation(evidenceFixture);
+
+  const provenance = makeFieldProvenance(observation, { entityId: device.id });
+
+  const importCases = [
+    ['importJob', importJobsTable, importJobSchema, job],
+    ['evidence', evidenceTable, evidenceSchema, evidenceFixture],
+    ['observation', observationsTable, observationSchema, observation],
+    ['fieldProvenance', fieldProvenanceTable, fieldProvenanceSchema, provenance],
+  ] as const;
+
+  it.each(importCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
+    const columnKeys = Object.keys(getTableColumns(table)).sort();
+    const schemaKeys = Object.keys(schema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('importProposal table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(importProposalsTable)).sort();
+    const schemaKeys = Object.keys(importProposalSchema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it.each(importCases)(
+    '%s domain fixture satisfies the drizzle select schema',
+    (_name, table, _schema, fixture) => {
+      const selectSchema = createSelectSchema(table);
+      expect(selectSchema.safeParse(fixture).success).toBe(true);
+    },
+  );
+
+  it('import-spine fixtures round-trip through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(importJobsTable).values(job).run();
+    db.insert(evidenceTable).values(evidenceFixture).run();
+    db.insert(observationsTable).values(observation).run();
+    db.insert(fieldProvenanceTable).values(provenance).run();
+    expect(importJobSchema.parse(db.select().from(importJobsTable).get())).toEqual(job);
+    expect(evidenceSchema.parse(db.select().from(evidenceTable).get())).toEqual(evidenceFixture);
+    expect(observationSchema.parse(db.select().from(observationsTable).get())).toEqual(observation);
+    expect(fieldProvenanceSchema.parse(db.select().from(fieldProvenanceTable).get())).toEqual(
+      provenance,
+    );
+  });
 });
 
 describe('entities round-trip through SQLite unchanged', () => {
@@ -95,6 +175,9 @@ describe('entities round-trip through SQLite unchanged', () => {
       ['link', link],
       ['service', service],
       ['policyRule', rule],
+      ['flow', flow],
+      ['identity', identity],
+      ['roleAssignment', roleAssignment],
     ] as const;
 
     for (const [entityType, entity] of inserts) {
