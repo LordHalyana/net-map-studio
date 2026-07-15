@@ -1,4 +1,7 @@
+import type { Baseline, Device } from '../../entities.js';
+import type { FlowEndpoint } from '../../endpoints.js';
 import type { EvidenceId } from '../../imports.js';
+import type { ProjectState } from '../../state.js';
 import type { HostSecurityInventory } from '../inputs.js';
 
 /** A path-bearing artifact drawn from a host inventory (file, process or persistence entry). */
@@ -80,4 +83,48 @@ export const SUSPECT_LOCATIONS: readonly string[] = [
 
 export function isSuspectLocation(text: string, extra: readonly string[] = []): boolean {
   return [...SUSPECT_LOCATIONS, ...extra].some((loc) => includesInsensitive(text, loc));
+}
+
+/** Networks a device's interfaces are members of. */
+export function deviceNetworkIds(state: ProjectState, device: Device): Set<string> {
+  const ids = new Set<string>();
+  for (const iface of state.interfaces) {
+    if (iface.deviceId === device.id && iface.networkId) ids.add(iface.networkId);
+  }
+  return ids;
+}
+
+/** Baselines whose scope governs this device (the device, its zone, or its networks). */
+export function applicableBaselines(state: ProjectState, device: Device): Baseline[] {
+  const networkIds = deviceNetworkIds(state, device);
+  return state.baselines.filter((b) => {
+    switch (b.scope.kind) {
+      case 'device':
+        return b.scope.id === device.id;
+      case 'zone':
+        return device.zoneId != null && b.scope.id === device.zoneId;
+      case 'network':
+        return networkIds.has(b.scope.id);
+    }
+  });
+}
+
+/** The known Device a flow endpoint resolves to, or undefined — never fabricated. */
+export function flowEndpointDevice(state: ProjectState, ep: FlowEndpoint): Device | undefined {
+  if (ep.kind === 'device') return state.devices.find((d) => d.id === ep.id);
+  if (ep.kind === 'interface') {
+    const iface = state.interfaces.find((i) => i.id === ep.id);
+    return iface ? state.devices.find((d) => d.id === iface.deviceId) : undefined;
+  }
+  return undefined;
+}
+
+/** Read a numeric rule-config param, falling back to a default. */
+export function numberParam(
+  params: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
+  const value = params[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
