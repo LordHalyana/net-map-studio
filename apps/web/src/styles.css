@@ -588,6 +588,54 @@ button:disabled {
   font-size: 10px;
 }
 
+/* ---------- rule callouts (visual-parity M4, gap G4) ---------- */
+
+.rule-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.rule-callout__title {
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.rule-callout__action {
+  text-transform: capitalize;
+  font-weight: 650;
+}
+
+.rule-callout__line--allow .rule-callout__action {
+  color: var(--accent-green);
+}
+
+.rule-callout__line--deny .rule-callout__action,
+.rule-callout__line--reject .rule-callout__action {
+  color: var(--danger);
+}
+
+.rule-callout__line--monitor .rule-callout__action {
+  color: var(--warn);
+}
+
+.rule-callout__more {
+  color: var(--text-dim);
+  font-size: 9px;
+}
+
 /* M3 label policy (gap G3): nothing rides the lines — edge labels reveal on
    hover or selection. hasText assertions still match (textContent remains). */
 .react-flow__edge:not(:hover, .selected) .react-flow__edge-textwrapper {

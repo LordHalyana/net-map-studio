@@ -22,10 +22,17 @@ import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from 
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
+import { RuleCalloutNode } from './RuleCalloutNode';
 import { graphToFlow } from './graphToFlow';
 import { DND_MIME } from '../layout/LibraryPanel';
 
-const nodeTypes = { device: DeviceNode, site: SiteNode, zone: ZoneNode, network: NetworkNode };
+const nodeTypes = {
+  device: DeviceNode,
+  site: SiteNode,
+  zone: ZoneNode,
+  network: NetworkNode,
+  ruleCallout: RuleCalloutNode,
+};
 
 const nodeTypeToSelection: Record<string, Selection['entityType']> = {
   device: 'device',
@@ -58,6 +65,7 @@ function CanvasInner() {
             physical: layers.physical,
             observed: layers.observed,
             identities: layers.identities,
+            rules: layers.rules,
             mode: canvasMode,
             provenance,
             collapsedSites,

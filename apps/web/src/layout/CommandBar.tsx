@@ -18,6 +18,7 @@ export function CommandBar() {
   const togglePhysicalLayer = useAppStore((s) => s.togglePhysicalLayer);
   const toggleObservedLayer = useAppStore((s) => s.toggleObservedLayer);
   const toggleIdentityOverlay = useAppStore((s) => s.toggleIdentityOverlay);
+  const toggleRulesLayer = useAppStore((s) => s.toggleRulesLayer);
   const canvasMode = useAppStore((s) => s.canvasMode);
   const setCanvasMode = useAppStore((s) => s.setCanvasMode);
   const graph = useAppStore((s) => s.graph);
@@ -89,6 +90,15 @@ export function CommandBar() {
           title="Show or hide observed traffic (aggregated Flow bundles)"
         >
           ≈ Observed {layers.observed ? 'on' : 'off'}
+        </button>
+        <button
+          type="button"
+          data-testid="toggle-rules-layer"
+          className={layers.rules ? 'toggle--on' : ''}
+          onClick={toggleRulesLayer}
+          title="Show or hide planned-rule callout cards (design §3.2C)"
+        >
+          ⛨ Rules {layers.rules ? 'on' : 'off'}
         </button>
         <button
           type="button"

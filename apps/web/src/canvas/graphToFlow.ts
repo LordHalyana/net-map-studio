@@ -6,6 +6,7 @@ import type {
   Flow,
   Link,
   Network,
+  PolicyRule,
   Position as XY,
   ProjectState,
   Site,
@@ -36,7 +37,15 @@ export interface FlowOptions {
   provenance: FieldProvenance[];
   collapsedSites: string[];
   collapsedZones: string[];
+  /** Planned-rule callout cards (M4, gap G4). */
+  rules: boolean;
 }
+
+export type RuleCalloutLine = { action: PolicyRule['action']; text: string };
+export type RuleCalloutData = { lines: RuleCalloutLine[]; more: number };
+
+/** Lines a callout card shows before collapsing into "+n more" (M4). */
+export const RULE_CALLOUT_MAX_LINES = 3;
 
 export const SITE_SIZE = { width: 460, height: 300 };
 export const SITE_COLLAPSED_SIZE = { width: 200, height: 48 };
@@ -304,12 +313,14 @@ export function graphToFlow(
     }
   }
 
+  const networkPositions = new Map<string, XY>();
   if (options.logical) {
     let fallbackX = 80;
     for (const network of state.networks) {
       if (!modeVisible(network.lifecycleState, options.mode)) continue;
       const position: XY = network.layoutHints['main'] ?? { x: fallbackX, y: -140 };
       fallbackX += 220;
+      networkPositions.set(network.id, position);
       nodes.push({
         id: network.id,
         type: 'network',
@@ -340,6 +351,94 @@ export function graphToFlow(
         label: iface.name,
         labelStyle: { fill: color, fontSize: 9 },
         labelBgStyle: { fill: '#161a22' },
+      });
+    }
+  }
+
+  // PolicyRule callouts (M4, gap G4): the concept's allow/deny annotation
+  // cards. Prototype verdict (issue #46): one card per (source, destination)
+  // pair at the path midpoint — destination-grouping collides with adjacent
+  // nodes, selection-only loses the concept's always-visible cards.
+  if (options.rules) {
+    const serviceById = new Map(state.services.map((s) => [s.id, s]));
+    const deviceById = new Map(state.devices.map((d) => [d.id, d]));
+
+    const anchorOf = (endpoint: PolicyRule['source']): { id: string; position: XY } | null => {
+      switch (endpoint.kind) {
+        case 'device': {
+          const device = deviceById.get(endpoint.id);
+          if (!device || hiddenDeviceIds.has(device.id)) return null;
+          return { id: device.id, position: device.position };
+        }
+        case 'interface': {
+          const deviceId = deviceByInterface.get(endpoint.id);
+          const device = deviceId ? deviceById.get(deviceId) : undefined;
+          if (!device || hiddenDeviceIds.has(device.id)) return null;
+          return { id: device.id, position: device.position };
+        }
+        case 'network':
+        case 'subnet': {
+          const position = networkPositions.get(endpoint.id);
+          return position ? { id: endpoint.id, position } : null;
+        }
+        default:
+          return null;
+      }
+    };
+
+    const groups = new Map<string, { position: XY; rules: PolicyRule[] }>();
+    for (const rule of state.policyRules) {
+      if (!modeVisible(rule.lifecycleState, options.mode)) continue;
+      const source = anchorOf(rule.source);
+      const destination = anchorOf(rule.destination);
+      const anchor = destination ?? source;
+      if (!anchor) continue;
+      const position: XY =
+        !source || !destination
+          ? { x: anchor.position.x + 190, y: anchor.position.y - 10 }
+          : {
+              x: (source.position.x + destination.position.x) / 2 + 60,
+              y: (source.position.y + destination.position.y) / 2 - 30,
+            };
+      const key = `${source?.id ?? 'none'}~${destination?.id ?? 'none'}`;
+      const group = groups.get(key) ?? { position, rules: [] };
+      group.rules.push(rule);
+      groups.set(key, group);
+    }
+
+    // stagger cards whose midpoints land in the same neighbourhood so
+    // parallel rules (staff/guest/pos → servers) don't stack
+    const occupancy = new Map<string, number>();
+    for (const [key, group] of groups) {
+      const cell = `${Math.round(group.position.x / 90)}:${Math.round(group.position.y / 60)}`;
+      const stacked = occupancy.get(cell) ?? 0;
+      occupancy.set(cell, stacked + 1);
+      group.position = { x: group.position.x, y: group.position.y + stacked * 58 };
+      const lines: RuleCalloutLine[] = group.rules.slice(0, RULE_CALLOUT_MAX_LINES).map((rule) => {
+        const service = rule.serviceId ? serviceById.get(rule.serviceId) : undefined;
+        const port =
+          service?.portStart != null
+            ? service.portEnd != null && service.portEnd !== service.portStart
+              ? ` (${service.portStart}-${service.portEnd})`
+              : ` (${service.portStart})`
+            : '';
+        return {
+          action: rule.action,
+          text: service ? `${service.name}${port}` : 'All Other',
+        };
+      });
+      nodes.push({
+        id: `rule-callout-${key}`,
+        type: 'ruleCallout',
+        position: group.position,
+        data: {
+          lines,
+          more: Math.max(0, group.rules.length - RULE_CALLOUT_MAX_LINES),
+        } satisfies RuleCalloutData,
+        draggable: false,
+        selectable: false,
+        focusable: false,
+        zIndex: 10,
       });
     }
   }

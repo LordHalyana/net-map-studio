@@ -53,6 +53,8 @@ export interface LayerState {
   observed: boolean;
   /** Identity overlay (§3.9): chips on devices, off by default. */
   identities: boolean;
+  /** Planned-rule callout cards on the canvas (visual-parity M4, gap G4). */
+  rules: boolean;
 }
 
 export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff';
@@ -124,6 +126,7 @@ interface AppState {
   togglePhysicalLayer: () => void;
   toggleObservedLayer: () => void;
   toggleIdentityOverlay: () => void;
+  toggleRulesLayer: () => void;
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
   refreshProvenance: () => Promise<void>;
@@ -154,7 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
-  layers: { logical: true, physical: true, observed: true, identities: false },
+  layers: { logical: true, physical: true, observed: true, identities: false, rules: true },
   collapsedSites: [],
   collapsedZones: [],
   contextTab: 'details',
@@ -304,6 +307,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleIdentityOverlay: () =>
     set({ layers: { ...get().layers, identities: !get().layers.identities } }),
+
+  toggleRulesLayer: () => set({ layers: { ...get().layers, rules: !get().layers.rules } }),
 
   setView: (view) => set({ view }),
 
