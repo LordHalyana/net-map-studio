@@ -16,14 +16,19 @@ import {
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { deviceTypeSchema } from '@netplan/domain';
+import { deviceTypeSchema, type Severity } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
 import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { PolicyRuleCalloutNode } from './PolicyRuleCalloutNode';
-import { graphToFlow, type DeviceNodeData, type NetworkNodeData } from './graphToFlow';
+import {
+  graphToFlow,
+  type DeviceFindingsBadge,
+  type DeviceNodeData,
+  type NetworkNodeData,
+} from './graphToFlow';
 import { nodeAccentColor } from './roleColors';
 import { CANVAS_BG, GRID_LINE, MINIMAP_NEUTRAL } from './colors';
 import { CanvasToolbar } from '../layout/CanvasToolbar';
@@ -81,6 +86,33 @@ function CanvasInner() {
   const provenance = useAppStore((s) => s.provenance);
   const gridEnabled = useAppStore((s) => s.gridEnabled);
 
+  // findings feed the warning badges + layer tint (M5, #62)
+  const findingsReport = useAppStore((s) => s.findings);
+  const refreshFindings = useAppStore((s) => s.refreshFindings);
+  useEffect(() => {
+    if (project && !findingsReport) void refreshFindings();
+  }, [project, findingsReport, refreshFindings]);
+
+  const openFindingsByDevice = useMemo(() => {
+    const order: Severity[] = ['info', 'low', 'medium', 'high', 'critical'];
+    const map = new Map<string, DeviceFindingsBadge>();
+    for (const finding of findingsReport?.findings ?? []) {
+      if (finding.status !== 'new' || finding.stale) continue;
+      const affected = finding.detection?.affected;
+      if (!affected || affected.kind !== 'device') continue;
+      const severity = finding.detection?.severity ?? 'info';
+      const current = map.get(affected.id);
+      map.set(affected.id, {
+        count: (current?.count ?? 0) + 1,
+        severity:
+          current && order.indexOf(current.severity) > order.indexOf(severity)
+            ? current.severity
+            : severity,
+      });
+    }
+    return map;
+  }, [findingsReport]);
+
   const flow = useMemo(
     () =>
       graph
@@ -90,13 +122,15 @@ function CanvasInner() {
             observed: layers.observed,
             identities: layers.identities,
             rules: layers.rules,
+            findingsLayer: layers.findings,
+            openFindingsByDevice,
             mode: canvasMode,
             provenance,
             collapsedSites,
             collapsedZones,
           })
         : { nodes: [], edges: [] },
-    [graph, layers, canvasMode, provenance, collapsedSites, collapsedZones],
+    [graph, layers, canvasMode, provenance, collapsedSites, collapsedZones, openFindingsByDevice],
   );
 
   // Adopt graph-derived nodes, preserving drag/selection state AND object

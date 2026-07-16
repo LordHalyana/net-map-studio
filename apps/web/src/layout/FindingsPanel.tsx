@@ -48,6 +48,11 @@ export function FindingsPanel() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const focusedFingerprint = useAppStore((s) => s.focusedFindingFingerprint);
+  const deviceFilter = useAppStore((s) => s.findingsDeviceFilter);
+  const focusFindingsForDevice = useAppStore((s) => s.focusFindingsForDevice);
+  const filteredDevice = deviceFilter
+    ? (graph?.devices.find((d) => d.id === deviceFilter) ?? null)
+    : null;
 
   useEffect(() => {
     if (project && !report) void refreshFindings();
@@ -72,6 +77,12 @@ export function FindingsPanel() {
     if (statusFilter === 'open' && f.status !== 'new') return false;
     if (statusFilter === 'dispositioned' && f.status === 'new') return false;
     if (categoryFilter !== 'all' && f.detection?.category !== categoryFilter) return false;
+    if (
+      deviceFilter &&
+      !(f.detection?.affected?.kind === 'device' && f.detection.affected.id === deviceFilter)
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -132,6 +143,19 @@ export function FindingsPanel() {
             ))}
           </select>
         </label>
+        {deviceFilter && (
+          <span className="findings-device-filter" data-testid="findings-device-filter">
+            Device: {filteredDevice?.name ?? deviceFilter.slice(0, 8)}
+            <button
+              type="button"
+              data-testid="findings-device-filter-clear"
+              title="Show findings for all devices"
+              onClick={() => focusFindingsForDevice(null)}
+            >
+              ✕
+            </button>
+          </span>
+        )}
         <span className="findings-count" data-testid="findings-count">
           {visible.length} of {findings.length} findings
         </span>

@@ -10,6 +10,7 @@ import type {
   PolicyRule,
   Position as XY,
   ProjectState,
+  Severity,
   Site,
   Zone,
 } from '@netplan/domain';
@@ -41,7 +42,13 @@ export interface FlowOptions {
   collapsedZones: string[];
   /** Planned-rule callout cards (M4, gap G4). */
   rules: boolean;
+  /** Findings layer (M5, #62): severity tint on affected devices. */
+  findingsLayer: boolean;
+  /** Open findings per device: count + worst severity (M5, #62). */
+  openFindingsByDevice: Map<string, DeviceFindingsBadge>;
 }
+
+export type DeviceFindingsBadge = { count: number; severity: Severity };
 
 export type PolicyRuleCalloutLine = {
   action: PolicyRule['action'];
@@ -133,6 +140,10 @@ export type DeviceNodeData = {
   identityChips: { id: string; label: string; scope: 'local' | 'domain' }[];
   /** Diff-mode emphasis (ADR-0009). */
   diffState: 'added' | 'removed' | null;
+  /** Open findings affecting this device (M5, #62); null = clean. */
+  findings: DeviceFindingsBadge | null;
+  /** Severity tint enabled (the findings layer toggle). */
+  findingsTint: boolean;
 };
 
 /**
@@ -279,6 +290,8 @@ export function graphToFlow(
         evidenceCount: deviceEvidence.get(device.id)?.size ?? 0,
         identityChips: identityChipsByDevice.get(device.id) ?? [],
         diffState: diffStateOf(device.lifecycleState, options.mode),
+        findings: options.openFindingsByDevice.get(device.id) ?? null,
+        findingsTint: options.findingsLayer,
       },
       hidden,
     });

@@ -8,6 +8,7 @@ import {
   Redo2,
   Scan,
   ShieldCheck,
+  TriangleAlert,
   Undo2,
   Users,
   Waypoints,
@@ -35,6 +36,7 @@ export function CanvasToolbar() {
   const toggleObservedLayer = useAppStore((s) => s.toggleObservedLayer);
   const toggleIdentityOverlay = useAppStore((s) => s.toggleIdentityOverlay);
   const toggleRulesLayer = useAppStore((s) => s.toggleRulesLayer);
+  const toggleFindingsLayer = useAppStore((s) => s.toggleFindingsLayer);
   const canvasMode = useAppStore((s) => s.canvasMode);
   const setCanvasMode = useAppStore((s) => s.setCanvasMode);
   const gridEnabled = useAppStore((s) => s.gridEnabled);
@@ -80,6 +82,13 @@ export function CanvasToolbar() {
       onClick: toggleRulesLayer,
       title: 'Planned-rule callout cards (design §3.2C)',
       icon: ShieldCheck,
+    },
+    {
+      testid: 'toggle-findings-layer',
+      on: layers.findings,
+      onClick: toggleFindingsLayer,
+      title: 'Findings layer: severity tint on affected devices (§3.2C)',
+      icon: TriangleAlert,
     },
   ] as const;
 

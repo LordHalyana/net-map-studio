@@ -47,6 +47,9 @@
   /* finding severity tints */
   --severity-critical: #ff9c9c;
   --severity-high: #ffb27a;
+  --severity-medium: #e5b455;
+  --severity-low: #4da3ff;
+  --severity-info: #8b94a7;
 
   /* shape & type scale */
   --radius-sm: 6px;
@@ -997,6 +1000,81 @@ button:disabled {
 
 .zone-node__name {
   font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* findings on the canvas (M5, #62): warning badge + severity layer tint */
+.device-node__warning {
+  pointer-events: auto;
+  padding: 1px 5px;
+  border: none;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.device-node__warning--critical {
+  background: var(--severity-critical);
+}
+
+.device-node__warning--high {
+  background: var(--severity-high);
+}
+
+.device-node__warning--medium {
+  background: var(--severity-medium);
+}
+
+.device-node__warning--low {
+  background: var(--severity-low);
+}
+
+.device-node__warning--info {
+  background: var(--severity-info);
+}
+
+.device-node--finding-critical {
+  outline: 1.5px solid var(--severity-critical);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--severity-critical) 45%, transparent);
+}
+
+.device-node--finding-high {
+  outline: 1.5px solid var(--severity-high);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--severity-high) 45%, transparent);
+}
+
+.device-node--finding-medium {
+  outline: 1.5px solid var(--severity-medium);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--severity-medium) 40%, transparent);
+}
+
+.device-node--finding-low {
+  outline: 1.5px solid var(--severity-low);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--severity-low) 35%, transparent);
+}
+
+.device-node--finding-info {
+  outline: 1.5px solid var(--severity-info);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--severity-info) 30%, transparent);
+}
+
+.findings-device-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.findings-device-filter button {
+  padding: 0 3px;
+  border: none;
+  background: none;
   color: var(--text-dim);
 }
 

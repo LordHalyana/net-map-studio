@@ -55,6 +55,8 @@ export interface LayerState {
   identities: boolean;
   /** Planned-rule callout cards on the canvas (visual-parity M4, gap G4). */
   rules: boolean;
+  /** Findings layer (M5, #62): severity tint on affected devices. */
+  findings: boolean;
 }
 
 export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff';
@@ -104,6 +106,8 @@ interface AppState {
   focusedRuleId: string | null;
   /** Finding card to highlight/scroll to in the Findings view (M3, #60). */
   focusedFindingFingerprint: string | null;
+  /** Findings view scoped to one device — set by the canvas badge (M5, #62). */
+  findingsDeviceFilter: string | null;
   /** Whole-project provenance sidecar mirror — feeds badges and the inspector. */
   provenance: FieldProvenance[];
   importJobs: ImportJob[];
@@ -133,6 +137,9 @@ interface AppState {
   toggleObservedLayer: () => void;
   toggleIdentityOverlay: () => void;
   toggleRulesLayer: () => void;
+  toggleFindingsLayer: () => void;
+  /** Open the Findings view filtered to one device (M5, #62). */
+  focusFindingsForDevice: (deviceId: string | null) => void;
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
   toggleGrid: () => void;
@@ -168,7 +175,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
-  layers: { logical: true, physical: true, observed: true, identities: false, rules: true },
+  layers: {
+    logical: true,
+    physical: true,
+    observed: true,
+    identities: false,
+    rules: true,
+    findings: true,
+  },
   collapsedSites: [],
   collapsedZones: [],
   contextTab: 'details',
@@ -180,6 +194,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   gridEnabled: true,
   focusedRuleId: null,
   focusedFindingFingerprint: null,
+  findingsDeviceFilter: null,
   provenance: [],
   importJobs: [],
   selectedImport: null,
@@ -324,6 +339,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleRulesLayer: () => set({ layers: { ...get().layers, rules: !get().layers.rules } }),
 
+  toggleFindingsLayer: () => set({ layers: { ...get().layers, findings: !get().layers.findings } }),
+
+  focusFindingsForDevice: (deviceId) =>
+    set(
+      deviceId
+        ? { view: 'findings', findingsDeviceFilter: deviceId }
+        : { findingsDeviceFilter: null },
+    ),
+
   setView: (view) => set({ view }),
 
   setCanvasMode: (mode) => set({ canvasMode: mode }),
@@ -419,6 +443,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
         availability: await getAvailability(project.id),
         provenance: await listProjectProvenance(project.id),
+        // committed/rolled-back evidence changes the detection surface (M5, #62)
+        findings: null,
       });
     } catch (error) {
       set({ importNotice: error instanceof Error ? error.message : 'Commit failed' });
@@ -443,6 +469,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
         availability: await getAvailability(project.id),
         provenance: await listProjectProvenance(project.id),
+        // committed/rolled-back evidence changes the detection surface (M5, #62)
+        findings: null,
       });
     } catch (error) {
       set({ importNotice: error instanceof Error ? error.message : 'Rollback failed' });
