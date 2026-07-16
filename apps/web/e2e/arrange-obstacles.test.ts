@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  changeSetIdSchema,
   deviceIdSchema,
   deviceSchema,
   interfaceIdSchema,
@@ -8,7 +7,6 @@ import {
   networkIdSchema,
   networkSchema,
   newId,
-  operationIdSchema,
   projectIdSchema,
   siteIdSchema,
   siteSchema,
@@ -17,11 +15,11 @@ import {
   type Device,
   type Interface,
   type Network,
-  type Operation,
   type ProjectId,
   type Site,
   type Zone,
 } from '@netplan/domain';
+import { changeSet, opCreateEntity, opDeleteEntity } from '../src/state/ops';
 
 /**
  * Auto-arrange obstacle avoidance (#75): the acceptance scenario — a Zone
@@ -134,30 +132,18 @@ async function seedScenario(page: Page): Promise<Seeded> {
   addFanDevice('obst-fan-server', 'server', 0);
   for (let i = 0; i < 6; i++) addFanDevice(`obst-fan-ws-${i}`, 'workstation', 200 + i * 60);
 
-  const create = (entityType: string, entity: unknown): Operation =>
-    ({
-      id: newId(operationIdSchema),
-      projectId,
-      kind: 'CreateEntity',
-      payload: { entityType, entity },
-    }) as Operation;
-  const ops: Operation[] = [
-    create('site', site),
-    create('zone', zone),
-    create('device', contained),
-    create('device', pinned),
-    create('network', network),
-    ...fanDevices.map((d) => create('device', d)),
-    ...interfaces.map((i) => create('interface', i)),
+  const ops = [
+    opCreateEntity(projectId, { entityType: 'site', entity: site }),
+    opCreateEntity(projectId, { entityType: 'zone', entity: zone }),
+    opCreateEntity(projectId, { entityType: 'device', entity: contained }),
+    opCreateEntity(projectId, { entityType: 'device', entity: pinned }),
+    opCreateEntity(projectId, { entityType: 'network', entity: network }),
+    ...fanDevices.map((d) => opCreateEntity(projectId, { entityType: 'device', entity: d })),
+    ...interfaces.map((i) => opCreateEntity(projectId, { entityType: 'interface', entity: i })),
   ];
 
   const response = await page.request.post(`/api/projects/${projectId}/operations`, {
-    data: {
-      id: newId(changeSetIdSchema),
-      projectId,
-      label: 'Seed #75 obstacle scene',
-      operations: ops,
-    },
+    data: changeSet(projectId, 'Seed #75 obstacle scene', ops),
   });
   expect(response.ok()).toBe(true);
   return { projectId, site, zone, contained, pinned, fanDevices, interfaces, network };
@@ -165,36 +151,28 @@ async function seedScenario(page: Page): Promise<Seeded> {
 
 /** Delete everything the seed created, dependents first, in one changeset. */
 async function cleanupScenario(page: Page, seeded: Seeded) {
-  const remove = (entityType: string, entity: unknown): Operation =>
-    ({
-      id: newId(operationIdSchema),
-      projectId: seeded.projectId,
-      kind: 'DeleteEntity',
-      payload: { entityType, entity },
-    }) as Operation;
-  const ops: Operation[] = [
-    ...seeded.interfaces.map((i) => remove('interface', i)),
-    ...seeded.fanDevices.map((d) => remove('device', d)),
-    remove('device', seeded.pinned),
-    remove('device', seeded.contained),
-    remove('network', seeded.network),
-    remove('zone', seeded.zone),
-    remove('site', seeded.site),
+  const { projectId } = seeded;
+  const ops = [
+    ...seeded.interfaces.map((i) =>
+      opDeleteEntity(projectId, { entityType: 'interface', entity: i }),
+    ),
+    ...seeded.fanDevices.map((d) => opDeleteEntity(projectId, { entityType: 'device', entity: d })),
+    opDeleteEntity(projectId, { entityType: 'device', entity: seeded.pinned }),
+    opDeleteEntity(projectId, { entityType: 'device', entity: seeded.contained }),
+    opDeleteEntity(projectId, { entityType: 'network', entity: seeded.network }),
+    opDeleteEntity(projectId, { entityType: 'zone', entity: seeded.zone }),
+    opDeleteEntity(projectId, { entityType: 'site', entity: seeded.site }),
   ];
-  const response = await page.request.post(`/api/projects/${seeded.projectId}/operations`, {
-    data: {
-      id: newId(changeSetIdSchema),
-      projectId: seeded.projectId,
-      label: 'Clean up #75 obstacle scene',
-      operations: ops,
-    },
+  const response = await page.request.post(`/api/projects/${projectId}/operations`, {
+    data: changeSet(projectId, 'Clean up #75 obstacle scene', ops),
   });
   expect(response.ok()).toBe(true);
 }
 
-type Box = { x: number; y: number; width: number; height: number };
+type Rect = { x: number; y: number; width: number; height: number };
 
-const boxesIntersect = (a: Box, b: Box) =>
+// deliberately independent of the intersects() under test in autoArrange.ts
+const boxesIntersect = (a: Rect, b: Rect) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 test.describe('Auto-arrange obstacle avoidance (#75)', () => {
@@ -224,7 +202,7 @@ test.describe('Auto-arrange obstacle avoidance (#75)', () => {
 
       // zero overlapping device nodes at 100% zoom — including the contained
       // and pinned cards the layout skipped
-      const deviceBoxes: { name: string; box: Box }[] = [];
+      const deviceBoxes: { name: string; box: Rect }[] = [];
       for (const node of await page.locator('.device-node').all()) {
         const box = await node.boundingBox();
         const testId = await node.getAttribute('data-testid');
@@ -247,7 +225,7 @@ test.describe('Auto-arrange obstacle avoidance (#75)', () => {
       const movableNames = new Set(
         graph.devices.filter((d) => !d.zoneId && !d.pinned).map((d) => `device-node-${d.name}`),
       );
-      const siteBoxes: Box[] = [];
+      const siteBoxes: Rect[] = [];
       for (const node of await page.locator('[data-testid^="site-node-"]').all()) {
         const box = await node.boundingBox();
         if (box) siteBoxes.push(box);
