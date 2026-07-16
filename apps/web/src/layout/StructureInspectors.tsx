@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   networkKindSchema,
   zoneKindSchema,
@@ -7,9 +8,48 @@ import {
   type Zone,
 } from '@netplan/domain';
 import { useAppStore } from '../state/store';
-import { opSetField } from '../state/ops';
+import {
+  deleteSiteChangeSet,
+  deleteSiteImpact,
+  deleteZoneChangeSet,
+  deleteZoneImpact,
+  opSetField,
+} from '../state/ops';
 import { VLAN_PALETTE } from '../canvas/networkColor';
+import { Button, ConfirmDialog } from '../ui';
 import { FieldSection, SelectField, TextField } from './fields';
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** Impact summary for the delete confirm — only non-zero lines render. */
+function DeleteImpactBody({
+  kind,
+  name,
+  lines,
+}: {
+  kind: 'site' | 'zone';
+  name: string;
+  lines: string[];
+}) {
+  return (
+    <>
+      <p>
+        This deletes the {kind} <strong>{name}</strong>.
+        {lines.length === 0 ? ' Nothing else is affected.' : ''}
+      </p>
+      {lines.length > 0 && (
+        <ul>
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+      <p>Undo (Ctrl+Z) restores everything.</p>
+    </>
+  );
+}
 
 export function NetworkInspector({ network, graph }: { network: Network; graph: ProjectState }) {
   const dispatch = useAppStore((s) => s.dispatch);
@@ -104,10 +144,32 @@ export function NetworkInspector({ network, graph }: { network: Network; graph: 
 
 export function SiteInspector({ site, graph }: { site: Site; graph: ProjectState }) {
   const dispatch = useAppStore((s) => s.dispatch);
+  const [confirming, setConfirming] = useState(false);
   const set = (field: string, value: unknown, previous: unknown) =>
     dispatch(opSetField(graph.project.id, 'site', site.id, field, value, previous));
+
+  const impact = deleteSiteImpact(graph, site.id);
+  const impactLines = [
+    impact.zones.length > 0 && `${plural(impact.zones.length, 'zone')} will be deleted`,
+    impact.devices.length > 0 &&
+      `${plural(impact.devices.length, 'device')} will stay on the canvas, no longer in a zone`,
+    impact.rules.length > 0 &&
+      `${plural(impact.rules.length, 'zone-targeting rule')} will be removed`,
+    impact.flows.length > 0 &&
+      `${plural(impact.flows.length, 'zone-targeting flow')} will be removed`,
+  ].filter((line): line is string => Boolean(line));
+
   return (
     <div data-testid="inspector-site">
+      <div className="inspector-actions">
+        <Button
+          variant="danger"
+          data-testid="inspector-delete-site"
+          onClick={() => setConfirming(true)}
+        >
+          Delete
+        </Button>
+      </div>
       <FieldSection title="Site">
         <TextField
           label="Name"
@@ -121,16 +183,50 @@ export function SiteInspector({ site, graph }: { site: Site; graph: ProjectState
           onCommit={(v) => set('description', v, site.description)}
         />
       </FieldSection>
+      <ConfirmDialog
+        open={confirming}
+        title={`Delete site ${site.name}?`}
+        body={<DeleteImpactBody kind="site" name={site.name} lines={impactLines} />}
+        confirmLabel="Delete site"
+        danger
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          const cs = deleteSiteChangeSet(graph, site.id);
+          if (cs) dispatch(cs);
+        }}
+      />
     </div>
   );
 }
 
 export function ZoneInspector({ zone, graph }: { zone: Zone; graph: ProjectState }) {
   const dispatch = useAppStore((s) => s.dispatch);
+  const [confirming, setConfirming] = useState(false);
   const set = (field: string, value: unknown, previous: unknown) =>
     dispatch(opSetField(graph.project.id, 'zone', zone.id, field, value, previous));
+
+  const impact = deleteZoneImpact(graph, zone.id);
+  const impactLines = [
+    impact.devices.length > 0 &&
+      `${plural(impact.devices.length, 'device')} will stay on the canvas, no longer in this zone`,
+    impact.rules.length > 0 &&
+      `${plural(impact.rules.length, 'zone-targeting rule')} will be removed`,
+    impact.flows.length > 0 &&
+      `${plural(impact.flows.length, 'zone-targeting flow')} will be removed`,
+  ].filter((line): line is string => Boolean(line));
+
   return (
     <div data-testid="inspector-zone">
+      <div className="inspector-actions">
+        <Button
+          variant="danger"
+          data-testid="inspector-delete-zone"
+          onClick={() => setConfirming(true)}
+        >
+          Delete
+        </Button>
+      </div>
       <FieldSection title="Zone">
         <TextField
           label="Name"
@@ -145,6 +241,19 @@ export function ZoneInspector({ zone, graph }: { zone: Zone; graph: ProjectState
           onCommit={(v) => set('kind', v, zone.kind)}
         />
       </FieldSection>
+      <ConfirmDialog
+        open={confirming}
+        title={`Delete zone ${zone.name}?`}
+        body={<DeleteImpactBody kind="zone" name={zone.name} lines={impactLines} />}
+        confirmLabel="Delete zone"
+        danger
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          const cs = deleteZoneChangeSet(graph, zone.id);
+          if (cs) dispatch(cs);
+        }}
+      />
     </div>
   );
 }
