@@ -5,6 +5,7 @@ import {
   deviceSchema,
   flowSchema,
   hostArtifactSchema,
+  reportRecordSchema,
   identitySchema,
   interfaceSchema,
   linkSchema,
@@ -39,6 +40,8 @@ export const projectStateSchema = z.object({
   flows: z.array(flowSchema).default([]),
   /** Detection inputs per Device (improvements M7, #64) — defaulted for old bundles. */
   hostArtifacts: z.array(hostArtifactSchema).default([]),
+  /** Generated-deliverable audit trail (improvements M11, #68). */
+  reports: z.array(reportRecordSchema).default([]),
   identities: z.array(identitySchema).default([]),
   roleAssignments: z.array(roleAssignmentSchema).default([]),
   /** Phase-3 finding dispositions (ADR-0023) — the persisted analyst decisions. */

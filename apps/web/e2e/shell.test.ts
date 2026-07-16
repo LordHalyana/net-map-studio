@@ -128,3 +128,43 @@ test.describe('nav destinations I (improvements M10, #67)', () => {
     await page.getByTestId('rules-filter-action').selectOption('');
   });
 });
+
+test.describe('nav destinations II (improvements M11, #68)', () => {
+  test('Reports generates a bundle and lists the Report record', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-reports').click();
+    await expect(page.getByTestId('reports-panel')).toBeVisible();
+
+    const download = page.waitForEvent('download');
+    await page.getByTestId('reports-generate-bundle').click();
+    expect((await download).suggestedFilename()).toMatch(/\.netplan$/);
+
+    // the server wrote a Report record; the panel refreshes its mirror
+    await expect
+      .poll(async () => page.locator('[data-testid^="report-record-"]').count(), {
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
+    await expect(page.getByTestId('reports-table')).toContainText('bundle');
+  });
+
+  test('identities and flows CSVs download from the Reports page', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-reports').click();
+    for (const entity of ['identities', 'flows'] as const) {
+      const download = page.waitForEvent('download');
+      await page.getByTestId(`reports-csv-${entity}`).click();
+      expect((await download).suggestedFilename()).toBe(`${entity}.csv`);
+    }
+  });
+
+  test('Settings surfaces existing config and links to egress', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-settings').click();
+    await expect(page.getByTestId('settings-panel')).toBeVisible();
+    await expect(page.getByTestId('settings-rule-config')).toContainText('Config version');
+    await expect(page.getByTestId('settings-indicator-lists')).toBeVisible();
+    await page.getByTestId('settings-open-egress').click();
+    await expect(page.getByTestId('egress-panel')).toBeVisible();
+  });
+});

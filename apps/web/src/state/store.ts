@@ -63,7 +63,16 @@ export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff'
 
 /** Which primary workspace fills the central region (design §3.2B). */
 export type WorkspaceView =
-  'overview' | 'canvas' | 'networks' | 'rules' | 'imports' | 'identities' | 'findings' | 'egress';
+  | 'overview'
+  | 'canvas'
+  | 'networks'
+  | 'rules'
+  | 'imports'
+  | 'identities'
+  | 'findings'
+  | 'reports'
+  | 'egress'
+  | 'settings';
 
 /** AS-IS / TO-BE / Diff rendering mode (ADR-0009, design §3.10). */
 export type CanvasMode = 'asIs' | 'toBe' | 'diff';

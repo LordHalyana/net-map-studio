@@ -3,11 +3,13 @@ import {
   Building2,
   Cloud,
   DoorOpen,
+  FileText,
   Gauge,
   ImagePlus,
   LayoutGrid,
   Map,
   Search,
+  Settings,
   ShieldCheck,
   TriangleAlert,
   Upload,
@@ -119,7 +121,9 @@ export function LibraryPanel() {
               ['imports', Upload, 'Imports and Evidence'],
               ['identities', Users, 'Users and Roles'],
               ['findings', TriangleAlert, 'Findings'],
+              ['reports', FileText, 'Reports'],
               ['egress', DoorOpen, 'Egress and Threat Intel'],
+              ['settings', Settings, 'Settings'],
             ] as const
           ).map(([key, Icon, label]) => (
             <li key={key}>

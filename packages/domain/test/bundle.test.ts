@@ -48,6 +48,7 @@ function sampleState(): ProjectState {
     policyRules: [rule],
     flows: [],
     hostArtifacts: [],
+    reports: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

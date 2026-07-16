@@ -65,6 +65,8 @@ function addEntity(state: ProjectState, payload: EntityPayload): ProjectState {
       return { ...state, flows: [...state.flows, payload.entity] };
     case 'hostArtifact':
       return { ...state, hostArtifacts: [...state.hostArtifacts, payload.entity] };
+    case 'report':
+      return { ...state, reports: [...state.reports, payload.entity] };
     case 'identity':
       return { ...state, identities: [...state.identities, payload.entity] };
     case 'roleAssignment':
@@ -95,6 +97,8 @@ function removeEntity(state: ProjectState, payload: EntityPayload): ProjectState
       return { ...state, flows: state.flows.filter((e) => e.id !== id) };
     case 'hostArtifact':
       return { ...state, hostArtifacts: state.hostArtifacts.filter((e) => e.id !== id) };
+    case 'report':
+      return { ...state, reports: state.reports.filter((e) => e.id !== id) };
     case 'identity':
       return { ...state, identities: state.identities.filter((e) => e.id !== id) };
     case 'roleAssignment':
@@ -141,6 +145,8 @@ function setField(
       return { ...state, flows: patch(state.flows) };
     case 'hostArtifact':
       return { ...state, hostArtifacts: patch(state.hostArtifacts) };
+    case 'report':
+      return { ...state, reports: patch(state.reports) };
     case 'identity':
       return { ...state, identities: patch(state.identities) };
     case 'roleAssignment':

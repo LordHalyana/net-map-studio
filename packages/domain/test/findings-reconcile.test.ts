@@ -33,6 +33,7 @@ function emptyState(project = makeProject()): ProjectState {
     policyRules: [],
     flows: [],
     hostArtifacts: [],
+    reports: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

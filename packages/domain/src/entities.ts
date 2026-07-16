@@ -5,6 +5,7 @@ import {
   deviceIdSchema,
   flowIdSchema,
   hostArtifactIdSchema,
+  reportIdSchema,
   identityIdSchema,
   interfaceIdSchema,
   linkIdSchema,
@@ -312,6 +313,37 @@ export const hostArtifactSchema = z.object({
   lifecycleState: lifecycleStateSchema,
 });
 export type HostArtifact = z.infer<typeof hostArtifactSchema>;
+
+/**
+ * Report record (design §3.4; improvements M11, #68): the minimal persisted
+ * audit trail of a generated deliverable — what was produced, when, under
+ * which redaction profile, and the output's hash. Written through the
+ * Operation log on every export/report, so client deliverables are
+ * reconstructable and auditable (§3.13's audit hook, M13).
+ */
+export const reportTypeSchema = z.enum([
+  'bundle',
+  'designReport',
+  'findingsReport',
+  'changeReport',
+  'csv',
+  'topologyImage',
+]);
+export type ReportType = z.infer<typeof reportTypeSchema>;
+
+export const reportRecordSchema = z.object({
+  id: reportIdSchema,
+  projectId: projectIdSchema,
+  type: reportTypeSchema,
+  createdAt: z.iso.datetime(),
+  /** The redaction profile in force; empty = unredacted. */
+  redactionProfile: z.string().default(''),
+  /** Free-form generation parameters (entity type for CSVs, format, …). */
+  parameters: z.record(z.string(), z.string()).default({}),
+  /** SHA-256 of the produced output; empty when the output never passed through the server. */
+  outputSha256: z.string().default(''),
+});
+export type ReportRecord = z.infer<typeof reportRecordSchema>;
 
 /**
  * A modelled principal in the mapped environment (ADR-0022) — never a

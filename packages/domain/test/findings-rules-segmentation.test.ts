@@ -39,6 +39,7 @@ function baseState(overrides: Partial<ProjectState> = {}): ProjectState {
     policyRules: [],
     flows: [],
     hostArtifacts: [],
+    reports: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

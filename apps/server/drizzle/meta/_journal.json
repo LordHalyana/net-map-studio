@@ -99,6 +99,13 @@
       "when": 1784203466769,
       "tag": "0013_natural_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1784205322354,
+      "tag": "0014_strong_warpath",
+      "breakpoints": true
     }
   ]
 }

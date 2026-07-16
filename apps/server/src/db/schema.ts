@@ -242,6 +242,19 @@ export const hostArtifacts = sqliteTable('host_artifacts', {
   lifecycleState: lifecycleState(),
 });
 
+/** Generated-deliverable audit trail (design §3.4; improvements M11, #68). */
+export const reports = sqliteTable('reports', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  type: text('type').notNull(),
+  createdAt: text('created_at').notNull(),
+  redactionProfile: text('redaction_profile').notNull(),
+  parameters: text('parameters', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+  outputSha256: text('output_sha256').notNull(),
+});
+
 export const identities = sqliteTable('identities', {
   id: text('id').primaryKey(),
   projectId: text('project_id')

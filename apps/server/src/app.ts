@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
@@ -7,11 +8,16 @@ import {
   makeBundle,
   netplanBundleSchema,
   newId,
+  operationIdSchema,
   operationSchema,
   projectIdSchema,
   projectSchema,
+  reportIdSchema,
+  reportRecordSchema,
   settableEntityTypeSchema,
+  type ReportType,
 } from '@netplan/domain';
+import { buildChangeReport } from './export/change-report.js';
 import { toCsv } from './export/csv.js';
 import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
@@ -241,7 +247,9 @@ export async function buildApp(options: AppOptions = {}) {
     if (fields.length > 0) {
       state = applyRedaction(state, { name: 'query', fields });
     }
-    return makeBundle(state, new Date().toISOString(), importStore.exportAttachments(id));
+    const bundle = makeBundle(state, new Date().toISOString(), importStore.exportAttachments(id));
+    recordReport(id, 'bundle', query.redact, {}, JSON.stringify(bundle));
+    return bundle;
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -335,6 +343,37 @@ export async function buildApp(options: AppOptions = {}) {
   // always current, so there is no server-side run to trigger; disposition
   // changes go through POST /projects/:id/operations (SetFindingStatus/Note).
   /** Findings, optionally through the client-safe redaction profile (M12, Q15). */
+  /**
+   * Persist the §3.4 Report record through the Operation log (M11, #68):
+   * every generated deliverable leaves an auditable, undoable trace with the
+   * output's SHA-256 — also the audit hook M13 builds on.
+   */
+  function recordReport(
+    projectId: string,
+    type: ReportType,
+    redactionProfile: string,
+    parameters: Record<string, string>,
+    output: string,
+  ): void {
+    engine.applyOperation({
+      id: newId(operationIdSchema),
+      projectId: projectIdSchema.parse(projectId),
+      kind: 'CreateEntity',
+      payload: {
+        entityType: 'report',
+        entity: reportRecordSchema.parse({
+          id: newId(reportIdSchema),
+          projectId,
+          type,
+          createdAt: new Date().toISOString(),
+          redactionProfile,
+          parameters,
+          outputSha256: createHash('sha256').update(output).digest('hex'),
+        }),
+      },
+    });
+  }
+
   function analyzeWithRedaction(id: string, redactParam: unknown): FindingView[] {
     const findings = findingsService.analyze(id).findings;
     const profile =
@@ -365,6 +404,7 @@ export async function buildApp(options: AppOptions = {}) {
       opSeq: report.opSeq,
       configHash: report.configHash,
     });
+    recordReport(id, 'findingsReport', query.redact ?? '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 
@@ -441,31 +481,56 @@ export async function buildApp(options: AppOptions = {}) {
     'services',
     'links',
     'policyRules',
+    'identities',
+    'flows',
     'findings',
   ]);
 
   app.get('/projects/:id/export/csv/:entityType', async (request, reply) => {
-    const { id } = projectParamsSchema.parse(request.params);
-    const params = z.object({ entityType: csvEntityTypes }).safeParse(request.params);
+    // one parse for both segments (M11, #68 — retires the double-parse)
+    const params = z
+      .object({ id: z.string(), entityType: csvEntityTypes })
+      .safeParse(request.params);
     if (!params.success) {
       throw new OperationError('INVALID', 'Unknown entity type for CSV export');
     }
+    const { id, entityType } = params.data;
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
     // Findings are derived — not a ProjectState collection — and flow through
     // the same redaction pipeline as every other export (M12).
     const rows =
-      params.data.entityType === 'findings'
+      entityType === 'findings'
         ? findingsToCsvRows(engine.getState(id), analyzeWithRedaction(id, query.redact))
-        : engine.getState(id)[params.data.entityType];
+        : engine.getState(id)[entityType];
+    const csv = toCsv(rows);
+    recordReport(id, 'csv', query.redact ?? '', { entityType }, csv);
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="${params.data.entityType}.csv"`)
-      .send(toCsv(rows));
+      .header('content-disposition', `attachment; filename="${entityType}.csv"`)
+      .send(csv);
   });
 
   app.get('/projects/:id/report', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
-    const html = buildHtmlReport(engine.getState(id), new Date().toISOString());
+    const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
+    const html = buildHtmlReport(engine.getState(id), new Date().toISOString(), {
+      findings: analyzeWithRedaction(id, query.redact),
+      redactionProfile: query.redact ?? '',
+    });
+    recordReport(id, 'designReport', query.redact ?? '', {}, html);
+    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+  });
+
+  // AS-IS → TO-BE change report (design §3.12; improvements M11, #68)
+  app.get('/projects/:id/report/change', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const html = buildChangeReport(
+      engine.getState(id),
+      engine.listChangeSets(id),
+      engine.getLog(id),
+      new Date().toISOString(),
+    );
+    recordReport(id, 'changeReport', '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 

@@ -36,6 +36,7 @@ function state(services: Service[], baselines: Baseline[]): ProjectState {
     policyRules: [],
     flows: [],
     hostArtifacts: [],
+    reports: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

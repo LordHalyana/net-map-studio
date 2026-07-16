@@ -8,6 +8,8 @@ import { UsersRolesPanel } from './UsersRolesPanel';
 import { FindingsPanel } from './FindingsPanel';
 import { EgressPanel } from './EgressPanel';
 import { OverviewPanel } from './OverviewPanel';
+import { ReportsPanel } from './ReportsPanel';
+import { SettingsPanel } from './SettingsPanel';
 import { NetworksPanel } from './NetworksPanel';
 import { RulesPanel } from './RulesPanel';
 import { ShortcutHelp } from './ShortcutHelp';
@@ -35,6 +37,10 @@ export function AppShell() {
         <EgressPanel />
       ) : view === 'overview' ? (
         <OverviewPanel />
+      ) : view === 'reports' ? (
+        <ReportsPanel />
+      ) : view === 'settings' ? (
+        <SettingsPanel />
       ) : view === 'networks' ? (
         <NetworksPanel />
       ) : view === 'rules' ? (
