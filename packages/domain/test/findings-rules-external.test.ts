@@ -25,6 +25,7 @@ function state(flows: Flow[], baselines: ProjectState['baselines'] = []): Projec
     services: [],
     policyRules: [],
     flows,
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

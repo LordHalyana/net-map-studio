@@ -11,6 +11,7 @@ import {
   findingStatusSchema,
   flowEndpointSchema,
   flowSchema,
+  hostArtifactSchema,
   identitySchema,
   interfaceSchema,
   linkSchema,
@@ -63,6 +64,7 @@ import {
   fieldProvenance,
   findingDispositions,
   flows,
+  hostArtifacts,
   identities,
   importJobs,
   importProposals,
@@ -138,6 +140,7 @@ const settableSchemas = {
   service: serviceSchema,
   policyRule: policyRuleSchema,
   flow: flowSchema,
+  hostArtifact: hostArtifactSchema,
   identity: identitySchema,
   roleAssignment: roleAssignmentSchema,
   baseline: baselineSchema,
@@ -157,6 +160,7 @@ const referenceFields: Partial<
   service: { deviceId: 'device' },
   policyRule: { serviceId: 'service' },
   flow: { serviceId: 'service' },
+  hostArtifact: { deviceId: 'device' },
   identity: { deviceId: 'device' },
   roleAssignment: { identityId: 'identity', deviceId: 'device' },
 };
@@ -253,6 +257,13 @@ export function createEngine(db: Db) {
         .orderBy(asc(flows.id))
         .all()
         .map((r) => flowSchema.parse(r)),
+      hostArtifacts: db
+        .select()
+        .from(hostArtifacts)
+        .where(eq(hostArtifacts.projectId, projectId))
+        .orderBy(asc(hostArtifacts.id))
+        .all()
+        .map((r) => hostArtifactSchema.parse(r)),
       identities: db
         .select()
         .from(identities)
@@ -335,6 +346,7 @@ export function createEngine(db: Db) {
       tx.delete(changeSets).where(eq(changeSets.projectId, projectId)).run();
       tx.delete(roleAssignments).where(eq(roleAssignments.projectId, projectId)).run();
       tx.delete(identities).where(eq(identities.projectId, projectId)).run();
+      tx.delete(hostArtifacts).where(eq(hostArtifacts.projectId, projectId)).run();
       tx.delete(flows).where(eq(flows.projectId, projectId)).run();
       tx.delete(policyRules).where(eq(policyRules.projectId, projectId)).run();
       tx.delete(links).where(eq(links.projectId, projectId)).run();
@@ -473,6 +485,14 @@ export function createEngine(db: Db) {
           payload.entity.deviceId,
           'Service',
         );
+      case 'hostArtifact':
+        return requireRef(
+          tx,
+          payload.entity.projectId,
+          'device',
+          payload.entity.deviceId,
+          'HostArtifact',
+        );
       case 'flow':
         requireFlowEndpoint(tx, payload.entity.projectId, payload.entity.source, 'Flow source');
         requireFlowEndpoint(
@@ -577,6 +597,14 @@ export function createEngine(db: Db) {
             .get()
         )
           fail('a RoleAssignment');
+        if (
+          tx
+            .select({ id: hostArtifacts.id })
+            .from(hostArtifacts)
+            .where(eq(hostArtifacts.deviceId, id))
+            .get()
+        )
+          fail('a HostArtifact');
         return;
       case 'interface':
         if (
@@ -646,6 +674,8 @@ export function createEngine(db: Db) {
         return void tx.insert(services).values(payload.entity).run();
       case 'flow':
         return void tx.insert(flows).values(payload.entity).run();
+      case 'hostArtifact':
+        return void tx.insert(hostArtifacts).values(payload.entity).run();
       case 'identity':
         return void tx.insert(identities).values(payload.entity).run();
       case 'roleAssignment':
@@ -673,6 +703,8 @@ export function createEngine(db: Db) {
         return void tx.delete(services).where(eq(services.id, id)).run();
       case 'flow':
         return void tx.delete(flows).where(eq(flows.id, id)).run();
+      case 'hostArtifact':
+        return void tx.delete(hostArtifacts).where(eq(hostArtifacts.id, id)).run();
       case 'identity':
         return void tx.delete(identities).where(eq(identities.id, id)).run();
       case 'roleAssignment':
@@ -710,6 +742,8 @@ export function createEngine(db: Db) {
         return tx.select().from(policyRules).where(eq(policyRules.id, id)).get();
       case 'flow':
         return tx.select().from(flows).where(eq(flows.id, id)).get();
+      case 'hostArtifact':
+        return tx.select().from(hostArtifacts).where(eq(hostArtifacts.id, id)).get();
       case 'identity':
         return tx.select().from(identities).where(eq(identities.id, id)).get();
       case 'roleAssignment':
@@ -777,6 +811,12 @@ export function createEngine(db: Db) {
           .run();
       case 'flow':
         return void tx.update(flows).set(flowSchema.parse(candidate)).where(eq(flows.id, id)).run();
+      case 'hostArtifact':
+        return void tx
+          .update(hostArtifacts)
+          .set(hostArtifactSchema.parse(candidate))
+          .where(eq(hostArtifacts.id, id))
+          .run();
       case 'identity':
         return void tx
           .update(identities)
@@ -1040,6 +1080,8 @@ export function createEngine(db: Db) {
         return { entityType, entity: serviceSchema.parse(row) };
       case 'flow':
         return { entityType, entity: flowSchema.parse(row) };
+      case 'hostArtifact':
+        return { entityType, entity: hostArtifactSchema.parse(row) };
       case 'identity':
         return { entityType, entity: identitySchema.parse(row) };
       case 'roleAssignment':
@@ -1505,6 +1547,16 @@ export function createEngine(db: Db) {
             service: state.services.find((s) => s.id === entity.serviceId) ?? null,
             source: resolveFlowEndpoint(entity.source),
             destination: resolveFlowEndpoint(entity.destination),
+          },
+        };
+      }
+      case 'hostArtifact': {
+        const entity = state.hostArtifacts.find((a) => a.id === entityId);
+        if (!entity) throw new OperationError('NOT_FOUND', `hostArtifact ${entityId} not found`);
+        return {
+          entity,
+          relationships: {
+            device: state.devices.find((d) => d.id === entity.deviceId) ?? null,
           },
         };
       }

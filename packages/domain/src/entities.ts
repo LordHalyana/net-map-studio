@@ -4,6 +4,7 @@ import {
   baselineIdSchema,
   deviceIdSchema,
   flowIdSchema,
+  hostArtifactIdSchema,
   identityIdSchema,
   interfaceIdSchema,
   linkIdSchema,
@@ -273,6 +274,44 @@ export const flowSchema = z.object({
   lifecycleState: lifecycleStateSchema,
 });
 export type Flow = z.infer<typeof flowSchema>;
+
+/**
+ * Host security artifact (improvements M7, #64): one evidence-derived
+ * detection input on a Device — a running process, persistence entry,
+ * installed application or file-inventory record. The Flow precedent
+ * applied to §3.8's inputs: a typed per-device collection with direct
+ * confidence, written only through the import pipeline, never hand-edited.
+ * Analysis input, not topology — it never renders on the canvas.
+ */
+export const hostArtifactKindSchema = z.enum(['process', 'persistence', 'software', 'file']);
+export type HostArtifactKind = z.infer<typeof hostArtifactKindSchema>;
+
+/** How a persistence artifact launches (mirrors findings/inputs.ts kinds). */
+export const hostPersistenceKindSchema = z.enum(['startup', 'scheduledTask', 'service', 'other']);
+
+export const hostArtifactSchema = z.object({
+  id: hostArtifactIdSchema,
+  projectId: projectIdSchema,
+  deviceId: deviceIdSchema,
+  kind: hostArtifactKindSchema,
+  /** Process/entry/application name, or the file path for `kind: 'file'`. */
+  name: z.string().min(1),
+  /** On-disk path (executable, entry binary, file), when reported. */
+  path: z.string().nullable().default(null),
+  /** The command a persistence entry launches. */
+  command: z.string().default(''),
+  /** Set only for `kind: 'persistence'`. */
+  persistenceKind: hostPersistenceKindSchema.nullable().default(null),
+  /** Set only for `kind: 'file'`, when the collector hashed it. */
+  sha256: z.string().nullable().default(null),
+  publisher: z.string().default(''),
+  version: z.string().default(''),
+  /** True when the collector tagged software as remote-access/remote-admin. */
+  remoteAccess: z.boolean().default(false),
+  confidence: confidenceSchema,
+  lifecycleState: lifecycleStateSchema,
+});
+export type HostArtifact = z.infer<typeof hostArtifactSchema>;
 
 /**
  * A modelled principal in the mapped environment (ADR-0022) — never a

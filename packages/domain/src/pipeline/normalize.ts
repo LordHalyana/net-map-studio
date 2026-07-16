@@ -132,6 +132,10 @@ function normalizeClaim(claim: ObservationClaim): ObservationClaim {
         device: normalizeHints(claim.device),
         identity: { ...claim.identity, domain: claim.identity.domain.toUpperCase() },
       };
+    case 'hostArtifact':
+      // names/paths keep their casing (Linux paths are case-sensitive);
+      // only the host reference normalizes
+      return { ...claim, device: normalizeHints(claim.device) };
   }
 }
 

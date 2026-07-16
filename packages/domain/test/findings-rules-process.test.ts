@@ -27,6 +27,7 @@ function state(): ProjectState {
     services: [],
     policyRules: [],
     flows: [],
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

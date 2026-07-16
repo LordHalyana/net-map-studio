@@ -1,6 +1,12 @@
 import { combineConfidence, contributorScore, type Confidence } from '../confidence.js';
 import type { DeviceHints, FlowEndpointHints, Observation, ObservationId } from '../imports.js';
-import type { AddressKind, IdentityScope, Protocol, RolePrivilege } from '../entities.js';
+import type {
+  AddressKind,
+  HostArtifact,
+  IdentityScope,
+  Protocol,
+  RolePrivilege,
+} from '../entities.js';
 import { fieldValueSchema, type FieldValue } from '../operations.js';
 import { normalizeObservation } from './normalize.js';
 import { identityNaturalKey } from './keys.js';
@@ -106,6 +112,28 @@ export interface IdentityCandidate {
   confidence: Confidence;
 }
 
+/** Fields a host-artifact carries besides its device/confidence envelope. */
+export type HostArtifactCandidateFields = Pick<
+  HostArtifact,
+  | 'kind'
+  | 'name'
+  | 'path'
+  | 'command'
+  | 'persistenceKind'
+  | 'sha256'
+  | 'publisher'
+  | 'version'
+  | 'remoteAccess'
+>;
+
+export interface HostArtifactCandidate extends HostArtifactCandidateFields {
+  targetKind: 'hostArtifact';
+  key: string;
+  deviceKey: string;
+  observations: ObservationId[];
+  confidence: Confidence;
+}
+
 export interface RoleAssignmentCandidate {
   targetKind: 'roleAssignment';
   key: string;
@@ -123,6 +151,7 @@ export interface CandidateSet {
   addresses: AddressCandidate[];
   services: ServiceCandidate[];
   flows: FlowCandidate[];
+  hostArtifacts: HostArtifactCandidate[];
   identities: IdentityCandidate[];
   roleAssignments: RoleAssignmentCandidate[];
 }
@@ -384,6 +413,10 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
       obs: Observation[];
     }
   >();
+  const hostArtifacts = new Map<
+    string,
+    { deviceKey: string; fields: HostArtifactCandidateFields; obs: Observation[] }
+  >();
 
   const identityKeyOf = (
     identity: { scope: IdentityScope; name: string; domain: string },
@@ -490,6 +523,35 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
         identities.set(key, entry);
         break;
       }
+      case 'hostArtifact': {
+        const deviceKey = deviceKeyFor(observation);
+        // natural key: (host, kind, name, path) — repeated observations of the
+        // same artifact collapse instead of duplicating (§3.7)
+        const key = `${deviceKey}/artifact:${claim.kind}:${claim.name}:${claim.path ?? ''}`;
+        const entry = hostArtifacts.get(key) ?? {
+          deviceKey,
+          fields: {
+            kind: claim.kind,
+            name: claim.name,
+            path: claim.path,
+            command: claim.command,
+            persistenceKind: claim.persistenceKind,
+            sha256: claim.sha256,
+            publisher: claim.publisher,
+            version: claim.version,
+            remoteAccess: claim.remoteAccess,
+          },
+          obs: new Array<Observation>(),
+        };
+        // later observations fill gaps but never overwrite a reported value
+        entry.fields.sha256 = entry.fields.sha256 ?? claim.sha256;
+        entry.fields.publisher = entry.fields.publisher || claim.publisher;
+        entry.fields.version = entry.fields.version || claim.version;
+        entry.fields.remoteAccess = entry.fields.remoteAccess || claim.remoteAccess;
+        entry.obs.push(observation);
+        hostArtifacts.set(key, entry);
+        break;
+      }
       case 'roleAssignment': {
         const deviceKey = deviceKeyFor(observation);
         const identityKey = identityKeyOf(claim.identity, deviceKey);
@@ -587,6 +649,14 @@ export function buildCandidates(rawObservations: readonly Observation[]): Candid
         confidence: combineObservations(entry.obs),
       };
     }),
+    hostArtifacts: [...hostArtifacts.entries()].map(([key, entry]) => ({
+      targetKind: 'hostArtifact',
+      key,
+      deviceKey: entry.deviceKey,
+      ...entry.fields,
+      observations: entry.obs.map((o) => o.id),
+      confidence: combineObservations(entry.obs),
+    })),
     roleAssignments: [...roleAssignments.entries()].map(([key, entry]) => ({
       targetKind: 'roleAssignment',
       key,

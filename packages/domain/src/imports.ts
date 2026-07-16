@@ -5,6 +5,8 @@ import {
   addressKindSchema,
   deviceTypeSchema,
   identityKindSchema,
+  hostArtifactKindSchema,
+  hostPersistenceKindSchema,
   identityScopeSchema,
   interfaceKindSchema,
   protocolSchema,
@@ -205,6 +207,25 @@ const identityClaimSchema = z
     message: 'a host-less identity claim must be domain-scoped',
   });
 
+/**
+ * One host security artifact (improvements M7, #64): a running process,
+ * persistence entry, installed application or file-inventory record —
+ * the detection inputs of design §3.8, keyed to their host.
+ */
+const hostArtifactClaimSchema = z.object({
+  targetKind: z.literal('hostArtifact'),
+  device: deviceHintsSchema,
+  kind: hostArtifactKindSchema,
+  name: z.string().min(1),
+  path: z.string().nullable().default(null),
+  command: z.string().default(''),
+  persistenceKind: hostPersistenceKindSchema.nullable().default(null),
+  sha256: z.string().nullable().default(null),
+  publisher: z.string().default(''),
+  version: z.string().default(''),
+  remoteAccess: z.boolean().default(false),
+});
+
 const roleAssignmentClaimSchema = z.object({
   targetKind: z.literal('roleAssignment'),
   device: deviceHintsSchema,
@@ -220,6 +241,7 @@ export const observationClaimSchema = z.discriminatedUnion('targetKind', [
   addressClaimSchema,
   serviceClaimSchema,
   flowClaimSchema,
+  hostArtifactClaimSchema,
   identityClaimSchema,
   roleAssignmentClaimSchema,
 ]);
@@ -231,6 +253,7 @@ export type InterfaceClaim = z.infer<typeof interfaceClaimSchema>;
 export type AddressClaim = z.infer<typeof addressClaimSchema>;
 export type ServiceClaim = z.infer<typeof serviceClaimSchema>;
 export type FlowClaim = z.infer<typeof flowClaimSchema>;
+export type HostArtifactClaim = z.infer<typeof hostArtifactClaimSchema>;
 export type IdentityClaim = z.infer<typeof identityClaimSchema>;
 export type RoleAssignmentClaim = z.infer<typeof roleAssignmentClaimSchema>;
 

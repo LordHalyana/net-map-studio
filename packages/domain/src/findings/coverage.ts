@@ -35,12 +35,9 @@ export type DeviceCoverage = z.infer<typeof deviceCoverageSchema>;
 /**
  * Derive per-Device coverage from the committed graph. A class counts as
  * available when the graph holds evidence-derived entities of that class for
- * the Device.
- *
- * Note (seam for M9/M5/M6): the process / persistence / installed-software /
- * file-inventory classes are optional device-state fields (ADR-0018) that are
- * not yet parsed into entities, so they read as missing until those families
- * land. When they do, this function is where their availability is wired in.
+ * the Device. The process / persistence / installed-software / file-inventory
+ * classes read from the committed hostArtifacts collection (improvements M7,
+ * #64) — the pipeline-written detection inputs of design §3.8.
  */
 export function computeDeviceCoverage(state: ProjectState): DeviceCoverage[] {
   const serviceDeviceIds = new Set(
@@ -62,6 +59,16 @@ export function computeDeviceCoverage(state: ProjectState): DeviceCoverage[] {
       .map((r) => r.deviceId)
       .filter((id): id is NonNullable<typeof id> => id != null),
   );
+  const artifactClasses = new Map<string, Set<InputClass>>();
+  for (const artifact of state.hostArtifacts) {
+    const classes = artifactClasses.get(artifact.deviceId) ?? new Set<InputClass>();
+    if (artifact.kind === 'process') classes.add('processes');
+    if (artifact.kind === 'persistence') classes.add('persistence');
+    if (artifact.kind === 'software') classes.add('installedSoftware');
+    if (artifact.kind === 'file') classes.add('fileInventory');
+    if (artifact.remoteAccess) classes.add('remoteAccess');
+    artifactClasses.set(artifact.deviceId, classes);
+  }
 
   return state.devices.map((device) => {
     const present = new Set<InputClass>();
@@ -69,6 +76,7 @@ export function computeDeviceCoverage(state: ProjectState): DeviceCoverage[] {
     if (flowDeviceIds.has(device.id)) present.add('flows');
     if (identityDeviceIds.has(device.id)) present.add('identities');
     if (roleDeviceIds.has(device.id)) present.add('roleAssignments');
+    for (const cls of artifactClasses.get(device.id) ?? []) present.add(cls);
 
     return {
       deviceId: device.id,

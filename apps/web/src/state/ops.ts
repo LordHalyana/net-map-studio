@@ -339,6 +339,12 @@ export function deleteDevicesChangeSet(state: ProjectState, deviceIds: string[])
     }
   }
 
+  for (const artifact of state.hostArtifacts) {
+    if (targetDeviceIds.has(artifact.deviceId)) {
+      ops.push(opDeleteEntity(projectId, { entityType: 'hostArtifact', entity: artifact }));
+    }
+  }
+
   for (const iface of ifaces) {
     ops.push(opDeleteEntity(projectId, { entityType: 'interface', entity: iface }));
   }

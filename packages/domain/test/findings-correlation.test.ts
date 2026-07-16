@@ -41,6 +41,7 @@ function stateWith(deviceCount: number): { state: ProjectState; ids: string[] } 
     services: [],
     policyRules: [],
     flows,
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

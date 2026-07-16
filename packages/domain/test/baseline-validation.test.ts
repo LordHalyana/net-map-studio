@@ -16,6 +16,7 @@ function stateWith(overrides: Partial<ProjectState>): ProjectState {
     services: [],
     policyRules: [],
     flows: [],
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

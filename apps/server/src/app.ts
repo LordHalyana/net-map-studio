@@ -97,13 +97,7 @@ export async function buildApp(options: AppOptions = {}) {
     providers: [stubProvider, createLocalFeedProvider(localFeedStore)],
   });
   const enrichmentService = createEnrichmentService(db, egressDoor);
-  const findingsService = createFindingsService(
-    db,
-    engine,
-    importStore,
-    provenanceStore,
-    enrichmentService,
-  );
+  const findingsService = createFindingsService(db, engine, provenanceStore, enrichmentService);
   app.decorate('importStore', importStore);
   app.decorate('egressDoor', egressDoor);
 

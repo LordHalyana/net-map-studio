@@ -220,6 +220,28 @@ export const flows = sqliteTable('flows', {
   lifecycleState: lifecycleState(),
 });
 
+/** Detection inputs per Device (improvements M7, #64) — the Flow precedent applied to §3.8. */
+export const hostArtifacts = sqliteTable('host_artifacts', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  deviceId: text('device_id')
+    .notNull()
+    .references(() => devices.id),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  path: text('path'),
+  command: text('command').notNull(),
+  persistenceKind: text('persistence_kind'),
+  sha256: text('sha256'),
+  publisher: text('publisher').notNull(),
+  version: text('version').notNull(),
+  remoteAccess: integer('remote_access', { mode: 'boolean' }).notNull(),
+  confidence: real('confidence').notNull(),
+  lifecycleState: lifecycleState(),
+});
+
 export const identities = sqliteTable('identities', {
   id: text('id').primaryKey(),
   projectId: text('project_id')

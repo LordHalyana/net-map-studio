@@ -3,7 +3,12 @@ import {
   deviceStateReportSchema,
   type DeviceStateHost,
 } from '@netplan/import-contract';
-import type { DeviceHints, IdentityRef, ObservationDraft } from '@netplan/domain';
+import type {
+  DeviceHints,
+  HostArtifactClaim,
+  IdentityRef,
+  ObservationDraft,
+} from '@netplan/domain';
 import { guardedJsonParse } from '../guards.js';
 import type { Adapter, AdapterContext } from './types.js';
 
@@ -218,6 +223,84 @@ function hostObservations(host: DeviceStateHost): ObservationDraft[] {
         privilege: 'sudoer',
         detail: '',
       },
+    });
+  }
+
+  // --- host security artifacts (improvements M7, #64): the §3.8 detection
+  // inputs become pipeline Observations instead of analysis-time re-parses ---
+  const artifactClaim = (
+    partial: Pick<HostArtifactClaim, 'kind' | 'name'> & Partial<HostArtifactClaim>,
+  ) =>
+    claim({
+      contributor: 'stableDeviceId',
+      observedAt,
+      claim: {
+        targetKind: 'hostArtifact',
+        device: hints,
+        path: null,
+        command: '',
+        persistenceKind: null,
+        sha256: null,
+        publisher: '',
+        version: '',
+        remoteAccess: false,
+        ...partial,
+      },
+    });
+
+  for (const process of host.processes ?? []) {
+    artifactClaim({
+      kind: 'process',
+      name: process.name,
+      path: process.path ?? null,
+      command: process.commandLine ?? '',
+    });
+  }
+
+  const persistence = [
+    ...(host.startupEntries ?? []).map((e) => ({ ...e, persistenceKind: 'startup' as const })),
+    ...(host.scheduledTasks ?? []).map((e) => ({
+      ...e,
+      persistenceKind: 'scheduledTask' as const,
+    })),
+    ...(host.services ?? []).map((e) => ({
+      name: e.name,
+      command: e.binaryPath ?? '',
+      path: e.binaryPath ?? null,
+      persistenceKind: 'service' as const,
+    })),
+    ...(host.persistence ?? []).map((e) => ({ ...e, persistenceKind: 'other' as const })),
+  ];
+  for (const entry of persistence) {
+    artifactClaim({
+      kind: 'persistence',
+      name: entry.name,
+      command: entry.command ?? '',
+      path: entry.path ?? null,
+      persistenceKind: entry.persistenceKind,
+    });
+  }
+
+  const software = [
+    ...(host.packages ?? []).map((p) => ({ ...p, remoteAccess: false })),
+    ...(host.remoteAccess ?? []).map((p) => ({ ...p, remoteAccess: true })),
+  ];
+  for (const pkg of software) {
+    artifactClaim({
+      kind: 'software',
+      name: pkg.name,
+      publisher: pkg.publisher ?? '',
+      version: pkg.version ?? '',
+      remoteAccess: pkg.remoteAccess,
+    });
+  }
+
+  for (const file of host.fileInventory ?? []) {
+    artifactClaim({
+      kind: 'file',
+      name: file.path,
+      path: file.path,
+      sha256: file.sha256 ?? null,
     });
   }
 

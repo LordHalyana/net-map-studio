@@ -1,28 +1,20 @@
-import { eq } from 'drizzle-orm';
 import {
   computeDeviceCoverage,
-  deviceIdSchema,
-  evidenceIdSchema,
+  hostSecurityInventorySchema,
   inventoryCoverage,
-  observationSchema,
   reconcileFindings,
   runBuiltInAnalysis,
   DEFAULT_ENGINE_CONFIG,
   type DeviceCoverage,
   type FindingView,
+  type HostArtifact,
   type HostSecurityInventory,
   type InputClass,
 } from '@netplan/domain';
-import { deviceStateReportSchema } from '@netplan/import-contract';
 import type { Db } from '../db/index.js';
-import { observations as observationsTable } from '../db/schema.js';
 import type { Engine } from '../engine/store.js';
-import type { ImportStore } from '../imports/store.js';
 import type { ProvenanceStore } from '../imports/provenance.js';
 import type { EnrichmentService } from '../egress/enrichment.js';
-import { hostInventoryFromReport } from './host-inventory.js';
-
-const DEVICE_STATE_PARSER = 'device-state';
 
 /** A device's evaluability for the findings UI (M11 coverage surfacing). */
 export type DeviceEvaluability = DeviceCoverage;
@@ -39,64 +31,56 @@ export interface FindingsReport {
 }
 
 export function createFindingsService(
-  db: Db,
+  _db: Db,
   engine: Engine,
-  importStore: ImportStore,
   provenanceStore: ProvenanceStore,
   enrichmentService: EnrichmentService,
 ) {
   /**
-   * Map each device-state host's stable id to its committed Device id, via the
-   * provenance sidecar: a device's provenance row carries the observation it
-   * came from, and that observation's device hints carry the stable id.
+   * Build one host-security inventory per Device from the committed
+   * hostArtifacts collection (improvements M7, #64). Detection inputs are
+   * pipeline-written entities now — analysis no longer re-parses raw evidence
+   * blobs, so it keeps working after evidence is downgraded to hashOnly.
+   * Evidence refs live in the provenance sidecar, per field, like every other
+   * imported value.
    */
-  function stableIdToDeviceId(projectId: string): Map<string, string> {
-    const observationRows = db
-      .select()
-      .from(observationsTable)
-      .where(eq(observationsTable.projectId, projectId))
-      .all()
-      .map((r) => observationSchema.parse(r));
-    const observationById = new Map(observationRows.map((o) => [o.id, o] as const));
-
-    const map = new Map<string, string>();
-    for (const row of provenanceStore.listForProject(projectId)) {
-      if (row.entityType !== 'device' || !row.observationId) continue;
-      const observation = observationById.get(row.observationId);
-      if (observation?.claim.targetKind === 'device' && observation.claim.device.stableId) {
-        map.set(observation.claim.device.stableId, row.entityId);
-      }
-    }
-    return map;
-  }
-
-  /** Build one host-security inventory per committed Device from device-state evidence. */
   function buildInventories(projectId: string): HostSecurityInventory[] {
-    const stableToDevice = stableIdToDeviceId(projectId);
-    const inventories: HostSecurityInventory[] = [];
-    for (const record of importStore.listEvidence(projectId)) {
-      if (record.parserName !== DEVICE_STATE_PARSER) continue;
-      const blob = importStore.getEvidenceBlob(projectId, record.id);
-      if (!blob) continue; // hash-only retention — no raw bytes to parse
-      const raw =
-        blob.encoding === 'base64'
-          ? Buffer.from(blob.content, 'base64').toString('utf8')
-          : blob.content;
-      const parsed = deviceStateReportSchema.safeParse(safeJson(raw));
-      if (!parsed.success) continue;
-      for (const host of parsed.data.hosts) {
-        const deviceId = stableToDevice.get(host.deviceId);
-        if (!deviceId) continue; // host not reconciled to a committed Device — skip, never fabricate
-        inventories.push(
-          hostInventoryFromReport(
-            host,
-            deviceIdSchema.parse(deviceId),
-            evidenceIdSchema.parse(record.id),
-          ),
-        );
-      }
+    const state = engine.getState(projectId);
+    const byDevice = new Map<string, HostArtifact[]>();
+    for (const artifact of state.hostArtifacts) {
+      const list = byDevice.get(artifact.deviceId) ?? [];
+      list.push(artifact);
+      byDevice.set(artifact.deviceId, list);
     }
-    return inventories;
+    return [...byDevice.entries()].map(([deviceId, artifacts]) =>
+      hostSecurityInventorySchema.parse({
+        deviceId,
+        evidenceId: null,
+        files: artifacts
+          .filter((a) => a.kind === 'file')
+          .map((a) => ({ path: a.path ?? a.name, sha256: a.sha256 })),
+        processes: artifacts
+          .filter((a) => a.kind === 'process')
+          .map((a) => ({ name: a.name, path: a.path })),
+        persistence: artifacts
+          .filter((a) => a.kind === 'persistence')
+          .map((a) => ({
+            kind: a.persistenceKind ?? 'other',
+            name: a.name,
+            command: a.command,
+            path: a.path,
+          })),
+        software: artifacts
+          .filter((a) => a.kind === 'software')
+          .map((a) => ({
+            name: a.name,
+            publisher: a.publisher,
+            version: a.version,
+            remoteAccess: a.remoteAccess,
+          })),
+        collectedClasses: [],
+      }),
+    );
   }
 
   function coverageFor(
@@ -150,14 +134,6 @@ export function createFindingsService(
 }
 
 export type FindingsService = ReturnType<typeof createFindingsService>;
-
-function safeJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
 
 function dedupeClasses(classes: InputClass[]): InputClass[] {
   return [...new Set(classes)];

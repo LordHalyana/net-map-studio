@@ -31,6 +31,7 @@ function stateWith(rules: PolicyRule[], services: Service[] = [https]): ProjectS
     services,
     policyRules: rules,
     flows: [],
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

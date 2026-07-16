@@ -40,6 +40,7 @@ function emptyState(): ProjectState {
     services: [],
     policyRules: [],
     flows: [],
+    hostArtifacts: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
