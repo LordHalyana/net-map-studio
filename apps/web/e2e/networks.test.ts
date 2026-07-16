@@ -12,13 +12,13 @@ async function waitSaved(page: Page) {
 async function addDeviceViaLibrary(page: Page, deviceType: string): Promise<string> {
   const nodes = page.locator('.react-flow__node');
   const before = await nodes.count();
-  const namesBefore = await page.locator('.device-node__name').allInnerTexts();
+  const namesBefore = await page.locator('.device-node__name').allTextContents();
   await page.getByTestId(`library-item-${deviceType}`).click();
   await expect(nodes).toHaveCount(before + 1);
   let added: string[] = [];
   await expect
     .poll(async () => {
-      const namesNow = await page.locator('.device-node__name').allInnerTexts();
+      const namesNow = await page.locator('.device-node__name').allTextContents();
       added = namesNow.filter((n) => n && !namesBefore.includes(n));
       return added.length;
     })

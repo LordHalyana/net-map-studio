@@ -1,7 +1,10 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import { Box } from 'lucide-react';
 import type { Device } from '@netplan/domain';
 import { findLibraryItem } from '../library/catalog';
+import { accentStyle } from './colors';
+import { nodeAccentColor } from './roleColors';
 import type { DeviceNodeData } from './graphToFlow';
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
@@ -16,14 +19,26 @@ const lifecycleShort: Record<Device['lifecycleState'], string> = {
 };
 
 /**
- * Canvas representation of a Device: type icon, status dot, lifecycleState
- * badge, Membership tint chips, and placeholders for confidence /
- * evidence-count (wired but empty until Phase 2 — design §3.2C).
+ * Canvas representation of a Device (visual-parity M1, gap G1): role-colored
+ * border + glow, tinted icon tile, uppercase name over the primary IP.
+ * Prototype verdict (issue #43, branch proto/m1-device-node): lifecycle /
+ * confidence / evidence badges collapse into a strip that appears on hover or
+ * selection — always-on badges recreate the clutter the concept avoids. The
+ * status dot stays always-visible.
  */
 export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
-  const { device, memberships, showTint, confidence, evidenceCount, identityChips, diffState } =
-    data;
-  const glyph = findLibraryItem(device.deviceType)?.glyph ?? '▢';
+  const {
+    device,
+    memberships,
+    primaryIp,
+    showTint,
+    confidence,
+    evidenceCount,
+    identityChips,
+    diffState,
+  } = data;
+  const accent = nodeAccentColor(device, memberships);
+  const Icon = findLibraryItem(device.deviceType)?.icon ?? Box;
   const typeLabel =
     device.deviceType === 'custom' && device.customTypeLabel
       ? device.customTypeLabel
@@ -38,22 +53,24 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
   return (
     <div
       className={`device-node${selected ? ' device-node--selected' : ''}${diffClass}`}
+      style={accentStyle(accent)}
       data-testid={`device-node-${device.name}`}
     >
       <Handle type="source" position={Position.Top} id="membership" className="hidden-handle" />
       <Handle type="source" position={Position.Right} id="link-out" className="hidden-handle" />
       <Handle type="target" position={Position.Left} id="link-in" className="hidden-handle" />
-      <span className="device-node__glyph">
+      <span className="device-node__tile">
         {device.customIconKey ? (
           <img className="device-node__icon" src={device.customIconKey} alt={typeLabel} />
         ) : (
-          glyph
+          <Icon size={17} aria-hidden />
         )}
       </span>
       <div className="device-node__body">
         <span className="device-node__name">{device.name}</span>
-        <span className="device-node__meta">{typeLabel}</span>
-        {showTint && memberships.length > 0 && (
+        <span className="device-node__meta">{primaryIp ?? typeLabel}</span>
+        {/* dual-homed devices keep explicit chips; a single Membership is the tint */}
+        {showTint && memberships.length > 1 && (
           <span className="device-node__memberships" data-testid="device-memberships">
             {memberships.map((m) => (
               <span
@@ -67,11 +84,11 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
           </span>
         )}
       </div>
+      <span
+        className={`device-node__status device-node__status--${device.status}`}
+        title={`Status: ${device.status}`}
+      />
       <div className="device-node__badges">
-        <span
-          className={`device-node__status device-node__status--${device.status}`}
-          title={`Status: ${device.status}`}
-        />
         <span
           className={`device-node__lifecycle device-node__lifecycle--${device.lifecycleState}`}
           title={`Lifecycle: ${device.lifecycleState}`}

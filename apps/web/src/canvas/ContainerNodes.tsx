@@ -1,5 +1,14 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import {
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  HardDrive,
+  LayoutGrid,
+  Waypoints,
+} from 'lucide-react';
+import { accentStyle } from './colors';
 import { useAppStore } from '../state/store';
 import type { NetworkNodeData, SiteNodeData, ZoneNodeData } from './graphToFlow';
 
@@ -23,9 +32,15 @@ export const SiteNode = memo(function SiteNode({ data }: NodeProps<Node<SiteNode
           }}
           title={collapsed ? 'Expand site' : 'Collapse site'}
         >
-          {collapsed ? '▸' : '▾'}
+          {collapsed ? (
+            <ChevronRight size={12} aria-hidden />
+          ) : (
+            <ChevronDown size={12} aria-hidden />
+          )}
         </button>
-        <span className="site-node__name">🏢 {site.name}</span>
+        <span className="site-node__name">
+          <Building2 size={13} aria-hidden /> {site.name}
+        </span>
       </div>
     </div>
   );
@@ -50,15 +65,28 @@ export const ZoneNode = memo(function ZoneNode({ data }: NodeProps<Node<ZoneNode
           }}
           title={collapsed ? 'Expand zone' : 'Collapse zone'}
         >
-          {collapsed ? '▸' : '▾'}
+          {collapsed ? (
+            <ChevronRight size={12} aria-hidden />
+          ) : (
+            <ChevronDown size={12} aria-hidden />
+          )}
         </button>{' '}
-        {zone.kind === 'rack' ? '🗄' : '▦'} {zone.name}
+        {zone.kind === 'rack' ? (
+          <HardDrive size={12} aria-hidden />
+        ) : (
+          <LayoutGrid size={12} aria-hidden />
+        )}{' '}
+        {zone.name}
       </span>
     </div>
   );
 });
 
-/** A network-node is a projection of Membership, not a stored topological node (ADR-0013). */
+/**
+ * A network-node is a projection of Membership, not a stored topological node
+ * (ADR-0013). Rendered as the concept's colored VLAN rectangle (M2, gap G2):
+ * tinted icon tile, uppercase name, `VLAN nn · cidr` line, colored border+glow.
+ */
 export const NetworkNode = memo(function NetworkNode({
   data,
   selected,
@@ -67,16 +95,17 @@ export const NetworkNode = memo(function NetworkNode({
   return (
     <div
       className={`network-node${selected ? ' network-node--selected' : ''}`}
-      style={{ borderColor: color }}
+      style={accentStyle(color)}
       data-testid={`network-node-${network.name}`}
     >
       <Handle type="target" position={Position.Bottom} id="members" className="hidden-handle" />
-      <span className="network-node__glyph" style={{ background: color }} />
+      <span className="network-node__tile">
+        <Waypoints size={17} aria-hidden />
+      </span>
       <div className="network-node__body">
         <span className="network-node__name">{network.name}</span>
         <span className="network-node__meta">
-          {network.kind}
-          {network.vlanId != null ? ` · VLAN ${network.vlanId}` : ''}
+          {network.vlanId != null ? `VLAN ${network.vlanId}` : network.kind}
           {network.cidr ? ` · ${network.cidr}` : ''}
         </span>
       </div>

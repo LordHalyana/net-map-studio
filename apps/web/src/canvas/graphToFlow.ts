@@ -1,23 +1,23 @@
 import type { Edge, Node } from '@xyflow/react';
+import { PORT_DOT_MARKER } from './EdgeMarkerDefs';
+import { EDGE_LABEL_BG, EDGE_LABEL_TEXT, EDGE_NEUTRAL, FLOW_AMBER } from './colors';
 import type {
   Device,
   FieldProvenance,
   Flow,
   Link,
   Network,
+  PolicyRule,
   Position as XY,
   ProjectState,
   Site,
   Zone,
 } from '@netplan/domain';
 
-/** Stable tint per Network, used for membership edges and device chips. */
-const palette = ['#4da3ff', '#4dc38a', '#e5b455', '#c78bff', '#e06c6c', '#5bd0d0', '#9fd05b'];
+import { networkColor, networkColorMap } from './networkColor';
+import { primaryIpByDevice } from './primaryIp';
 
-export function networkColor(state: ProjectState, networkId: string): string {
-  const index = state.networks.findIndex((n) => n.id === networkId);
-  return palette[(index + palette.length) % palette.length] ?? '#4da3ff';
-}
+export { networkColor };
 
 export interface Membership {
   networkId: string;
@@ -39,7 +39,15 @@ export interface FlowOptions {
   provenance: FieldProvenance[];
   collapsedSites: string[];
   collapsedZones: string[];
+  /** Planned-rule callout cards (M4, gap G4). */
+  rules: boolean;
 }
+
+export type PolicyRuleCalloutLine = { action: PolicyRule['action']; text: string };
+export type PolicyRuleCalloutData = { lines: PolicyRuleCalloutLine[]; more: number };
+
+/** Lines a callout card shows before collapsing into "+n more" (M4). */
+export const POLICY_RULE_CALLOUT_MAX_LINES = 3;
 
 export const SITE_SIZE = { width: 460, height: 300 };
 export const SITE_COLLAPSED_SIZE = { width: 200, height: 48 };
@@ -52,6 +60,8 @@ export type NetworkNodeData = { network: Network; color: string };
 export type DeviceNodeData = {
   device: Device;
   memberships: Membership[];
+  /** Primary address for the node's second line (concept shows IP, gap G1). */
+  primaryIp: string | null;
   showTint: boolean;
   /** Highest accepted provenance confidence across fields (M8); null = manual object. */
   confidence: number | null;
@@ -95,9 +105,17 @@ export function graphToFlow(
   const collapsedZones = new Set(options.collapsedZones);
   const nodes: Node[] = [];
   const edges: Edge[] = [];
+  // Orthogonal routing with port dots (M3 prototype verdict, issue #45):
+  // smoothstep reads like the concept's right-angle lines at canvas zoom and
+  // stays soft on dense fans. React Flow wraps the marker id in url(#...).
+  const edgeType = 'smoothstep';
+  const portDots = { markerStart: PORT_DOT_MARKER, markerEnd: PORT_DOT_MARKER };
 
   const zoneById = new Map(state.zones.map((z) => [z.id, z]));
   const hiddenDeviceIds = new Set<string>();
+  const primaryIps = primaryIpByDevice(state);
+  const tintByNetwork = networkColorMap(state.networks);
+  const tint = (networkId: string) => tintByNetwork.get(networkId) ?? EDGE_NEUTRAL;
 
   // provenance badges (M8): winning confidence + distinct evidence per device
   const deviceConfidence = new Map<string, number>();
@@ -178,7 +196,7 @@ export function graphToFlow(
       .map((i) => ({
         networkId: i.networkId ?? '',
         name: state.networks.find((n) => n.id === i.networkId)?.name ?? '?',
-        color: networkColor(state, i.networkId ?? ''),
+        color: tint(i.networkId ?? ''),
         interfaceName: i.name,
       }));
     nodes.push({
@@ -190,6 +208,7 @@ export function graphToFlow(
       data: {
         device,
         memberships,
+        primaryIp: primaryIps.get(device.id) ?? null,
         showTint: options.logical,
         confidence: deviceConfidence.get(device.id) ?? null,
         evidenceCount: deviceEvidence.get(device.id)?.size ?? 0,
@@ -227,12 +246,13 @@ export function graphToFlow(
       target: targetDevice,
       sourceHandle: 'link-out',
       targetHandle: 'link-in',
-      type: 'default',
+      type: edgeType,
+      ...portDots,
       data: { linkIds: bundleLinks.map((l) => l.id) },
-      style: { stroke: '#8b94a7', strokeWidth: single ? 1.5 : 2.5 },
+      style: { stroke: EDGE_NEUTRAL, strokeWidth: single ? 1.5 : 2.5 },
       label: single ? first.label || first.kind : `${bundleLinks.length} links`,
-      labelStyle: { fill: '#d7dde8', fontSize: 10 },
-      labelBgStyle: { fill: '#161a22' },
+      labelStyle: { fill: EDGE_LABEL_TEXT, fontSize: 10 },
+      labelBgStyle: { fill: EDGE_LABEL_BG },
     });
   }
 
@@ -272,46 +292,145 @@ export function graphToFlow(
         target: targetDevice,
         sourceHandle: 'link-out',
         targetHandle: 'link-in',
-        type: 'default',
+        type: edgeType,
         animated: true,
         data: { flowIds: bundle.map((f) => f.id) },
-        style: { stroke: '#e5b455', strokeDasharray: '4 3', opacity: 0.8 },
+        style: { stroke: FLOW_AMBER, strokeDasharray: '4 3', opacity: 0.8 },
         label,
-        labelStyle: { fill: '#e5b455', fontSize: 9 },
-        labelBgStyle: { fill: '#161a22' },
+        labelStyle: { fill: FLOW_AMBER, fontSize: 9 },
+        labelBgStyle: { fill: EDGE_LABEL_BG },
       });
     }
   }
 
+  const networkPositions = new Map<string, XY>();
   if (options.logical) {
     let fallbackX = 80;
     for (const network of state.networks) {
       if (!modeVisible(network.lifecycleState, options.mode)) continue;
       const position: XY = network.layoutHints['main'] ?? { x: fallbackX, y: -140 };
       fallbackX += 220;
+      networkPositions.set(network.id, position);
       nodes.push({
         id: network.id,
         type: 'network',
         position,
-        data: { network, color: networkColor(state, network.id) },
+        data: { network, color: tint(network.id) },
       });
     }
 
+    // Every Membership draws (M2 prototype verdict, issue #44): one solid
+    // colored edge per interface — a 20-member fan in a single color stays
+    // legible, and hiding endpoint edges orphans the bottom row.
     for (const iface of state.interfaces) {
       if (!iface.networkId) continue;
       if (hiddenDeviceIds.has(iface.deviceId)) continue;
-      const color = networkColor(state, iface.networkId);
+      const color = tint(iface.networkId);
+      // solid and colored; the interface-name label is revealed on
+      // hover/selection by the M3 CSS label policy
       edges.push({
         id: `membership-${iface.id}`,
         source: iface.deviceId,
         target: iface.networkId,
         sourceHandle: 'membership',
         targetHandle: 'members',
-        type: 'default',
-        style: { stroke: color, strokeDasharray: '6 3', opacity: 0.85 },
+        type: edgeType,
+        ...portDots,
+        data: { interfaceName: iface.name },
+        style: { stroke: color, strokeWidth: 1.5, opacity: 0.9 },
         label: iface.name,
         labelStyle: { fill: color, fontSize: 9 },
-        labelBgStyle: { fill: '#161a22' },
+        labelBgStyle: { fill: EDGE_LABEL_BG },
+      });
+    }
+  }
+
+  // PolicyRule callouts (M4, gap G4): the concept's allow/deny annotation
+  // cards. Prototype verdict (issue #46): one card per (source, destination)
+  // pair at the path midpoint — destination-grouping collides with adjacent
+  // nodes, selection-only loses the concept's always-visible cards.
+  if (options.rules) {
+    const serviceById = new Map(state.services.map((s) => [s.id, s]));
+    const deviceById = new Map(state.devices.map((d) => [d.id, d]));
+
+    const anchorOf = (endpoint: PolicyRule['source']): { id: string; position: XY } | null => {
+      switch (endpoint.kind) {
+        case 'device': {
+          const device = deviceById.get(endpoint.id);
+          if (!device || hiddenDeviceIds.has(device.id)) return null;
+          return { id: device.id, position: device.position };
+        }
+        case 'interface': {
+          const deviceId = deviceByInterface.get(endpoint.id);
+          const device = deviceId ? deviceById.get(deviceId) : undefined;
+          if (!device || hiddenDeviceIds.has(device.id)) return null;
+          return { id: device.id, position: device.position };
+        }
+        case 'network':
+        case 'subnet': {
+          const position = networkPositions.get(endpoint.id);
+          return position ? { id: endpoint.id, position } : null;
+        }
+        default:
+          return null;
+      }
+    };
+
+    const groups = new Map<string, { position: XY; rules: PolicyRule[] }>();
+    for (const rule of state.policyRules) {
+      if (!modeVisible(rule.lifecycleState, options.mode)) continue;
+      const source = anchorOf(rule.source);
+      const destination = anchorOf(rule.destination);
+      const anchor = destination ?? source;
+      if (!anchor) continue;
+      const position: XY =
+        !source || !destination
+          ? { x: anchor.position.x + 190, y: anchor.position.y - 10 }
+          : {
+              x: (source.position.x + destination.position.x) / 2 + 60,
+              y: (source.position.y + destination.position.y) / 2 - 30,
+            };
+      const key = `${source?.id ?? 'none'}~${destination?.id ?? 'none'}`;
+      const group = groups.get(key) ?? { position, rules: [] };
+      group.rules.push(rule);
+      groups.set(key, group);
+    }
+
+    // stagger cards whose midpoints land in the same neighbourhood so
+    // parallel rules (staff/guest/pos → servers) don't stack
+    const occupancy = new Map<string, number>();
+    for (const [key, group] of groups) {
+      const cell = `${Math.round(group.position.x / 90)}:${Math.round(group.position.y / 60)}`;
+      const stacked = occupancy.get(cell) ?? 0;
+      occupancy.set(cell, stacked + 1);
+      group.position = { x: group.position.x, y: group.position.y + stacked * 58 };
+      const lines: PolicyRuleCalloutLine[] = group.rules
+        .slice(0, POLICY_RULE_CALLOUT_MAX_LINES)
+        .map((rule) => {
+          const service = rule.serviceId ? serviceById.get(rule.serviceId) : undefined;
+          const port =
+            service?.portStart != null
+              ? service.portEnd != null && service.portEnd !== service.portStart
+                ? ` (${service.portStart}-${service.portEnd})`
+                : ` (${service.portStart})`
+              : '';
+          return {
+            action: rule.action,
+            text: service ? `${service.name}${port}` : 'All Other',
+          };
+        });
+      nodes.push({
+        id: `policy-rule-callout-${key}`,
+        type: 'policyRuleCallout',
+        position: group.position,
+        data: {
+          lines,
+          more: Math.max(0, group.rules.length - POLICY_RULE_CALLOUT_MAX_LINES),
+        } satisfies PolicyRuleCalloutData,
+        draggable: false,
+        selectable: false,
+        focusable: false,
+        zIndex: 10,
       });
     }
   }

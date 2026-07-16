@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
+import { Box } from 'lucide-react';
 import {
   addressKindSchema,
   criticalitySchema,
@@ -10,9 +11,15 @@ import {
   type Address,
   type Device,
   type Interface,
+  type PolicyRule,
   type ProjectState,
 } from '@netplan/domain';
 import { getLog } from '../api/client';
+import { findLibraryItem } from '../library/catalog';
+import { accentStyle } from '../canvas/colors';
+import { networkColorMap } from '../canvas/networkColor';
+import { primaryIp } from '../canvas/primaryIp';
+import { nodeAccentColor } from '../canvas/roleColors';
 import { useAppStore } from '../state/store';
 import {
   buildAddress,
@@ -125,8 +132,38 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
     );
   }
 
+  // header block (visual-parity M6, gap G8)
+  const tints = networkColorMap(graph.networks);
+  const memberships = interfaces
+    .filter((i) => i.networkId)
+    .map((i) => ({ color: tints.get(i.networkId ?? '') ?? 'var(--text-dim)' }));
+  const accent = nodeAccentColor(device, memberships);
+  const HeaderIcon = findLibraryItem(device.deviceType)?.icon ?? Box;
+  const headerIp = primaryIp(graph, device.id);
+
   return (
     <div data-testid="inspector-device">
+      <div className="inspector-head">
+        <span className="inspector-head__tile" style={accentStyle(accent)}>
+          {device.customIconKey ? (
+            <img className="device-node__icon" src={device.customIconKey} alt="" />
+          ) : (
+            <HeaderIcon size={20} aria-hidden />
+          )}
+        </span>
+        <div className="inspector-head__text">
+          <span className="inspector-head__name">{device.name}</span>
+          <span className="inspector-head__ip">{headerIp ?? device.deviceType}</span>
+        </div>
+        <span className={`inspector-head__status inspector-head__status--${device.status}`}>
+          ●{' '}
+          {device.status === 'active'
+            ? 'Online'
+            : device.status === 'inactive'
+              ? 'Offline'
+              : 'Unknown'}
+        </span>
+      </div>
       <div className="inspector-actions">
         <button
           type="button"
@@ -286,9 +323,22 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         </button>
       </FieldSection>
 
+      <ConnectionsSection device={device} graph={graph} />
+
+      <DeviceRulesSection device={device} graph={graph} />
+
       <ProvenanceSection entityType="device" entityId={device.id} />
 
       <FieldSection title="Tags & notes">
+        {device.tags.length > 0 && (
+          <div className="tag-chips" data-testid="device-tags">
+            {device.tags.map((tag) => (
+              <span key={tag} className="tag-chip">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         <TextField
           label="Tags"
           value={device.tags.join(', ')}
@@ -311,6 +361,122 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         />
       </FieldSection>
     </div>
+  );
+}
+
+/**
+ * The device's connections (M6, gap G8): its Links with the peer they reach,
+ * plus its observed-Flow count. Rendered as an inspector section rather than
+ * the concept's Connections tab — three short sections don't earn tab chrome.
+ */
+function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const interfaceIds = new Set(
+    graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),
+  );
+  const describe = (interfaceId: string) => {
+    const iface = graph.interfaces.find((i) => i.id === interfaceId);
+    const peer = iface ? graph.devices.find((d) => d.id === iface.deviceId) : undefined;
+    return `${peer?.name ?? '?'} · ${iface?.name ?? '?'}`;
+  };
+  const links = graph.links.filter(
+    (l) => interfaceIds.has(l.source.id) || interfaceIds.has(l.target.id),
+  );
+  const touchesFlow = (endpoint: (typeof graph.flows)[number]['source']) =>
+    (endpoint.kind === 'device' && endpoint.id === device.id) ||
+    (endpoint.kind === 'interface' && interfaceIds.has(endpoint.id));
+  const flowCount = graph.flows.filter(
+    (f) => touchesFlow(f.source) || touchesFlow(f.destination),
+  ).length;
+  if (links.length === 0 && flowCount === 0) return null;
+
+  return (
+    <FieldSection title={`Connections (${links.length})`} testId="inspector-device-connections">
+      {links.map((link) => {
+        const outbound = interfaceIds.has(link.source.id);
+        const near = outbound ? link.source.id : link.target.id;
+        const far = outbound ? link.target.id : link.source.id;
+        return (
+          <div key={link.id} className="inspector-connection">
+            <span className="inspector-connection__kind">{link.kind}</span>
+            <span className="inspector-connection__path">
+              {describe(near)} ⟷ {describe(far)}
+            </span>
+          </div>
+        );
+      })}
+      {flowCount > 0 && (
+        <div className="inspector-connection">
+          <span className="inspector-connection__kind">flows</span>
+          <span className="inspector-connection__path">
+            {flowCount} observed flow{flowCount === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+    </FieldSection>
+  );
+}
+
+/**
+ * PolicyRules touching this Device (M6, gap G8): endpoints referencing the
+ * device, one of its interfaces, or a network it is a member of. The switch
+ * toggles logging — the concept's per-rule toggle, no schema change.
+ */
+function DeviceRulesSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const dispatch = useAppStore((s) => s.dispatch);
+  const projectId = graph.project.id;
+  const interfaceIds = new Set(
+    graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),
+  );
+  const networkIds = new Set(
+    graph.interfaces
+      .filter((i) => i.deviceId === device.id && i.networkId)
+      .map((i) => i.networkId ?? ''),
+  );
+  const touches = (endpoint: PolicyRule['source']) =>
+    (endpoint.kind === 'device' && endpoint.id === device.id) ||
+    (endpoint.kind === 'interface' && interfaceIds.has(endpoint.id)) ||
+    ((endpoint.kind === 'network' || endpoint.kind === 'subnet') && networkIds.has(endpoint.id));
+  const rules = graph.policyRules.filter((r) => touches(r.source) || touches(r.destination));
+  if (rules.length === 0) return null;
+
+  const serviceById = new Map(graph.services.map((s) => [s.id, s]));
+  return (
+    <FieldSection title={`Rules (${rules.length})`} testId="inspector-device-rules">
+      {rules.map((rule) => {
+        const service = rule.serviceId ? serviceById.get(rule.serviceId) : undefined;
+        return (
+          <div key={rule.id} className="inspector-rule">
+            <span className={`inspector-rule__action inspector-rule__action--${rule.action}`}>
+              {rule.action}
+            </span>
+            <span className="inspector-rule__service">
+              {service
+                ? `${service.name}${service.portStart != null ? ` (${service.portStart}${service.portEnd != null && service.portEnd !== service.portStart ? `-${service.portEnd}` : ''})` : ''}`
+                : 'All Other'}
+            </span>
+            <label className="switch" title="Logging">
+              <input
+                type="checkbox"
+                checked={rule.logging}
+                onChange={() =>
+                  dispatch(
+                    opSetField(
+                      projectId,
+                      'policyRule',
+                      rule.id,
+                      'logging',
+                      !rule.logging,
+                      rule.logging,
+                    ),
+                  )
+                }
+              />
+              <span className="switch__track" />
+            </label>
+          </div>
+        );
+      })}
+    </FieldSection>
   );
 }
 
@@ -345,8 +511,25 @@ function InterfaceEditor({ iface, graph }: { iface: Interface; graph: ProjectSta
     setNewAddress('');
   }
 
+  const membershipColor = iface.networkId
+    ? networkColorMap(graph.networks).get(iface.networkId)
+    : undefined;
+
   return (
     <div className="interface-editor" data-testid={`interface-${iface.name}`}>
+      <div className="interface-editor__summary">
+        <span
+          className="interface-editor__dot"
+          style={{ background: membershipColor ?? 'var(--text-dim)' }}
+          title={
+            membershipColor
+              ? (graph.networks.find((n) => n.id === iface.networkId)?.name ?? '')
+              : 'No network membership'
+          }
+        />
+        <span className="interface-editor__name">{iface.name}</span>
+        {addresses[0] && <span className="interface-editor__ip">{addresses[0].value}</span>}
+      </div>
       <div className="interface-editor__header">
         <TextField
           label="Interface"

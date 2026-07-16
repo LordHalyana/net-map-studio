@@ -20,8 +20,8 @@ test.describe('workspace shell (M4 DoD)', () => {
     }
 
     const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    // --bg: #0f1115
-    expect(bodyBg).toBe('rgb(15, 17, 21)');
+    // --bg: #0b0e13 (visual-parity M0 tokens)
+    expect(bodyBg).toBe('rgb(11, 14, 19)');
   });
 
   test('canvas pans, zooms and shows a minimap', async ({ page }) => {

@@ -66,6 +66,8 @@ test.describe('M7: import wizard, review, commit, rollback', () => {
     await page.getByTestId('nav-canvas').click();
     await expect(page.getByTestId('device-node-web01')).toBeVisible();
     await expect(page.getByTestId('device-node-db01')).toBeVisible();
+    // badge strip reveals on hover (visual-parity M1 badge policy)
+    await page.getByTestId('device-node-web01').hover();
     await expect(
       page.getByTestId('device-node-web01').locator('.device-node__lifecycle--observed'),
     ).toBeVisible();
