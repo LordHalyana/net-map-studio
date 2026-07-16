@@ -30,6 +30,16 @@ pnpm dev
 
 Open http://127.0.0.1:5173.
 
+**Seed data** — with the dev stack running, populate it with the demo scene
+(the concept image's hotel topology — devices, VLANs, links, rules, a Site
+with Zones), created through the real Operation log:
+
+```sh
+pnpm seed            # adds the "Hotel Network Plan" project if missing
+pnpm seed --reset    # delete existing projects first, so the app opens it
+pnpm seed --stress   # also seed a 20-member IoT VLAN + a dual-homed device
+```
+
 **Production-style single process** — builds everything, then runs one local
 web-server process that serves the built SPA _and_ the API from one origin
 (ADR-0002):
@@ -48,6 +58,7 @@ Open http://127.0.0.1:3001. Configure with env vars:
 | Command          | What it does                                        |
 | ---------------- | --------------------------------------------------- |
 | `pnpm build`     | Build every package                                 |
+| `pnpm seed`      | Seed the running dev server with the demo scene     |
 | `pnpm typecheck` | `tsc --noEmit` across the workspace                 |
 | `pnpm test`      | Unit + integration tests (Vitest)                   |
 | `pnpm test:e2e`  | Playwright end-to-end tests (boots its own servers) |

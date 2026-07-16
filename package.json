@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "seed": "pnpm --filter @netplan/web seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

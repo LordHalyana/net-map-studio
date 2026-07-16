@@ -13,12 +13,17 @@ import {
   networkSchema,
   newId,
   projectSchema,
+  siteIdSchema,
+  siteSchema,
+  zoneIdSchema,
+  zoneSchema,
   type Device,
   type Interface,
   type Network,
   type Operation,
   type Position,
   type Project,
+  type Zone,
 } from '@netplan/domain';
 import { z } from 'zod';
 import {
@@ -51,6 +56,8 @@ interface DeviceSpec {
   customTypeLabel?: string;
   vendor?: string;
   model?: string;
+  /** Containment (ADR-0013): position becomes zone-relative. */
+  zoneId?: Zone['id'];
 }
 
 function demoDevice(projectId: string, spec: DeviceSpec): Device {
@@ -64,6 +71,7 @@ function demoDevice(projectId: string, spec: DeviceSpec): Device {
     model: spec.model ?? '',
     status: 'active',
     position: spec.position,
+    zoneId: spec.zoneId ?? null,
   });
 }
 
@@ -90,10 +98,12 @@ function demoNetwork(projectId: string, spec: NetworkSpec): Network {
  * Seed (or find) the demo project on a running server; returns the Project.
  * `stress` adds the two cases the concept image dodges — a 20-member IoT
  * VLAN and a dual-homed device — for judging fan-out and multi-membership.
+ * `structure` adds a Site with two Zones and zoned devices so Containment
+ * (collapse/expand, zone moves) has data to exercise (local-dev seed).
  */
 export async function seedDemoScene(
   apiBase: string,
-  options: { stress?: boolean } = {},
+  options: { stress?: boolean; structure?: boolean } = {},
 ): Promise<Project> {
   const projects = await api(apiBase, '/projects', z.array(projectSchema));
   const existing = projects.find((p) => p.name === DEMO_PROJECT_NAME);
@@ -282,6 +292,55 @@ export async function seedDemoScene(
     ops.push(opCreateEntity(pid, { entityType: 'device', entity: dualHomed }));
     pushIface(buildInterface(dualHomed, 'eth0', { networkId: staff.id }), '192.168.10.40');
     pushIface(buildInterface(dualHomed, 'eth1', { networkId: pos.id }), '192.168.40.40');
+  }
+
+  // -- structure (local-dev seed): Site › Zones › zoned devices (ADR-0013) --
+  if (options.structure) {
+    const site = siteSchema.parse({
+      id: newId(siteIdSchema),
+      projectId: pid,
+      name: 'Main Office',
+      position: { x: 60, y: 1000 },
+    });
+    const serverRoom = zoneSchema.parse({
+      id: newId(zoneIdSchema),
+      projectId: pid,
+      siteId: site.id,
+      name: 'Server Room',
+      kind: 'rack',
+      position: { x: 20, y: 44 },
+    });
+    const frontDesk = zoneSchema.parse({
+      id: newId(zoneIdSchema),
+      projectId: pid,
+      siteId: site.id,
+      name: 'Front Desk',
+      kind: 'room',
+      position: { x: 240, y: 44 },
+    });
+    ops.push(
+      opCreateEntity(pid, { entityType: 'site', entity: site }),
+      opCreateEntity(pid, { entityType: 'zone', entity: serverRoom }),
+      opCreateEntity(pid, { entityType: 'zone', entity: frontDesk }),
+    );
+    const rackSwitch = demoDevice(pid, {
+      name: 'Rack Switch',
+      deviceType: 'switch',
+      position: { x: 24, y: 48 },
+      zoneId: serverRoom.id,
+    });
+    const frontDeskPc = demoDevice(pid, {
+      name: 'Front Desk PC',
+      deviceType: 'workstation',
+      position: { x: 24, y: 48 },
+      zoneId: frontDesk.id,
+    });
+    ops.push(
+      opCreateEntity(pid, { entityType: 'device', entity: rackSwitch }),
+      opCreateEntity(pid, { entityType: 'device', entity: frontDeskPc }),
+    );
+    pushIface(buildInterface(rackSwitch, 'eth0', { networkId: servers.id }), '192.168.30.20');
+    pushIface(buildInterface(frontDeskPc, 'eth0', { networkId: staff.id }), '192.168.10.30');
   }
 
   // -- links (concept trunk lines) --

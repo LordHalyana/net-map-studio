@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
-    "visual:capture": "tsx e2e/visual-capture.ts"
+    "visual:capture": "tsx e2e/visual-capture.ts",
+    "seed": "tsx e2e/seed-dev.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
