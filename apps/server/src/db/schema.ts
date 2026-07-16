@@ -28,6 +28,7 @@ import type {
   ProvenanceStatus,
   RolePrivilege,
   SettableEntityType,
+  Size,
 } from '@netplan/domain';
 
 /**
@@ -42,6 +43,8 @@ import type {
 const lifecycleState = () => text('lifecycle_state').$type<LifecycleState>().notNull();
 const tags = () => text('tags', { mode: 'json' }).$type<string[]>().notNull();
 const position = () => text('position', { mode: 'json' }).$type<Position>().notNull();
+/** Operator-set container size (M1, #58); null = renderer default. */
+const size = () => text('size', { mode: 'json' }).$type<Size | null>();
 
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
@@ -62,6 +65,7 @@ export const sites = sqliteTable('sites', {
   tags: tags(),
   notes: text('notes').notNull(),
   position: position(),
+  size: size(),
 });
 
 export const zones = sqliteTable('zones', {
@@ -79,6 +83,7 @@ export const zones = sqliteTable('zones', {
   tags: tags(),
   notes: text('notes').notNull(),
   position: position(),
+  size: size(),
 });
 
 export const devices = sqliteTable('devices', {

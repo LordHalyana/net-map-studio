@@ -164,7 +164,7 @@ export function graphToFlow(
       type: 'site',
       position: site.position,
       data: { site, collapsed: isCollapsed },
-      style: isCollapsed ? { ...SITE_COLLAPSED_SIZE } : { ...SITE_SIZE },
+      style: isCollapsed ? { ...SITE_COLLAPSED_SIZE } : { ...(site.size ?? SITE_SIZE) },
       zIndex: -20,
     });
   }
@@ -179,7 +179,7 @@ export function graphToFlow(
       extent: 'parent',
       position: zone.position,
       data: { zone, collapsed: zoneCollapsed },
-      style: zoneCollapsed ? { ...ZONE_COLLAPSED_SIZE } : { ...ZONE_SIZE },
+      style: zoneCollapsed ? { ...ZONE_COLLAPSED_SIZE } : { ...(zone.size ?? ZONE_SIZE) },
       hidden: siteCollapsed,
       zIndex: -10,
     });

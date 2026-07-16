@@ -22,6 +22,10 @@ import { confidenceSchema } from './confidence.js';
 const positionSchema = z.object({ x: z.number(), y: z.number() });
 export type Position = z.infer<typeof positionSchema>;
 
+/** Operator-set container dimensions; null = the renderer's default size. */
+const sizeSchema = z.object({ width: z.number().positive(), height: z.number().positive() });
+export type Size = z.infer<typeof sizeSchema>;
+
 /**
  * Per-(network, view) layout hints (ADR-0013): a network-node on the canvas is
  * a projection of Membership, so its position is a hint keyed by view id, not
@@ -49,6 +53,7 @@ export const siteSchema = z.object({
   tags: tagsSchema,
   notes: z.string().default(''),
   position: positionSchema.default({ x: 0, y: 0 }),
+  size: sizeSchema.nullable().default(null),
 });
 export type Site = z.infer<typeof siteSchema>;
 
@@ -73,6 +78,7 @@ export const zoneSchema = z.object({
   tags: tagsSchema,
   notes: z.string().default(''),
   position: positionSchema.default({ x: 0, y: 0 }),
+  size: sizeSchema.nullable().default(null),
 });
 export type Zone = z.infer<typeof zoneSchema>;
 

@@ -1000,6 +1000,23 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* container resize handle (M1, #58) — visible only while selected */
+.container-resize-handle {
+  background: transparent;
+  border: none;
+  width: 14px;
+  height: 14px;
+}
+
+.container-resize-handle__grip {
+  position: absolute;
+  inset: 0;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  border-bottom-right-radius: 6px;
+  cursor: nwse-resize;
+}
+
 /* concept VLAN rectangle (visual-parity M2, gap G2) */
 .network-node {
   --node-accent: var(--accent);
