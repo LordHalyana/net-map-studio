@@ -1,6 +1,13 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { Building2, ChevronDown, ChevronRight, HardDrive, LayoutGrid } from 'lucide-react';
+import {
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  HardDrive,
+  LayoutGrid,
+  Waypoints,
+} from 'lucide-react';
 import { useAppStore } from '../state/store';
 import type { NetworkNodeData, SiteNodeData, ZoneNodeData } from './graphToFlow';
 
@@ -74,7 +81,11 @@ export const ZoneNode = memo(function ZoneNode({ data }: NodeProps<Node<ZoneNode
   );
 });
 
-/** A network-node is a projection of Membership, not a stored topological node (ADR-0013). */
+/**
+ * A network-node is a projection of Membership, not a stored topological node
+ * (ADR-0013). Rendered as the concept's colored VLAN rectangle (M2, gap G2):
+ * tinted icon tile, uppercase name, `VLAN nn · cidr` line, colored border+glow.
+ */
 export const NetworkNode = memo(function NetworkNode({
   data,
   selected,
@@ -83,16 +94,17 @@ export const NetworkNode = memo(function NetworkNode({
   return (
     <div
       className={`network-node${selected ? ' network-node--selected' : ''}`}
-      style={{ borderColor: color }}
+      style={{ '--node-accent': color } as React.CSSProperties}
       data-testid={`network-node-${network.name}`}
     >
       <Handle type="target" position={Position.Bottom} id="members" className="hidden-handle" />
-      <span className="network-node__glyph" style={{ background: color }} />
+      <span className="network-node__tile">
+        <Waypoints size={17} aria-hidden />
+      </span>
       <div className="network-node__body">
         <span className="network-node__name">{network.name}</span>
         <span className="network-node__meta">
-          {network.kind}
-          {network.vlanId != null ? ` · VLAN ${network.vlanId}` : ''}
+          {network.vlanId != null ? `VLAN ${network.vlanId}` : network.kind}
           {network.cidr ? ` · ${network.cidr}` : ''}
         </span>
       </div>

@@ -86,8 +86,15 @@ function demoNetwork(projectId: string, spec: NetworkSpec): Network {
   });
 }
 
-/** Seed (or find) the demo project on a running server; returns the Project. */
-export async function seedDemoScene(apiBase: string): Promise<Project> {
+/**
+ * Seed (or find) the demo project on a running server; returns the Project.
+ * `stress` adds the two cases the concept image dodges — a 20-member IoT
+ * VLAN and a dual-homed device — for judging fan-out and multi-membership.
+ */
+export async function seedDemoScene(
+  apiBase: string,
+  options: { stress?: boolean } = {},
+): Promise<Project> {
   const projects = await api(apiBase, '/projects', z.array(projectSchema));
   const existing = projects.find((p) => p.name === DEMO_PROJECT_NAME);
   if (existing) return existing;
@@ -243,6 +250,34 @@ export async function seedDemoScene(apiBase: string): Promise<Project> {
     if (!spec) return;
     pushIface(buildInterface(device, 'eth0', { networkId: spec.network.id }), spec.ip);
   });
+
+  // -- stress cases (M2 prototype): 20-member VLAN + a dual-homed device --
+  if (options.stress) {
+    const iot = demoNetwork(pid, {
+      name: 'IoT VLAN 60',
+      vlanId: 60,
+      cidr: '192.168.60.0/24',
+      position: { x: 1210, y: 540 },
+    });
+    ops.push(opCreateEntity(pid, { entityType: 'network', entity: iot }));
+    for (let i = 0; i < 20; i++) {
+      const sensor = demoDevice(pid, {
+        name: `Sensor ${i + 1}`,
+        deviceType: 'iotDevice',
+        position: { x: 1130 + (i % 5) * 95, y: 840 + Math.floor(i / 5) * 70 },
+      });
+      ops.push(opCreateEntity(pid, { entityType: 'device', entity: sensor }));
+      pushIface(buildInterface(sensor, 'eth0', { networkId: iot.id }), `192.168.60.${11 + i}`);
+    }
+    const dualHomed = demoDevice(pid, {
+      name: 'Office Printer',
+      deviceType: 'printer',
+      position: { x: 560, y: 860 },
+    });
+    ops.push(opCreateEntity(pid, { entityType: 'device', entity: dualHomed }));
+    pushIface(buildInterface(dualHomed, 'eth0', { networkId: staff.id }), '192.168.10.40');
+    pushIface(buildInterface(dualHomed, 'eth1', { networkId: pos.id }), '192.168.40.40');
+  }
 
   // -- links (concept trunk lines) --
   ops.push(opCreateLink(pid, buildLink(pid, internetWan.id, fwWan.id, 'cable', 'uplink')));

@@ -311,10 +311,15 @@ export function graphToFlow(
       });
     }
 
+    // Every Membership draws (M2 prototype verdict, issue #44): one solid
+    // colored edge per interface — a 20-member fan in a single color stays
+    // legible, and hiding endpoint edges orphans the bottom row.
     for (const iface of state.interfaces) {
       if (!iface.networkId) continue;
       if (hiddenDeviceIds.has(iface.deviceId)) continue;
       const color = networkColor(state, iface.networkId);
+      // solid, colored, unlabeled: the line itself is the membership; the
+      // interface name lives in the edge data for hover/selection (M3)
       edges.push({
         id: `membership-${iface.id}`,
         source: iface.deviceId,
@@ -322,10 +327,8 @@ export function graphToFlow(
         sourceHandle: 'membership',
         targetHandle: 'members',
         type: 'default',
-        style: { stroke: color, strokeDasharray: '6 3', opacity: 0.85 },
-        label: iface.name,
-        labelStyle: { fill: color, fontSize: 9 },
-        labelBgStyle: { fill: '#161a22' },
+        data: { interfaceName: iface.name },
+        style: { stroke: color, strokeWidth: 1.5, opacity: 0.9 },
       });
     }
   }

@@ -535,35 +535,52 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* concept VLAN rectangle (visual-parity M2, gap G2) */
 .network-node {
+  --node-accent: var(--accent);
+
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 150px;
-  padding: 8px 10px;
+  gap: 9px;
+  min-width: 170px;
+  padding: 9px 12px;
   background: var(--bg-raised);
-  border: 1.5px solid var(--accent);
-  border-radius: 999px;
+  border: 1.5px solid var(--node-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--node-accent) 20%, transparent);
   position: relative;
 }
 
 .network-node--selected {
-  box-shadow: 0 0 0 2px rgb(255 255 255 / 25%);
+  box-shadow:
+    0 0 0 2px var(--node-accent),
+    0 0 18px color-mix(in srgb, var(--node-accent) 35%, transparent);
 }
 
-.network-node__glyph {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.network-node__tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--node-accent) 13%, transparent);
+  color: var(--node-accent);
+  flex-shrink: 0;
 }
 
 .network-node__body {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .network-node__name {
-  font-weight: 600;
+  font-weight: 650;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .network-node__meta {
