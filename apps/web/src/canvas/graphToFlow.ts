@@ -1,4 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
+import { PORT_DOT_MARKER } from './EdgeMarkerDefs';
 import type {
   Device,
   FieldProvenance,
@@ -93,6 +94,11 @@ export function graphToFlow(
   const collapsedZones = new Set(options.collapsedZones);
   const nodes: Node[] = [];
   const edges: Edge[] = [];
+  // Orthogonal routing with port dots (M3 prototype verdict, issue #45):
+  // smoothstep reads like the concept's right-angle lines at canvas zoom and
+  // stays soft on dense fans. React Flow wraps the marker id in url(#...).
+  const edgeType = 'smoothstep';
+  const portDots = { markerStart: PORT_DOT_MARKER, markerEnd: PORT_DOT_MARKER };
 
   const zoneById = new Map(state.zones.map((z) => [z.id, z]));
   const hiddenDeviceIds = new Set<string>();
@@ -241,7 +247,8 @@ export function graphToFlow(
       target: targetDevice,
       sourceHandle: 'link-out',
       targetHandle: 'link-in',
-      type: 'default',
+      type: edgeType,
+      ...portDots,
       data: { linkIds: bundleLinks.map((l) => l.id) },
       style: { stroke: '#8b94a7', strokeWidth: single ? 1.5 : 2.5 },
       label: single ? first.label || first.kind : `${bundleLinks.length} links`,
@@ -286,7 +293,7 @@ export function graphToFlow(
         target: targetDevice,
         sourceHandle: 'link-out',
         targetHandle: 'link-in',
-        type: 'default',
+        type: edgeType,
         animated: true,
         data: { flowIds: bundle.map((f) => f.id) },
         style: { stroke: '#e5b455', strokeDasharray: '4 3', opacity: 0.8 },
@@ -318,17 +325,21 @@ export function graphToFlow(
       if (!iface.networkId) continue;
       if (hiddenDeviceIds.has(iface.deviceId)) continue;
       const color = networkColor(state, iface.networkId);
-      // solid, colored, unlabeled: the line itself is the membership; the
-      // interface name lives in the edge data for hover/selection (M3)
+      // solid and colored; the interface-name label is revealed on
+      // hover/selection by the M3 CSS label policy
       edges.push({
         id: `membership-${iface.id}`,
         source: iface.deviceId,
         target: iface.networkId,
         sourceHandle: 'membership',
         targetHandle: 'members',
-        type: 'default',
+        type: edgeType,
+        ...portDots,
         data: { interfaceName: iface.name },
         style: { stroke: color, strokeWidth: 1.5, opacity: 0.9 },
+        label: iface.name,
+        labelStyle: { fill: color, fontSize: 9 },
+        labelBgStyle: { fill: '#161a22' },
       });
     }
   }

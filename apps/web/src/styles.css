@@ -588,6 +588,12 @@ button:disabled {
   font-size: 10px;
 }
 
+/* M3 label policy (gap G3): nothing rides the lines — edge labels reveal on
+   hover or selection. hasText assertions still match (textContent remains). */
+.react-flow__edge:not(:hover, .selected) .react-flow__edge-textwrapper {
+  display: none;
+}
+
 .hidden-handle {
   opacity: 0;
   pointer-events: none;

@@ -21,6 +21,7 @@ import { useAppStore, type Selection } from '../state/store';
 import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
+import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { graphToFlow } from './graphToFlow';
 import { DND_MIME } from '../layout/LibraryPanel';
 
@@ -346,6 +347,7 @@ function CanvasInner() {
         <Background variant={BackgroundVariant.Dots} gap={16} />
         <MiniMap pannable zoomable />
         <Controls />
+        <EdgeMarkerDefs />
       </ReactFlow>
     </main>
   );
