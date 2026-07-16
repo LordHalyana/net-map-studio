@@ -22,3 +22,5 @@ blob-report/
 Thumbs.db
 *.db-shm
 *.db-wal
+.visual/
+.visual-data/

@@ -1,15 +1,44 @@
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --bg-panel: #161a22;
-  --bg-raised: #1d2330;
-  --border: #262c38;
+
+  /* base surfaces & text (sampled from concept_design_netplanner.png, M0) */
+  --bg: #0b0e13;
+  --bg-panel: #10151d;
+  --bg-raised: #171e28;
+  --border: #242c39;
   --text: #d7dde8;
   --text-dim: #8b94a7;
+
+  /* semantic accents; --accent stays the legacy blue alias until M7 */
   --accent: #4da3ff;
-  --ok: #4dc38a;
+  --accent-green: #3ddc97;
+  --ok: #3ddc97;
   --warn: #e5b455;
-  --danger: #e06c6c;
+  --danger: #e05252;
+
+  /* role colors for canvas nodes (gap G1) */
+  --role-internet: #3ddc97;
+  --role-firewall: #e05252;
+  --role-vpn: #aab4c4;
+  --role-core: #4da3ff;
+  --role-server: #d7dde8;
+  --role-endpoint: #8b94a7;
+
+  /* VLAN palette (gap G2) — keep in sync with VLAN_PALETTE in networkColor.ts */
+  --vlan-1: #ff8a3d;
+  --vlan-2: #3ddc97;
+  --vlan-3: #a06bff;
+  --vlan-4: #ffc44d;
+  --vlan-5: #4da3ff;
+  --vlan-6: #5bd0d0;
+  --vlan-7: #e06c6c;
+  --vlan-8: #9fd05b;
+
+  /* shape & type scale */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --font-sans: 'Inter Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 * {
@@ -26,11 +55,7 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family:
-    'Segoe UI',
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 
@@ -176,7 +201,15 @@ button:disabled {
 
 .library-item__glyph {
   width: 18px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+.library-item:hover .library-item__glyph,
+.library-item--active .library-item__glyph {
+  color: var(--text);
 }
 
 /* ---------- inspector ---------- */
@@ -216,7 +249,8 @@ button:disabled {
 }
 
 .device-node__glyph {
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .device-node__body {
@@ -445,6 +479,16 @@ button:disabled {
 .site-node__name {
   font-weight: 600;
   color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.site-node__toggle,
+.zone-node__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .zone-node {

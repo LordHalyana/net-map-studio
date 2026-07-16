@@ -11,13 +11,9 @@ import type {
   Zone,
 } from '@netplan/domain';
 
-/** Stable tint per Network, used for membership edges and device chips. */
-const palette = ['#4da3ff', '#4dc38a', '#e5b455', '#c78bff', '#e06c6c', '#5bd0d0', '#9fd05b'];
+import { networkColor } from './networkColor';
 
-export function networkColor(state: ProjectState, networkId: string): string {
-  const index = state.networks.findIndex((n) => n.id === networkId);
-  return palette[(index + palette.length) % palette.length] ?? '#4da3ff';
-}
+export { networkColor };
 
 export interface Membership {
   networkId: string;

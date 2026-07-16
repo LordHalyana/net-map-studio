@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import { Building2, ChevronDown, ChevronRight, HardDrive, LayoutGrid } from 'lucide-react';
 import { useAppStore } from '../state/store';
 import type { NetworkNodeData, SiteNodeData, ZoneNodeData } from './graphToFlow';
 
@@ -23,9 +24,15 @@ export const SiteNode = memo(function SiteNode({ data }: NodeProps<Node<SiteNode
           }}
           title={collapsed ? 'Expand site' : 'Collapse site'}
         >
-          {collapsed ? '▸' : '▾'}
+          {collapsed ? (
+            <ChevronRight size={12} aria-hidden />
+          ) : (
+            <ChevronDown size={12} aria-hidden />
+          )}
         </button>
-        <span className="site-node__name">🏢 {site.name}</span>
+        <span className="site-node__name">
+          <Building2 size={13} aria-hidden /> {site.name}
+        </span>
       </div>
     </div>
   );
@@ -50,9 +57,18 @@ export const ZoneNode = memo(function ZoneNode({ data }: NodeProps<Node<ZoneNode
           }}
           title={collapsed ? 'Expand zone' : 'Collapse zone'}
         >
-          {collapsed ? '▸' : '▾'}
+          {collapsed ? (
+            <ChevronRight size={12} aria-hidden />
+          ) : (
+            <ChevronDown size={12} aria-hidden />
+          )}
         </button>{' '}
-        {zone.kind === 'rack' ? '🗄' : '▦'} {zone.name}
+        {zone.kind === 'rack' ? (
+          <HardDrive size={12} aria-hidden />
+        ) : (
+          <LayoutGrid size={12} aria-hidden />
+        )}{' '}
+        {zone.name}
       </span>
     </div>
   );

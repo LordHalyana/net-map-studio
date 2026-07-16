@@ -1,3 +1,13 @@
+import {
+  Building2,
+  Cloud,
+  DoorOpen,
+  LayoutGrid,
+  Map,
+  TriangleAlert,
+  Upload,
+  Users,
+} from 'lucide-react';
 import { libraryCatalog } from '../library/catalog';
 import { useAppStore } from '../state/store';
 import {
@@ -72,13 +82,13 @@ export function LibraryPanel() {
         <ul>
           {(
             [
-              ['canvas', '🗺', 'Canvas'],
-              ['imports', '⇪', 'Imports and Evidence'],
-              ['identities', '👤', 'Users and Roles'],
-              ['findings', '⚠', 'Findings'],
-              ['egress', '🚪', 'Egress and Threat Intel'],
+              ['canvas', Map, 'Canvas'],
+              ['imports', Upload, 'Imports and Evidence'],
+              ['identities', Users, 'Users and Roles'],
+              ['findings', TriangleAlert, 'Findings'],
+              ['egress', DoorOpen, 'Egress and Threat Intel'],
             ] as const
-          ).map(([key, glyph, label]) => (
+          ).map(([key, Icon, label]) => (
             <li key={key}>
               <button
                 type="button"
@@ -86,7 +96,9 @@ export function LibraryPanel() {
                 data-testid={`nav-${key}`}
                 onClick={() => setView(key)}
               >
-                <span className="library-item__glyph">{glyph}</span>
+                <span className="library-item__glyph">
+                  <Icon size={15} aria-hidden />
+                </span>
                 {label}
               </button>
             </li>
@@ -104,13 +116,17 @@ export function LibraryPanel() {
               data-testid="add-network"
               onClick={addNetwork}
             >
-              <span className="library-item__glyph">☁</span>
+              <span className="library-item__glyph">
+                <Cloud size={15} aria-hidden />
+              </span>
               Network / VLAN
             </button>
           </li>
           <li>
             <button type="button" className="library-item" data-testid="add-site" onClick={addSite}>
-              <span className="library-item__glyph">🏢</span>
+              <span className="library-item__glyph">
+                <Building2 size={15} aria-hidden />
+              </span>
               Site
             </button>
           </li>
@@ -123,7 +139,9 @@ export function LibraryPanel() {
               disabled={!graph || graph.sites.length === 0}
               title={graph?.sites.length ? 'Add a zone to the first site' : 'Add a site first'}
             >
-              <span className="library-item__glyph">▦</span>
+              <span className="library-item__glyph">
+                <LayoutGrid size={15} aria-hidden />
+              </span>
               Zone
             </button>
           </li>
@@ -146,7 +164,9 @@ export function LibraryPanel() {
                   }}
                   onClick={() => addDevice(item.deviceType)}
                 >
-                  <span className="library-item__glyph">{item.glyph}</span>
+                  <span className="library-item__glyph">
+                    <item.icon size={15} aria-hidden />
+                  </span>
                   {item.label}
                 </button>
               </li>

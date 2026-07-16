@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import { Box } from 'lucide-react';
 import type { Device } from '@netplan/domain';
 import { findLibraryItem } from '../library/catalog';
 import type { DeviceNodeData } from './graphToFlow';
@@ -23,7 +24,7 @@ const lifecycleShort: Record<Device['lifecycleState'], string> = {
 export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const { device, memberships, showTint, confidence, evidenceCount, identityChips, diffState } =
     data;
-  const glyph = findLibraryItem(device.deviceType)?.glyph ?? '▢';
+  const Icon = findLibraryItem(device.deviceType)?.icon ?? Box;
   const typeLabel =
     device.deviceType === 'custom' && device.customTypeLabel
       ? device.customTypeLabel
@@ -47,7 +48,7 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
         {device.customIconKey ? (
           <img className="device-node__icon" src={device.customIconKey} alt={typeLabel} />
         ) : (
-          glyph
+          <Icon size={16} aria-hidden />
         )}
       </span>
       <div className="device-node__body">
