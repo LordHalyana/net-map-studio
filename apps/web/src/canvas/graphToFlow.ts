@@ -15,6 +15,7 @@ import type {
   Zone,
 } from '@netplan/domain';
 
+import { footprints } from './footprints';
 import { networkColor, networkColorMap } from './networkColor';
 import { primaryIpByDevice } from './primaryIp';
 
@@ -67,59 +68,11 @@ export type PolicyRuleCalloutData = {
 /** Smoothstep edges accept lane offsets; the base Edge type omits them. */
 type CanvasEdge = Edge & { pathOptions?: { offset?: number; borderRadius?: number } };
 
-/**
- * Leaf-endpoint density (M4, #61; revisits divergence #51 as usability):
- * degree-1 devices in endpoint categories render as compact mini-nodes once
- * the scene is big enough for full cards to collide.
- */
-const COMPACT_ENDPOINT_TYPES = new Set<Device['deviceType']>([
-  'workstation',
-  'laptop',
-  'mobileDevice',
-  'posClient',
-  'paymentTerminal',
-  'printer',
-  'camera',
-  'voipDevice',
-  'iotDevice',
-]);
-export const COMPACT_LEAF_MIN_DEVICES = 9;
-
-/** Rendered footprint of a compact leaf node — auto-arrange uses it too. */
-export const COMPACT_NODE_SIZE = { width: 52, height: 44 };
-
-/** The devices that render compact (M4, #61) — one rule for canvas AND auto-arrange. */
-export function compactLeafDeviceIds(state: ProjectState): Set<string> {
-  if (state.devices.length < COMPACT_LEAF_MIN_DEVICES) return new Set();
-  const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
-  const degree = new Map<string, number>();
-  const bump = (deviceId: string | null | undefined) => {
-    if (deviceId) degree.set(deviceId, (degree.get(deviceId) ?? 0) + 1);
-  };
-  for (const link of state.links) {
-    bump(deviceByInterface.get(link.source.id));
-    bump(deviceByInterface.get(link.target.id));
-  }
-  for (const iface of state.interfaces) {
-    if (iface.networkId) bump(iface.deviceId);
-  }
-  return new Set(
-    state.devices
-      .filter((d) => COMPACT_ENDPOINT_TYPES.has(d.deviceType) && (degree.get(d.id) ?? 0) <= 1)
-      .map((d) => d.id),
-  );
-}
-
 /** Perpendicular distance a rule callout sits from its subject (M4, #61). */
 const CALLOUT_OFFSET = 110;
 
 /** Lines a callout card shows before collapsing into "+n more" (M4). */
 export const POLICY_RULE_CALLOUT_MAX_LINES = 3;
-
-export const SITE_SIZE = { width: 460, height: 300 };
-export const SITE_COLLAPSED_SIZE = { width: 200, height: 48 };
-export const ZONE_SIZE = { width: 200, height: 150 };
-export const ZONE_COLLAPSED_SIZE = { width: 170, height: 34 };
 
 export type SiteNodeData = { site: Site; collapsed: boolean };
 export type ZoneNodeData = { zone: Zone; collapsed: boolean };
@@ -179,7 +132,12 @@ export function graphToFlow(
   const nodes: Node[] = [];
   const edges: CanvasEdge[] = [];
   const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
-  const compactLeaves = compactLeafDeviceIds(state);
+  // the footprint resolver (#78) answers every "what rectangle does this
+  // node paint" question below — cards, container rects, collision rects
+  const fp = footprints(state, {
+    collapsedSites: options.collapsedSites,
+    collapsedZones: options.collapsedZones,
+  });
   // Orthogonal routing with port dots (M3 prototype verdict, issue #45):
   // smoothstep reads like the concept's right-angle lines at canvas zoom and
   // stays soft on dense fans. React Flow wraps the marker id in url(#...).
@@ -233,13 +191,13 @@ export function graphToFlow(
   }
 
   for (const site of state.sites) {
-    const isCollapsed = collapsed.has(site.id);
+    const { width, height } = fp.siteRect(site);
     nodes.push({
       id: site.id,
       type: 'site',
       position: site.position,
-      data: { site, collapsed: isCollapsed },
-      style: isCollapsed ? { ...SITE_COLLAPSED_SIZE } : { ...(site.size ?? SITE_SIZE) },
+      data: { site, collapsed: collapsed.has(site.id) },
+      style: { width, height },
       zIndex: -20,
     });
   }
@@ -254,13 +212,14 @@ export function graphToFlow(
       extent: 'parent',
       position: zone.position,
       data: { zone, collapsed: zoneCollapsed },
-      style: zoneCollapsed ? { ...ZONE_COLLAPSED_SIZE } : { ...(zone.size ?? ZONE_SIZE) },
+      style: { ...fp.zoneSize(zone) },
       hidden: siteCollapsed,
       zIndex: -10,
     });
   }
 
   for (const device of state.devices) {
+    const card = fp.device(device.id);
     const zone = device.zoneId ? zoneById.get(device.zoneId) : undefined;
     const modeHidden = !modeVisible(device.lifecycleState, options.mode);
     const hidden =
@@ -280,10 +239,14 @@ export function graphToFlow(
       parentId: zone?.id,
       extent: zone ? 'parent' : undefined,
       position: device.position,
+      // initial* advertise the footprint without fixing the CSS-driven size;
+      // the agreement test (#78) reads them back against the resolver
+      initialWidth: card.width,
+      initialHeight: card.height,
       data: {
         device,
         memberships,
-        compact: compactLeaves.has(device.id),
+        compact: fp.isCompactLeaf(device.id),
         primaryIp: primaryIps.get(device.id) ?? null,
         showTint: options.logical,
         confidence: deviceConfidence.get(device.id) ?? null,
@@ -392,6 +355,8 @@ export function graphToFlow(
         id: network.id,
         type: 'network',
         position,
+        initialWidth: fp.network().width,
+        initialHeight: fp.network().height,
         data: { network, color: tint(network.id) },
       });
     }
@@ -461,15 +426,11 @@ export function graphToFlow(
       { x: 0, y: 0 },
     );
 
-    // approximate node rectangles for the collision nudge below
+    // the rendered node rectangles for the collision nudge below
     const CALLOUT_SIZE = { width: 160, height: 72 };
     const nodeRects = [
-      ...state.devices.map((d) => ({
-        x: d.position.x,
-        y: d.position.y,
-        ...(compactLeaves.has(d.id) ? COMPACT_NODE_SIZE : { width: 190, height: 64 }),
-      })),
-      ...[...networkPositions.values()].map((p) => ({ x: p.x, y: p.y, width: 200, height: 52 })),
+      ...state.devices.map((d) => ({ ...d.position, ...fp.device(d.id) })),
+      ...[...networkPositions.values()].map((p) => ({ ...p, ...fp.network() })),
     ];
     const collides = (p: XY) =>
       nodeRects.some(
@@ -497,7 +458,7 @@ export function graphToFlow(
       let direction: XY;
       let leaderAngle: number;
       if (!source || !destination) {
-        position = { x: anchor.position.x + 190, y: anchor.position.y - 10 };
+        position = { x: anchor.position.x + fp.device(anchor.id).width, y: anchor.position.y - 10 };
         direction = { x: 1, y: 0 };
         leaderAngle = 180;
       } else {

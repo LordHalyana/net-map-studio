@@ -12,19 +12,8 @@ import type { Size } from '@netplan/domain';
 import { accentStyle } from './colors';
 import { useAppStore } from '../state/store';
 import { opSetField } from '../state/ops';
-import {
-  SITE_COLLAPSED_SIZE,
-  SITE_SIZE,
-  ZONE_COLLAPSED_SIZE,
-  ZONE_SIZE,
-  type NetworkNodeData,
-  type SiteNodeData,
-  type ZoneNodeData,
-} from './graphToFlow';
-
-/** Approximate rendered device footprint for the shrink clamp (M1, #58). */
-const DEVICE_FOOTPRINT = { width: 170, height: 64 };
-const CONTAINER_PADDING = 16;
+import { footprints } from './footprints';
+import type { NetworkNodeData, SiteNodeData, ZoneNodeData } from './graphToFlow';
 
 /**
  * Bottom-right resize handle (M1, #58). A single corner control keeps the
@@ -72,28 +61,22 @@ export const SiteNode = memo(function SiteNode({
   const dispatch = useAppStore((s) => s.dispatch);
   const { site, collapsed } = data;
 
-  // shrink clamp: never smaller than the bounding box of contained zones
-  let minWidth = SITE_COLLAPSED_SIZE.width;
-  let minHeight = SITE_COLLAPSED_SIZE.height;
-  for (const zone of graph?.zones ?? []) {
-    if (zone.siteId !== site.id) continue;
-    const rendered = collapsedZones.includes(zone.id)
-      ? ZONE_COLLAPSED_SIZE
-      : (zone.size ?? ZONE_SIZE);
-    minWidth = Math.max(minWidth, zone.position.x + rendered.width + CONTAINER_PADDING);
-    minHeight = Math.max(minHeight, zone.position.y + rendered.height + CONTAINER_PADDING);
-  }
+  // shrink clamp (#78): the footprint resolver keeps every contained zone's
+  // rendered rect inside — a Site can never shrink over a Zone
+  const fp = graph ? footprints(graph, { collapsedZones }) : null;
+  const min = fp?.siteMinSize(site.id);
+  const rect = fp?.siteRect(site);
 
   return (
     <div
       className={`site-node${collapsed ? ' site-node--collapsed' : ''}`}
       data-testid={`site-node-${site.name}`}
     >
-      {selected && !collapsed && project && (
+      {selected && !collapsed && project && min && rect && (
         <ContainerResizer
-          minWidth={minWidth}
-          minHeight={minHeight}
-          current={site.size ?? SITE_SIZE}
+          minWidth={min.width}
+          minHeight={min.height}
+          current={{ width: rect.width, height: rect.height }}
           onCommit={(size) =>
             dispatch(opSetField(project.id, 'site', site.id, 'size', size, site.size))
           }
@@ -135,28 +118,21 @@ export const ZoneNode = memo(function ZoneNode({
   const dispatch = useAppStore((s) => s.dispatch);
   const { zone, collapsed } = data;
 
-  // shrink clamp: never smaller than the bounding box of contained devices
-  let minWidth = ZONE_COLLAPSED_SIZE.width;
-  let minHeight = ZONE_COLLAPSED_SIZE.height;
-  for (const device of graph?.devices ?? []) {
-    if (device.zoneId !== zone.id) continue;
-    minWidth = Math.max(minWidth, device.position.x + DEVICE_FOOTPRINT.width + CONTAINER_PADDING);
-    minHeight = Math.max(
-      minHeight,
-      device.position.y + DEVICE_FOOTPRINT.height + CONTAINER_PADDING,
-    );
-  }
+  // shrink clamp (#78): the footprint resolver keeps every contained device's
+  // full card inside — a Zone can never shrink over a Device
+  const fp = graph ? footprints(graph) : null;
+  const min = fp?.zoneMinSize(zone.id);
 
   return (
     <div
       className={`zone-node${collapsed ? ' zone-node--collapsed' : ''}`}
       data-testid={`zone-node-${zone.name}`}
     >
-      {selected && !collapsed && project && (
+      {selected && !collapsed && project && fp && min && (
         <ContainerResizer
-          minWidth={minWidth}
-          minHeight={minHeight}
-          current={zone.size ?? ZONE_SIZE}
+          minWidth={min.width}
+          minHeight={min.height}
+          current={fp.zoneSize(zone)}
           onCommit={(size) =>
             dispatch(opSetField(project.id, 'zone', zone.id, 'size', size, zone.size))
           }

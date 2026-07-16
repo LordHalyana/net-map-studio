@@ -1,20 +1,12 @@
 import dagre from '@dagrejs/dagre';
 import type { ChangeSet, Operation, ProjectState } from '@netplan/domain';
 import { changeSet, opSetField } from '../state/ops';
-import { COMPACT_NODE_SIZE, compactLeafDeviceIds, SITE_SIZE } from './graphToFlow';
+import { footprints, type Rect } from './footprints';
 
-// Full-card footprint: generous enough that long names/IPs never make
-// siblings touch at 100% zoom (M4, #61 fan-out spacing).
-const NODE_WIDTH = 190;
-const NODE_HEIGHT = 64;
-const NETWORK_WIDTH = 200;
-const NETWORK_HEIGHT = 52;
 const NODE_SEP = 56;
 const RANK_SEP = 96;
 /** Clearance between the arranged block and the obstacle it shifts below (#75). */
 const OBSTACLE_GAP = 40;
-
-type Rect = { x: number; y: number; width: number; height: number };
 
 const intersects = (a: Rect, b: Rect) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -60,16 +52,13 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
   graph.setGraph({ rankdir: 'TB', nodesep: NODE_SEP, ranksep: RANK_SEP, marginx: 40, marginy: 40 });
   graph.setDefaultEdgeLabel(() => ({}));
 
-  // compact leaves take their mini-node footprint (M4, #61)
-  const compactLeaves = compactLeafDeviceIds(state);
+  // dagre lays out the exact footprints the canvas paints (#78)
+  const fp = footprints(state);
   for (const device of candidates) {
-    const size = compactLeaves.has(device.id)
-      ? COMPACT_NODE_SIZE
-      : { width: NODE_WIDTH, height: NODE_HEIGHT };
-    graph.setNode(device.id, { ...size });
+    graph.setNode(device.id, { ...fp.device(device.id) });
   }
   for (const network of state.networks) {
-    graph.setNode(network.id, { width: NETWORK_WIDTH, height: NETWORK_HEIGHT });
+    graph.setNode(network.id, { ...fp.network() });
   }
 
   const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
@@ -100,8 +89,6 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
 
   dagre.layout(graph);
 
-  const sizeOf = (deviceId: string) =>
-    compactLeaves.has(deviceId) ? COMPACT_NODE_SIZE : { width: NODE_WIDTH, height: NODE_HEIGHT };
   const boxOf = (id: string, size: { width: number; height: number }): Rect | null => {
     const node = graph.node(id);
     if (!node) return null;
@@ -113,17 +100,17 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
   };
 
   const arrangedDevices = movable.flatMap((device) => {
-    const box = boxOf(device.id, sizeOf(device.id));
+    const box = boxOf(device.id, fp.device(device.id));
     return box ? [{ device, box }] : [];
   });
   const arrangedNetworks = state.networks.flatMap((network) => {
-    const box = boxOf(network.id, { width: NETWORK_WIDTH, height: NETWORK_HEIGHT });
+    const box = boxOf(network.id, fp.network());
     return box ? [{ network, box }] : [];
   });
 
   const obstacles: Rect[] = [
-    ...state.sites.map((site) => ({ ...site.position, ...(site.size ?? SITE_SIZE) })),
-    ...candidates.filter((d) => d.pinned).map((d) => ({ ...d.position, ...sizeOf(d.id) })),
+    ...state.sites.map((site) => fp.siteRect(site)),
+    ...candidates.filter((d) => d.pinned).map((d) => ({ ...d.position, ...fp.device(d.id) })),
   ];
   const shift = obstacleShift(
     [...arrangedDevices, ...arrangedNetworks].map((a) => a.box),

@@ -166,6 +166,10 @@ Many-valued _logical_ belonging (a Device's Interface in a Network). Rendered as
 A per-Device flag meaning the operator has placed this Device deliberately: Auto-arrange never emits an Operation moving it, but it still participates in layout as fixed context and its footprint is respected as an obstacle.
 _Avoid_: Locked, frozen, anchored.
 
+**Footprint**:
+The rectangle a node paints on the canvas. Owned by the footprint resolver (`footprints(state)` in the canvas projection layer); the projection, Auto-arrange and the Site/Zone shrink clamps consume the resolver instead of keeping size copies of their own.
+_Avoid_: Node size, bounding box (for the rendered rect).
+
 ### Output
 
 **Report**:
