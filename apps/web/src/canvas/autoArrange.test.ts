@@ -14,6 +14,10 @@ import {
   makeSite,
 } from '@netplan/domain/fixtures';
 import { autoArrangeChangeSet } from './autoArrange';
+import { footprints } from './footprints';
+
+/** Clearance between the arranged block and the obstacle it shifts below (#75). */
+const OBSTACLE_GAP = 40;
 
 /** Mini hotel topology: internet → firewall → core, one VLAN, two endpoints. */
 function makeScene() {
@@ -135,9 +139,10 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
     const { state } = makeScene();
     const baseline = allPositions(state);
 
-    // default SITE_SIZE is 460×300 at the origin — squarely over the block
+    // the default Site rect at the origin sits squarely over the block
     const site = makeSite(state.project.id, { position: { x: 0, y: 0 } });
-    const shifted = allPositions({ ...state, sites: [site] });
+    const withSite = { ...state, sites: [site] };
+    const shifted = allPositions(withSite);
 
     const deltas = new Set<string>();
     for (const [id, before] of baseline) {
@@ -150,14 +155,15 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
     const [dx, dy] = (delta ?? '').split(',').map(Number);
     expect(dx).toBe(0); // straight down, matching TB rank direction
     expect(dy).toBeGreaterThan(0);
-    // block top lands exactly 40px below the site bottom (y 0 + height 300)
+    // block top lands exactly OBSTACLE_GAP below the rendered site bottom
+    const siteRect = footprints(withSite).siteRect(site);
     const top = Math.min(...[...shifted.values()].map((p) => p.y));
-    expect(top).toBe(300 + 40);
+    expect(top).toBe(siteRect.y + siteRect.height + OBSTACLE_GAP);
   });
 
   it('dual role: a pinned device shapes ranks yet its footprint repels the block', () => {
     const { state } = makeScene();
-    // full-card footprint (190×64) parked where the arranged block starts
+    // a full card parked where the arranged block starts
     const anchor = makeDevice(state.project.id, {
       name: 'anchor',
       deviceType: 'server',
@@ -172,7 +178,9 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
 
     const shifted = allPositions(withAnchor);
     const top = Math.min(...[...shifted.values()].map((p) => p.y));
-    expect(top).toBe(100 + 64 + 40); // 40px below the pinned card's bottom
+    // OBSTACLE_GAP below the pinned card's rendered bottom edge
+    const card = footprints(withAnchor).device(anchor.id);
+    expect(top).toBe(100 + card.height + OBSTACLE_GAP);
   });
 
   it('leaves the layout pixel-identical when no obstacle overlaps', () => {
@@ -183,7 +191,7 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
   });
 
   it('ignores an obstacle sitting in a gap between ranks (per-box, not bounding-box)', () => {
-    const { state } = makeScene();
+    const { state, internet } = makeScene();
     const baseline = allPositions(state);
     // drop a small site inside the block's bounding box but in the empty
     // band between the top rank's bottom edge and the next rank
@@ -191,8 +199,9 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
     const topY = Math.min(...positions.map((p) => p.y));
     const topNode = positions.find((p) => p.y === topY);
     if (!topNode) throw new Error('no top node');
+    const card = footprints(state).device(internet.id); // the top rank is the internet card
     const gapSite = makeSite(state.project.id, {
-      position: { x: topNode.x, y: topY + 64 + 16 }, // below the full card, above the next rank (96px ranksep)
+      position: { x: topNode.x, y: topY + card.height + 16 }, // below the card, above the next rank (96px ranksep)
       size: { width: 24, height: 24 },
     });
     expect(allPositions({ ...state, sites: [gapSite] })).toEqual(baseline);
@@ -200,13 +209,16 @@ describe('autoArrangeChangeSet obstacle avoidance (#75)', () => {
 
   it('shifts below the lowest obstacle in the block x-span, not one off to the side', () => {
     const { state } = makeScene();
-    const trigger = makeSite(state.project.id, { position: { x: 0, y: 0 } }); // 460×300
+    const trigger = makeSite(state.project.id, { position: { x: 0, y: 0 } });
     const lowerButAside = makeSite(state.project.id, {
       name: 'Depot',
-      position: { x: -2000, y: 600 }, // bottom edge 900, x-span ends at -1540
+      position: { x: -2000, y: 600 }, // lower bottom edge, x-span far left of the block
     });
-    const shifted = allPositions({ ...state, sites: [trigger, lowerButAside] });
+    const withSites = { ...state, sites: [trigger, lowerButAside] };
+    const shifted = allPositions(withSites);
+    const triggerRect = footprints(withSites).siteRect(trigger);
     const top = Math.min(...[...shifted.values()].map((p) => p.y));
-    expect(top).toBe(300 + 40); // clears the trigger, ignores the aside site
+    // clears the trigger, ignores the aside site
+    expect(top).toBe(triggerRect.y + triggerRect.height + OBSTACLE_GAP);
   });
 });
