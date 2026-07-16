@@ -1,4 +1,5 @@
 import { useAppStore } from '../state/store';
+import { Button } from '../ui';
 import { deleteDevicesChangeSet, duplicateDevicesChangeSet } from '../state/ops';
 import { DeviceInspector } from './DeviceInspector';
 import { NetworkInspector, SiteInspector, ZoneInspector } from './StructureInspectors';
@@ -24,8 +25,7 @@ export function InspectorPanel() {
         <h2 className="panel-title">Inspector</h2>
         <p data-testid="inspector-multi">{selection.ids.length} devices selected</p>
         <div className="inspector-actions">
-          <button
-            type="button"
+          <Button
             data-testid="duplicate-selection"
             onClick={() => {
               const cs = duplicateDevicesChangeSet(graph, selection.ids);
@@ -33,9 +33,9 @@ export function InspectorPanel() {
             }}
           >
             Duplicate
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="danger"
             data-testid="delete-selection"
             onClick={() => {
               const cs = deleteDevicesChangeSet(graph, selection.ids);
@@ -43,7 +43,7 @@ export function InspectorPanel() {
             }}
           >
             Delete
-          </button>
+          </Button>
         </div>
       </aside>
     );

@@ -1,5 +1,5 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
-import { ArrowLeftRight, Box, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { ArrowLeftRight, Box, ImagePlus, X } from 'lucide-react';
 import {
   addressKindSchema,
   criticalitySchema,
@@ -33,7 +33,7 @@ import {
   opSetField,
   opSetMembership,
 } from '../state/ops';
-import { Toggle } from '../ui';
+import { Button, IconButton, Toggle } from '../ui';
 import { FieldSection, SelectField, TextAreaField, TextField } from './fields';
 import { ProvenanceSection } from './ProvenanceSection';
 
@@ -44,6 +44,7 @@ function enumOptions(values: readonly string[]) {
 export function DeviceInspector({ device, graph }: { device: Device; graph: ProjectState }) {
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
+  const iconInput = useRef<HTMLInputElement>(null);
 
   const setField = (field: string, value: unknown, previousValue: unknown) =>
     dispatch(opSetField(projectId, 'device', device.id, field, value, previousValue));
@@ -166,8 +167,7 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         </span>
       </div>
       <div className="inspector-actions">
-        <button
-          type="button"
+        <Button
           data-testid="duplicate-device"
           onClick={() => {
             const cs = duplicateDevicesChangeSet(graph, [device.id]);
@@ -175,9 +175,9 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           }}
         >
           Duplicate
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="danger"
           data-testid="delete-device"
           onClick={() => {
             const cs = deleteDevicesChangeSet(graph, [device.id]);
@@ -185,25 +185,23 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           }}
         >
           Delete
-        </button>
+        </Button>
         {device.lifecycleState !== 'removedInProposal' ? (
-          <button
-            type="button"
+          <Button
             data-testid="remove-in-proposal"
             title="TO-BE proposal (ADR-0009): flag for removal without deleting the AS-IS object"
             onClick={() => setField('lifecycleState', 'removedInProposal', device.lifecycleState)}
           >
             Remove in proposal
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
+          <Button
             data-testid="restore-in-proposal"
             title="Clear the removal flag (restores the previous lifecycle state)"
             onClick={() => void restoreFromProposal()}
           >
             Restore
-          </button>
+          </Button>
         )}
       </div>
 
@@ -230,21 +228,47 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
             onCommit={(v) => setField('customTypeLabel', v, device.customTypeLabel)}
           />
         )}
-        <label className="field">
+        <div className="field">
           <span className="field__label">Icon</span>
-          <input
-            type="file"
-            accept="image/png,image/svg+xml,image/jpeg"
-            data-testid="device-icon-upload"
-            disabled={structuredTypeMissing}
-            title={
-              structuredTypeMissing
-                ? 'Assign a structured type label before uploading a custom icon'
-                : 'Upload a custom icon'
-            }
-            onChange={onIconUpload}
-          />
-        </label>
+          <div className="icon-upload">
+            {device.customIconKey && (
+              <span className="icon-upload__preview" title="Current custom icon">
+                <img src={device.customIconKey} alt="" />
+              </span>
+            )}
+            <Button
+              size="sm"
+              data-testid="device-icon-button"
+              disabled={structuredTypeMissing}
+              title={
+                structuredTypeMissing
+                  ? 'Assign a structured type label before uploading a custom icon'
+                  : 'Upload a custom icon (PNG, SVG or JPEG)'
+              }
+              onClick={() => iconInput.current?.click()}
+            >
+              <ImagePlus size={13} aria-hidden />
+              {device.customIconKey ? 'Replace…' : 'Upload icon…'}
+            </Button>
+            {device.customIconKey && (
+              <IconButton
+                icon={X}
+                size="sm"
+                label="Remove custom icon"
+                data-testid="device-icon-clear"
+                onClick={() => setField('customIconKey', '', device.customIconKey)}
+              />
+            )}
+            <input
+              ref={iconInput}
+              type="file"
+              accept="image/png,image/svg+xml,image/jpeg"
+              className="export-menu__file"
+              data-testid="device-icon-upload"
+              onChange={onIconUpload}
+            />
+          </div>
+        </div>
         <TextField
           label="Vendor"
           value={device.vendor}
