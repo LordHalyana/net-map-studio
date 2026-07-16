@@ -5,6 +5,7 @@ import {
   reconcileFindings,
   runBuiltInAnalysis,
   DEFAULT_ENGINE_CONFIG,
+  hashConfig,
   type DeviceCoverage,
   type FindingView,
   type HostArtifact,
@@ -110,6 +111,9 @@ export function createFindingsService(
    * sweep) runs only when either moves. One entry per project.
    */
   const cache = new Map<string, { key: string; report: FindingsReport }>();
+  // the rule-config hash (not just its version) — any threshold/list/override
+  // change moves it, so the cache invalidates when tuning changes (M14, #71)
+  const configHash = hashConfig(DEFAULT_ENGINE_CONFIG);
 
   function analyze(projectId: string): FindingsReport {
     const opSeq = engine.getWatermark(projectId);
@@ -121,7 +125,7 @@ export function createFindingsService(
       .map((e) => `${e.evidenceId}@${e.payload.fetchedAt}`)
       .sort()
       .join(',')}`;
-    const cacheKey = `${opSeq}:${DEFAULT_ENGINE_CONFIG.version}:${enrichmentSig}`;
+    const cacheKey = `${opSeq}:${configHash}:${enrichmentSig}`;
     const cached = cache.get(projectId);
     if (cached && cached.key === cacheKey) return cached.report;
 

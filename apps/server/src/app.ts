@@ -257,10 +257,20 @@ export async function buildApp(options: AppOptions = {}) {
     }
     // Stream assembly (ADR-0019, M14 #71): the bundle JSON is emitted in
     // chunks, reading each evidence blob one at a time, so a large project's
-    // captures never sit fully in memory as one array + one giant string.
-    recordReport(id, 'bundle', query.redact, {}, '');
-    const stream = Readable.from(importStore.streamBundle(id, state, new Date().toISOString()));
-    return reply.header('content-type', 'application/json; charset=utf-8').send(stream);
+    // captures never sit fully in memory as one array + one giant string. The
+    // audit hash (M11) is computed over the same bytes as they stream, then
+    // the Report record is written on completion.
+    const hash = createHash('sha256');
+    const hashed = (function* () {
+      for (const chunk of importStore.streamBundle(id, state, new Date().toISOString())) {
+        hash.update(chunk);
+        yield chunk;
+      }
+      recordReport(id, 'bundle', query.redact, {}, '', hash.digest('hex'));
+    })();
+    return reply
+      .header('content-type', 'application/json; charset=utf-8')
+      .send(Readable.from(hashed));
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -394,6 +404,8 @@ export async function buildApp(options: AppOptions = {}) {
     redactionProfile: string,
     parameters: Record<string, string>,
     output: string,
+    /** Precomputed digest for streamed output whose bytes we don't hold as a string. */
+    outputSha256?: string,
   ): void {
     engine.applyOperation({
       id: newId(operationIdSchema),
@@ -408,7 +420,7 @@ export async function buildApp(options: AppOptions = {}) {
           createdAt: new Date().toISOString(),
           redactionProfile,
           parameters,
-          outputSha256: createHash('sha256').update(output).digest('hex'),
+          outputSha256: outputSha256 ?? createHash('sha256').update(output).digest('hex'),
         }),
       },
     });

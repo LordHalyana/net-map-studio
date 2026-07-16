@@ -704,17 +704,9 @@ export function createImportStore(
   ): Generator<string> {
     const jobs = listJobs(projectId);
     const records = listEvidence(projectId);
+    // the manifest lists every record's hash — retained even when its blob is not
     const manifest = {
-      files: records
-        .filter((r) => {
-          const blob = db
-            .select({ id: evidenceBlobs.evidenceId })
-            .from(evidenceBlobs)
-            .where(eq(evidenceBlobs.evidenceId, r.id))
-            .get();
-          return blob !== undefined || true; // manifest lists every record's hash
-        })
-        .map((r) => ({ path: evidenceManifestPath(r), sha256: r.sha256 })),
+      files: records.map((r) => ({ path: evidenceManifestPath(r), sha256: r.sha256 })),
     };
     yield '{"format":"netplan"';
     yield `,"version":${NETPLAN_BUNDLE_VERSION}`;
@@ -909,8 +901,8 @@ export function createImportStore(
    * Secure deletion (§3.13): drop an evidence blob while preserving the
    * evidence record and its manifest hash — evidence *identity* survives, the
    * raw bytes do not. Non-undoable by design; the audit record is its only
-   * trace. Also masks any revealed secrets that traced to it (their source is
-   * gone).
+   * trace. A secret whose source blob is gone can no longer be revealed
+   * (see `revealSecret`), so its stored mask is now the only form it has.
    */
   function purgeEvidence(projectId: string, evidenceId: string): void {
     const record = db

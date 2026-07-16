@@ -6,10 +6,12 @@ import type { Adapter, AdapterContext } from './types.js';
  * Netcat-text Adapter (design §3.6; improvements M12, #69): applies an
  * operator ImportProfile — a per-line regex whose named capture groups are
  * the field map (`host` required; `port`, `status`, `banner` optional) — to
- * free-form scan/banner logs. Emits low-confidence claims per §3.7 ("a single
- * Netcat text result: low unless corroborated"): reachability corroborates an
- * existing Device through the normal pipeline; it never asserts topology of
- * its own.
+ * free-form scan/banner logs. A matched open port becomes a low-confidence
+ * Service claim per §3.7 ("a single Netcat text result: low unless
+ * corroborated") — supplementalText, or bannerInference when a banner is
+ * present. It emits Service observations only (a line needs a port); it never
+ * asserts topology of its own, so a claim corroborates an existing Device
+ * through the normal reconciliation pipeline rather than fabricating one.
  */
 
 /** Lines longer than this are skipped — a defence against pathological input. */

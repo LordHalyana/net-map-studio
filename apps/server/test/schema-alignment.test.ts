@@ -23,11 +23,20 @@ import {
   fieldProvenanceSchema,
   findingDispositionSchema,
   flowSchema,
+  hostArtifactSchema,
+  hostArtifactIdSchema,
   identitySchema,
   importJobSchema,
+  importProfileSchema,
+  importProfileIdSchema,
   importProposalSchema,
+  newId,
   observationSchema,
+  reportRecordSchema,
+  reportIdSchema,
   roleAssignmentSchema,
+  secretMatchSchema,
+  secretMatchIdSchema,
 } from '@netplan/domain';
 import {
   makeAddress,
@@ -89,6 +98,37 @@ const flow = makeFlow(project.id, { serviceId: service.id });
 const identity = makeIdentity(project.id, { deviceId: device.id });
 const roleAssignment = makeRoleAssignment(identity, { deviceId: device.id });
 const baseline = makeBaseline(project.id, { kind: 'zone', id: zone.id });
+// improvements-plan entities (M7/M11/M12/M13) have no dedicated make* fixtures
+const hostArtifact = hostArtifactSchema.parse({
+  id: newId(hostArtifactIdSchema),
+  projectId: project.id,
+  deviceId: device.id,
+  kind: 'process',
+  name: 'svchost.exe',
+  confidence: 0.9,
+});
+const report = reportRecordSchema.parse({
+  id: newId(reportIdSchema),
+  projectId: project.id,
+  type: 'bundle',
+  createdAt: '2026-07-15T00:00:00.000Z',
+});
+const importProfile = importProfileSchema.parse({
+  id: newId(importProfileIdSchema),
+  projectId: project.id,
+  name: 'nmap-grep',
+  pattern: '^(?<host>\\S+)$',
+});
+const secretMatch = secretMatchSchema.parse({
+  id: newId(secretMatchIdSchema),
+  projectId: project.id,
+  kind: 'privateKey',
+  label: 'PEM private key',
+  masked: 'MI••••••[redacted]',
+  evidenceId: newId(hostArtifactIdSchema),
+  offset: 0,
+  length: 12,
+});
 
 const cases = [
   ['project', projectSchema, project],
@@ -102,6 +142,10 @@ const cases = [
   ['service', serviceSchema, service],
   ['policyRule', policyRuleSchema, rule],
   ['flow', flowSchema, flow],
+  ['hostArtifact', hostArtifactSchema, hostArtifact],
+  ['report', reportRecordSchema, report],
+  ['importProfile', importProfileSchema, importProfile],
+  ['secretMatch', secretMatchSchema, secretMatch],
   ['identity', identitySchema, identity],
   ['roleAssignment', roleAssignmentSchema, roleAssignment],
   ['baseline', baselineSchema, baseline],
@@ -292,6 +336,10 @@ describe('entities round-trip through SQLite unchanged', () => {
       ['service', service],
       ['policyRule', rule],
       ['flow', flow],
+      ['hostArtifact', hostArtifact],
+      ['report', report],
+      ['importProfile', importProfile],
+      ['secretMatch', secretMatch],
       ['identity', identity],
       ['roleAssignment', roleAssignment],
       ['baseline', baseline],

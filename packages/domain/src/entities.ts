@@ -335,8 +335,12 @@ export const secretMatchSchema = z.object({
   label: z.string(),
   /** The masked stand-in shown everywhere by default. */
   masked: z.string(),
-  /** Evidence this was found in, for the audited reveal. */
-  evidenceId: z.string(),
+  /**
+   * Evidence this was found in, for the audited reveal. A bare uuid, not the
+   * branded EvidenceId — that brand lives in imports.ts, which imports this
+   * module, so referencing it here would be a cycle.
+   */
+  evidenceId: z.uuidv7(),
   /** Character offset in the evidence text — where reveal re-reads the original. */
   offset: z.number().int().min(0),
   /** Length of the original value, so reveal can slice it back out. */
