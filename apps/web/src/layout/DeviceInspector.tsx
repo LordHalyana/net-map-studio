@@ -16,7 +16,9 @@ import {
 } from '@netplan/domain';
 import { getLog } from '../api/client';
 import { findLibraryItem } from '../library/catalog';
-import { networkColor } from '../canvas/networkColor';
+import { accentStyle } from '../canvas/colors';
+import { networkColorMap } from '../canvas/networkColor';
+import { primaryIp } from '../canvas/primaryIp';
 import { nodeAccentColor } from '../canvas/roleColors';
 import { useAppStore } from '../state/store';
 import {
@@ -131,28 +133,18 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
   }
 
   // header block (visual-parity M6, gap G8)
+  const tints = networkColorMap(graph.networks);
   const memberships = interfaces
     .filter((i) => i.networkId)
-    .map((i) => ({
-      networkId: i.networkId ?? '',
-      name: graph.networks.find((n) => n.id === i.networkId)?.name ?? '?',
-      color: networkColor(graph, i.networkId ?? ''),
-      interfaceName: i.name,
-    }));
+    .map((i) => ({ color: tints.get(i.networkId ?? '') ?? 'var(--text-dim)' }));
   const accent = nodeAccentColor(device, memberships);
   const HeaderIcon = findLibraryItem(device.deviceType)?.icon ?? Box;
-  const interfaceIds = new Set(interfaces.map((i) => i.id));
-  const primaryIp = graph.addresses.find(
-    (a) => a.kind === 'ipv4' && interfaceIds.has(a.interfaceId),
-  )?.value;
+  const headerIp = primaryIp(graph, device.id);
 
   return (
     <div data-testid="inspector-device">
       <div className="inspector-head">
-        <span
-          className="inspector-head__tile"
-          style={{ '--node-accent': accent } as React.CSSProperties}
-        >
+        <span className="inspector-head__tile" style={accentStyle(accent)}>
           {device.customIconKey ? (
             <img className="device-node__icon" src={device.customIconKey} alt="" />
           ) : (
@@ -161,7 +153,7 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         </span>
         <div className="inspector-head__text">
           <span className="inspector-head__name">{device.name}</span>
-          <span className="inspector-head__ip">{primaryIp ?? device.deviceType}</span>
+          <span className="inspector-head__ip">{headerIp ?? device.deviceType}</span>
         </div>
         <span className={`inspector-head__status inspector-head__status--${device.status}`}>
           ●{' '}
@@ -331,6 +323,8 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         </button>
       </FieldSection>
 
+      <ConnectionsSection device={device} graph={graph} />
+
       <DeviceRulesSection device={device} graph={graph} />
 
       <ProvenanceSection entityType="device" entityId={device.id} />
@@ -367,6 +361,58 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
         />
       </FieldSection>
     </div>
+  );
+}
+
+/**
+ * The device's connections (M6, gap G8): its Links with the peer they reach,
+ * plus its observed-Flow count. Rendered as an inspector section rather than
+ * the concept's Connections tab — three short sections don't earn tab chrome.
+ */
+function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const interfaceIds = new Set(
+    graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),
+  );
+  const describe = (interfaceId: string) => {
+    const iface = graph.interfaces.find((i) => i.id === interfaceId);
+    const peer = iface ? graph.devices.find((d) => d.id === iface.deviceId) : undefined;
+    return `${peer?.name ?? '?'} · ${iface?.name ?? '?'}`;
+  };
+  const links = graph.links.filter(
+    (l) => interfaceIds.has(l.source.id) || interfaceIds.has(l.target.id),
+  );
+  const touchesFlow = (endpoint: (typeof graph.flows)[number]['source']) =>
+    (endpoint.kind === 'device' && endpoint.id === device.id) ||
+    (endpoint.kind === 'interface' && interfaceIds.has(endpoint.id));
+  const flowCount = graph.flows.filter(
+    (f) => touchesFlow(f.source) || touchesFlow(f.destination),
+  ).length;
+  if (links.length === 0 && flowCount === 0) return null;
+
+  return (
+    <FieldSection title={`Connections (${links.length})`} testId="inspector-device-connections">
+      {links.map((link) => {
+        const outbound = interfaceIds.has(link.source.id);
+        const near = outbound ? link.source.id : link.target.id;
+        const far = outbound ? link.target.id : link.source.id;
+        return (
+          <div key={link.id} className="inspector-connection">
+            <span className="inspector-connection__kind">{link.kind}</span>
+            <span className="inspector-connection__path">
+              {describe(near)} ⟷ {describe(far)}
+            </span>
+          </div>
+        );
+      })}
+      {flowCount > 0 && (
+        <div className="inspector-connection">
+          <span className="inspector-connection__kind">flows</span>
+          <span className="inspector-connection__path">
+            {flowCount} observed flow{flowCount === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+    </FieldSection>
   );
 }
 
@@ -465,7 +511,9 @@ function InterfaceEditor({ iface, graph }: { iface: Interface; graph: ProjectSta
     setNewAddress('');
   }
 
-  const membershipColor = iface.networkId ? networkColor(graph, iface.networkId) : undefined;
+  const membershipColor = iface.networkId
+    ? networkColorMap(graph.networks).get(iface.networkId)
+    : undefined;
 
   return (
     <div className="interface-editor" data-testid={`interface-${iface.name}`}>

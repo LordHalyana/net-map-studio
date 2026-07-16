@@ -3,6 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Box } from 'lucide-react';
 import type { Device } from '@netplan/domain';
 import { findLibraryItem } from '../library/catalog';
+import { accentStyle } from './colors';
 import { nodeAccentColor } from './roleColors';
 import type { DeviceNodeData } from './graphToFlow';
 
@@ -52,7 +53,7 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
   return (
     <div
       className={`device-node${selected ? ' device-node--selected' : ''}${diffClass}`}
-      style={{ '--node-accent': accent } as React.CSSProperties}
+      style={accentStyle(accent)}
       data-testid={`device-node-${device.name}`}
     >
       <Handle type="source" position={Position.Top} id="membership" className="hidden-handle" />

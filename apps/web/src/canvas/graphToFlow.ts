@@ -14,7 +14,8 @@ import type {
   Zone,
 } from '@netplan/domain';
 
-import { networkColor } from './networkColor';
+import { networkColor, networkColorMap } from './networkColor';
+import { primaryIpByDevice } from './primaryIp';
 
 export { networkColor };
 
@@ -42,11 +43,11 @@ export interface FlowOptions {
   rules: boolean;
 }
 
-export type RuleCalloutLine = { action: PolicyRule['action']; text: string };
-export type RuleCalloutData = { lines: RuleCalloutLine[]; more: number };
+export type PolicyRuleCalloutLine = { action: PolicyRule['action']; text: string };
+export type PolicyRuleCalloutData = { lines: PolicyRuleCalloutLine[]; more: number };
 
 /** Lines a callout card shows before collapsing into "+n more" (M4). */
-export const RULE_CALLOUT_MAX_LINES = 3;
+export const POLICY_RULE_CALLOUT_MAX_LINES = 3;
 
 export const SITE_SIZE = { width: 460, height: 300 };
 export const SITE_COLLAPSED_SIZE = { width: 200, height: 48 };
@@ -112,21 +113,9 @@ export function graphToFlow(
 
   const zoneById = new Map(state.zones.map((z) => [z.id, z]));
   const hiddenDeviceIds = new Set<string>();
-
-  // primary IP per device: first ipv4 (falling back to ipv6) across its interfaces
-  const primaryIpByDevice = new Map<string, string>();
-  {
-    const interfaceOwner = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
-    for (const kind of ['ipv4', 'ipv6'] as const) {
-      for (const address of state.addresses) {
-        if (address.kind !== kind) continue;
-        const deviceId = interfaceOwner.get(address.interfaceId);
-        if (deviceId && !primaryIpByDevice.has(deviceId)) {
-          primaryIpByDevice.set(deviceId, address.value);
-        }
-      }
-    }
-  }
+  const primaryIps = primaryIpByDevice(state);
+  const tintByNetwork = networkColorMap(state.networks);
+  const tint = (networkId: string) => tintByNetwork.get(networkId) ?? EDGE_NEUTRAL;
 
   // provenance badges (M8): winning confidence + distinct evidence per device
   const deviceConfidence = new Map<string, number>();
@@ -207,7 +196,7 @@ export function graphToFlow(
       .map((i) => ({
         networkId: i.networkId ?? '',
         name: state.networks.find((n) => n.id === i.networkId)?.name ?? '?',
-        color: networkColor(state, i.networkId ?? ''),
+        color: tint(i.networkId ?? ''),
         interfaceName: i.name,
       }));
     nodes.push({
@@ -219,7 +208,7 @@ export function graphToFlow(
       data: {
         device,
         memberships,
-        primaryIp: primaryIpByDevice.get(device.id) ?? null,
+        primaryIp: primaryIps.get(device.id) ?? null,
         showTint: options.logical,
         confidence: deviceConfidence.get(device.id) ?? null,
         evidenceCount: deviceEvidence.get(device.id)?.size ?? 0,
@@ -326,7 +315,7 @@ export function graphToFlow(
         id: network.id,
         type: 'network',
         position,
-        data: { network, color: networkColor(state, network.id) },
+        data: { network, color: tint(network.id) },
       });
     }
 
@@ -336,7 +325,7 @@ export function graphToFlow(
     for (const iface of state.interfaces) {
       if (!iface.networkId) continue;
       if (hiddenDeviceIds.has(iface.deviceId)) continue;
-      const color = networkColor(state, iface.networkId);
+      const color = tint(iface.networkId);
       // solid and colored; the interface-name label is revealed on
       // hover/selection by the M3 CSS label policy
       edges.push({
@@ -415,27 +404,29 @@ export function graphToFlow(
       const stacked = occupancy.get(cell) ?? 0;
       occupancy.set(cell, stacked + 1);
       group.position = { x: group.position.x, y: group.position.y + stacked * 58 };
-      const lines: RuleCalloutLine[] = group.rules.slice(0, RULE_CALLOUT_MAX_LINES).map((rule) => {
-        const service = rule.serviceId ? serviceById.get(rule.serviceId) : undefined;
-        const port =
-          service?.portStart != null
-            ? service.portEnd != null && service.portEnd !== service.portStart
-              ? ` (${service.portStart}-${service.portEnd})`
-              : ` (${service.portStart})`
-            : '';
-        return {
-          action: rule.action,
-          text: service ? `${service.name}${port}` : 'All Other',
-        };
-      });
+      const lines: PolicyRuleCalloutLine[] = group.rules
+        .slice(0, POLICY_RULE_CALLOUT_MAX_LINES)
+        .map((rule) => {
+          const service = rule.serviceId ? serviceById.get(rule.serviceId) : undefined;
+          const port =
+            service?.portStart != null
+              ? service.portEnd != null && service.portEnd !== service.portStart
+                ? ` (${service.portStart}-${service.portEnd})`
+                : ` (${service.portStart})`
+              : '';
+          return {
+            action: rule.action,
+            text: service ? `${service.name}${port}` : 'All Other',
+          };
+        });
       nodes.push({
-        id: `rule-callout-${key}`,
-        type: 'ruleCallout',
+        id: `policy-rule-callout-${key}`,
+        type: 'policyRuleCallout',
         position: group.position,
         data: {
           lines,
-          more: Math.max(0, group.rules.length - RULE_CALLOUT_MAX_LINES),
-        } satisfies RuleCalloutData,
+          more: Math.max(0, group.rules.length - POLICY_RULE_CALLOUT_MAX_LINES),
+        } satisfies PolicyRuleCalloutData,
         draggable: false,
         selectable: false,
         focusable: false,

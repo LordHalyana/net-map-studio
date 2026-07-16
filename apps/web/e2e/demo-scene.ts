@@ -211,6 +211,11 @@ export async function seedDemoScene(
       network: pos,
       ip: '192.168.40.12',
     },
+    {
+      device: { name: 'POS Printer', deviceType: 'printer', position: { x: 890, y: 720 } },
+      network: pos,
+      ip: '192.168.40.13',
+    },
   );
 
   const coreDevices = [internet, firewall, vpn, core, fileServer];

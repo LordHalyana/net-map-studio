@@ -9,12 +9,13 @@
   --text: #d7dde8;
   --text-dim: #8b94a7;
 
-  /* semantic accents; --accent stays the legacy blue alias until M7 */
-  --accent: #4da3ff;
+  /* semantic accents — the interactive accent is the concept's green (M7) */
+  --accent: #3ddc97;
   --accent-green: #3ddc97;
   --ok: #3ddc97;
   --warn: #e5b455;
   --danger: #e05252;
+  --on-accent: #04121f;
 
   /* role colors for canvas nodes (gap G1) */
   --role-internet: #3ddc97;
@@ -33,6 +34,19 @@
   --vlan-6: #5bd0d0;
   --vlan-7: #e06c6c;
   --vlan-8: #9fd05b;
+
+  /* canvas furniture — mirrored by canvas/colors.ts for React Flow inline styles */
+  --grid-line: #131926;
+  --minimap-neutral: #2c3547;
+  --containment-border: #3a4356;
+
+  /* modelled-identity chips (§3.9) */
+  --identity-local: #5bd0d0;
+  --identity-domain: #c78bff;
+
+  /* finding severity tints */
+  --severity-critical: #ff9c9c;
+  --severity-high: #ffb27a;
 
   /* shape & type scale */
   --radius-sm: 6px;
@@ -125,7 +139,7 @@ button:disabled {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #2c3a4f;
+  background: var(--bg-raised);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -594,6 +608,28 @@ button:disabled {
   font-size: 11px;
 }
 
+.inspector-connection {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.inspector-connection__kind {
+  color: var(--text-dim);
+  font-size: 11px;
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.inspector-connection__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inspector-rule {
   display: flex;
   align-items: center;
@@ -908,7 +944,7 @@ button:disabled {
 .site-node {
   width: 100%;
   height: 100%;
-  border: 1px dashed #3a4356;
+  border: 1px dashed var(--containment-border);
   border-radius: 8px;
   background: rgb(29 35 48 / 35%);
 }
@@ -948,7 +984,7 @@ button:disabled {
 .zone-node {
   width: 100%;
   height: 100%;
-  border: 1px dashed #2e3a4e;
+  border: 1px dashed var(--border);
   border-radius: 6px;
   background: rgb(38 44 56 / 30%);
   padding: 4px 8px;
@@ -1019,7 +1055,7 @@ button:disabled {
 
 /* ---------- rule callouts (visual-parity M4, gap G4) ---------- */
 
-.rule-callout {
+.policy-rule-callout {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1033,7 +1069,7 @@ button:disabled {
   pointer-events: none;
 }
 
-.rule-callout__title {
+.policy-rule-callout__title {
   font-weight: 700;
   font-size: 9px;
   letter-spacing: 0.08em;
@@ -1042,25 +1078,25 @@ button:disabled {
   margin-bottom: 2px;
 }
 
-.rule-callout__action {
+.policy-rule-callout__action {
   text-transform: capitalize;
   font-weight: 650;
 }
 
-.rule-callout__line--allow .rule-callout__action {
+.policy-rule-callout__line--allow .policy-rule-callout__action {
   color: var(--accent-green);
 }
 
-.rule-callout__line--deny .rule-callout__action,
-.rule-callout__line--reject .rule-callout__action {
+.policy-rule-callout__line--deny .policy-rule-callout__action,
+.policy-rule-callout__line--reject .policy-rule-callout__action {
   color: var(--danger);
 }
 
-.rule-callout__line--monitor .rule-callout__action {
+.policy-rule-callout__line--monitor .policy-rule-callout__action {
   color: var(--warn);
 }
 
-.rule-callout__more {
+.policy-rule-callout__more {
   color: var(--text-dim);
   font-size: 9px;
 }
@@ -1791,10 +1827,10 @@ button:disabled {
 }
 
 .identity-scope--domain {
-  color: #c78bff;
+  color: var(--identity-domain);
 }
 .identity-scope--local {
-  color: #5bd0d0;
+  color: var(--identity-local);
 }
 
 .device-node__identities {
@@ -1808,13 +1844,13 @@ button:disabled {
   font-size: 8px;
   padding: 1px 4px;
   border-radius: 6px;
-  background: #22304a;
-  color: #5bd0d0;
+  background: color-mix(in srgb, var(--identity-local) 14%, transparent);
+  color: var(--identity-local);
 }
 
 .identity-chip--domain {
-  background: #33224a;
-  color: #c78bff;
+  background: color-mix(in srgb, var(--identity-domain) 14%, transparent);
+  color: var(--identity-domain);
 }
 
 .identity-inspector dl {
@@ -1848,7 +1884,7 @@ button:disabled {
 }
 .findings-rerun {
   background: var(--accent);
-  color: #04121f;
+  color: var(--on-accent);
   border: none;
   border-radius: 6px;
   padding: 6px 12px;
@@ -1915,14 +1951,14 @@ button:disabled {
   border: 1px solid var(--border);
 }
 .severity--critical {
-  color: #ff9c9c;
+  color: var(--severity-critical);
   border-left-color: var(--danger) !important;
 }
 .finding-badge.severity--critical {
   background: rgba(224, 108, 108, 0.18);
 }
 .severity--high {
-  color: #ffb27a;
+  color: var(--severity-high);
 }
 .finding-badge.severity--high {
   background: rgba(229, 180, 85, 0.18);
@@ -1997,7 +2033,7 @@ button:disabled {
 }
 .finding-action--active {
   background: var(--accent);
-  color: #04121f;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .finding-action:disabled {

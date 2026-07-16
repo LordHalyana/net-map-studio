@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import {
   Building2,
   Cloud,
@@ -34,7 +34,7 @@ export function LibraryPanel() {
   const dispatch = useAppStore((s) => s.dispatch);
 
   /** Click, double-click and keyboard (Enter/Space on the focused item) all land here. */
-  function addDevice(deviceType: DeviceType) {
+  function addDevice(deviceType: DeviceType, customIconKey?: string) {
     if (!project || !graph) return;
     dropOffset = (dropOffset + 1) % 12;
     const existingNames = new Set(graph.devices.map((d) => d.name));
@@ -44,7 +44,17 @@ export function LibraryPanel() {
       { x: 120 + dropOffset * 40, y: 120 + dropOffset * 30 },
       existingNames,
     );
-    dispatch(opCreateDevice(project.id, device));
+    dispatch(opCreateDevice(project.id, customIconKey ? { ...device, customIconKey } : device));
+  }
+
+  /** Dropzone (G5): an image becomes a custom component carrying that icon. */
+  function addCustomWithIcon(file: File | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') addDevice('custom', reader.result);
+    };
+    reader.readAsDataURL(file);
   }
 
   function addNetwork() {
@@ -80,6 +90,7 @@ export function LibraryPanel() {
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
   const [filter, setFilter] = useState('');
+  const iconInput = useRef<HTMLInputElement>(null);
 
   const matches = (label: string) =>
     filter.trim() === '' || label.toLowerCase().includes(filter.trim().toLowerCase());
@@ -207,12 +218,28 @@ export function LibraryPanel() {
         type="button"
         className="library-dropzone"
         data-testid="library-dropzone"
-        onClick={() => addDevice('custom')}
-        title="Add a custom component; upload its icon in the inspector"
+        onClick={() => iconInput.current?.click()}
+        onDragOver={(event: DragEvent) => event.preventDefault()}
+        onDrop={(event: DragEvent) => {
+          event.preventDefault();
+          addCustomWithIcon(event.dataTransfer.files[0]);
+        }}
+        title="Drop or pick an icon image to add a custom component carrying it"
       >
         <ImagePlus size={16} aria-hidden />
         Drag custom icon here or click to upload
       </button>
+      <input
+        ref={iconInput}
+        type="file"
+        accept="image/png,image/svg+xml,image/jpeg"
+        style={{ display: 'none' }}
+        data-testid="library-dropzone-input"
+        onChange={(e) => {
+          addCustomWithIcon(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
     </nav>
   );
 }

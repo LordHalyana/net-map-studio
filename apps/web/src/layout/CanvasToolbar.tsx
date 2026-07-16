@@ -3,6 +3,7 @@ import {
   Cable,
   Grid3x3,
   Link2,
+  Maximize,
   Redo2,
   ShieldCheck,
   Undo2,
@@ -189,6 +190,18 @@ export function CanvasToolbar() {
           <ZoomIn size={15} aria-hidden />
         </button>
       </span>
+      <button
+        type="button"
+        className="canvas-toolbar__btn"
+        data-testid="toggle-fullscreen"
+        onClick={() => {
+          if (document.fullscreenElement) void document.exitFullscreen();
+          else void document.documentElement.requestFullscreen();
+        }}
+        title="Toggle fullscreen"
+      >
+        <Maximize size={15} aria-hidden />
+      </button>
     </div>
   );
 }

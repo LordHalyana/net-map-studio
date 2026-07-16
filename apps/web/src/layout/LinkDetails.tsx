@@ -1,7 +1,7 @@
 import { linkKindSchema, type Link, type ProjectState } from '@netplan/domain';
 import { useAppStore } from '../state/store';
 import { opDeleteLink, opSetField } from '../state/ops';
-import { networkColor } from '../canvas/networkColor';
+import { networkColorMap } from '../canvas/networkColor';
 import { nodeAccentColor } from '../canvas/roleColors';
 import { SelectField, TextField } from './fields';
 
@@ -12,15 +12,11 @@ function endpointInfo(graph: ProjectState, link: Link, which: 'source' | 'target
   const ip = iface
     ? graph.addresses.find((a) => a.interfaceId === iface.id && a.kind === 'ipv4')?.value
     : undefined;
+  const tints = networkColorMap(graph.networks);
   const memberships = device
     ? graph.interfaces
         .filter((i) => i.deviceId === device.id && i.networkId)
-        .map((i) => ({
-          networkId: i.networkId ?? '',
-          name: '',
-          color: networkColor(graph, i.networkId ?? ''),
-          interfaceName: i.name,
-        }))
+        .map((i) => ({ color: tints.get(i.networkId ?? '') ?? 'var(--text-dim)' }))
     : [];
   return {
     deviceName: device?.name ?? '?',

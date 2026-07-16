@@ -22,20 +22,27 @@ import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from 
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
-import { RuleCalloutNode } from './RuleCalloutNode';
+import { PolicyRuleCalloutNode } from './PolicyRuleCalloutNode';
 import { graphToFlow, type DeviceNodeData, type NetworkNodeData } from './graphToFlow';
 import { nodeAccentColor } from './roleColors';
-import { GRID_LINE, MINIMAP_NEUTRAL } from './colors';
+import { CANVAS_BG, GRID_LINE, MINIMAP_NEUTRAL } from './colors';
 import { CanvasToolbar } from '../layout/CanvasToolbar';
 import { DND_MIME } from '../layout/LibraryPanel';
 
 /** Minimap tinting (M5, gap G7): mirror each node's role/network color. */
+function isDeviceData(data: unknown): data is DeviceNodeData {
+  return typeof data === 'object' && data !== null && 'device' in data && 'memberships' in data;
+}
+
+function isNetworkData(data: unknown): data is NetworkNodeData {
+  return typeof data === 'object' && data !== null && 'network' in data && 'color' in data;
+}
+
 function minimapNodeColor(node: Node): string {
-  if (node.type === 'device') {
-    const data = node.data as DeviceNodeData;
-    return nodeAccentColor(data.device, data.memberships);
+  if (node.type === 'device' && isDeviceData(node.data)) {
+    return nodeAccentColor(node.data.device, node.data.memberships);
   }
-  if (node.type === 'network') return (node.data as NetworkNodeData).color;
+  if (node.type === 'network' && isNetworkData(node.data)) return node.data.color;
   return MINIMAP_NEUTRAL;
 }
 
@@ -44,7 +51,7 @@ const nodeTypes = {
   site: SiteNode,
   zone: ZoneNode,
   network: NetworkNode,
-  ruleCallout: RuleCalloutNode,
+  policyRuleCallout: PolicyRuleCalloutNode,
 };
 
 const nodeTypeToSelection: Record<string, Selection['entityType']> = {
@@ -296,7 +303,7 @@ function CanvasInner() {
       const element = document.querySelector('.react-flow');
       if (!(element instanceof HTMLElement)) return;
       const { toPng, toSvg } = await import('html-to-image');
-      const options = { backgroundColor: '#0b0e13', filter: excludeChrome };
+      const options = { backgroundColor: CANVAS_BG, filter: excludeChrome };
       const dataUrl =
         format === 'svg' ? await toSvg(element, options) : await toPng(element, options);
       const anchor = document.createElement('a');

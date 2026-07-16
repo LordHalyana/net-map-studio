@@ -124,13 +124,13 @@ test.describe('PolicyRules, Services & the rule editor (M8 DoD, §3.11)', () => 
     await addNamedNetwork(page, 'Callout Dst');
     await createRule(page, 'Callout Src', 'Callout Dst', 'allow');
 
-    const callout = page.getByTestId('rule-callout').first();
+    const callout = page.getByTestId('policy-rule-callout').first();
     await expect(callout).toBeVisible();
     await expect(callout).toContainText('allow:');
 
     await page.getByTestId('toggle-rules-layer').click();
-    await expect(page.getByTestId('rule-callout')).toHaveCount(0);
+    await expect(page.getByTestId('policy-rule-callout')).toHaveCount(0);
     await page.getByTestId('toggle-rules-layer').click();
-    await expect(page.getByTestId('rule-callout').first()).toBeVisible();
+    await expect(page.getByTestId('policy-rule-callout').first()).toBeVisible();
   });
 });

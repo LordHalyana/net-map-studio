@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Waypoints,
 } from 'lucide-react';
+import { accentStyle } from './colors';
 import { useAppStore } from '../state/store';
 import type { NetworkNodeData, SiteNodeData, ZoneNodeData } from './graphToFlow';
 
@@ -94,7 +95,7 @@ export const NetworkNode = memo(function NetworkNode({
   return (
     <div
       className={`network-node${selected ? ' network-node--selected' : ''}`}
-      style={{ '--node-accent': color } as React.CSSProperties}
+      style={accentStyle(color)}
       data-testid={`network-node-${network.name}`}
     >
       <Handle type="target" position={Position.Bottom} id="members" className="hidden-handle" />

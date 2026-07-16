@@ -57,7 +57,20 @@ async function main() {
   await shot('01-shell');
 
   const canvas = page.locator('.canvas-region');
-  await shot('02-canvas', { clip: await canvas.boundingBox().then((b) => b ?? undefined) });
+  const canvasBox = await canvas.boundingBox();
+  await shot('02-canvas', { clip: canvasBox ?? undefined });
+
+  // VLAN-row crop: the band of colored network rectangles mid-canvas
+  if (canvasBox) {
+    await shot('02b-vlan-row', {
+      clip: {
+        x: canvasBox.x,
+        y: canvasBox.y + canvasBox.height * 0.45,
+        width: canvasBox.width,
+        height: canvasBox.height * 0.3,
+      },
+    });
+  }
 
   // node close-up: zoom to 200% centred on the firewall
   await page.click('[data-testid="zoom-200"]');
