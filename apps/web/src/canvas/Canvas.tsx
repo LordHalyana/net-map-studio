@@ -25,6 +25,7 @@ import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { RuleCalloutNode } from './RuleCalloutNode';
 import { graphToFlow, type DeviceNodeData, type NetworkNodeData } from './graphToFlow';
 import { nodeAccentColor } from './roleColors';
+import { GRID_LINE, MINIMAP_NEUTRAL } from './colors';
 import { CanvasToolbar } from '../layout/CanvasToolbar';
 import { DND_MIME } from '../layout/LibraryPanel';
 
@@ -35,7 +36,7 @@ function minimapNodeColor(node: Node): string {
     return nodeAccentColor(data.device, data.memberships);
   }
   if (node.type === 'network') return (node.data as NetworkNodeData).color;
-  return '#2c3547';
+  return MINIMAP_NEUTRAL;
 }
 
 const nodeTypes = {
@@ -295,7 +296,7 @@ function CanvasInner() {
       const element = document.querySelector('.react-flow');
       if (!(element instanceof HTMLElement)) return;
       const { toPng, toSvg } = await import('html-to-image');
-      const options = { backgroundColor: '#0f1115', filter: excludeChrome };
+      const options = { backgroundColor: '#0b0e13', filter: excludeChrome };
       const dataUrl =
         format === 'svg' ? await toSvg(element, options) : await toPng(element, options);
       const anchor = document.createElement('a');
@@ -366,7 +367,7 @@ function CanvasInner() {
           minZoom={0.05}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Lines} gap={22} color="#131926" />
+          <Background variant={BackgroundVariant.Lines} gap={22} color={GRID_LINE} />
           <MiniMap
             pannable
             zoomable

@@ -72,10 +72,16 @@ async function main() {
   await page.waitForTimeout(500);
   await shot('04-inspector');
 
-  // bottom panel: link info via the firewall→core link, then rules tab
+  // bottom panel: link info via the firewall→core trunk link, then rules tab
+  const trunkEdge = page.locator('.react-flow__edge', { hasText: 'trunk' }).first();
+  if (await trunkEdge.count()) {
+    await trunkEdge.click({ force: true });
+    await page.waitForTimeout(400);
+    await shot('05-link-info');
+  }
   await page.click('[data-testid="context-tab-rules"]');
   await page.waitForTimeout(400);
-  await shot('05-rules-tab');
+  await shot('06-rules-tab');
 
   await browser.close();
   console.log(`captured to ${OUT}`);

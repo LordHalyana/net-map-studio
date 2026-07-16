@@ -1135,6 +1135,15 @@ button:disabled {
   gap: 4px;
 }
 
+/* connect-mode sides read as endpoint cards (M7, gap G9) */
+.connect-form__side {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  min-width: 180px;
+}
+
 .connect-form__side select,
 .connect-form__field select,
 .connect-form__field input {
@@ -1156,15 +1165,67 @@ button:disabled {
 
 .link-list__item {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px;
-  min-width: 260px;
+  border-radius: var(--radius-md);
+  padding: 10px;
+  min-width: 380px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.link-list__form {
+  min-width: 170px;
 }
 
 .link-list__endpoints {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.link-list__arrows {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+/* concept endpoint cards (M7, gap G9) */
+.endpoint-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.endpoint-card__role {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.endpoint-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 650;
+  font-size: 12px;
+}
+
+.endpoint-card__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.endpoint-card__ip {
+  color: var(--text-dim);
+  font-family: Consolas, monospace;
+  font-size: 11px;
 }
 
 /* ---------- rules panel (§3.11) ---------- */
@@ -1376,16 +1437,6 @@ button:disabled {
 
 /* ---------- global search & zoom presets ---------- */
 
-.command-bar__zoom {
-  display: inline-flex;
-  gap: 2px;
-}
-
-.command-bar__zoom button {
-  padding: 4px 6px;
-  font-size: 11px;
-}
-
 .global-search {
   position: relative;
   margin-left: auto;
@@ -1483,14 +1534,14 @@ button:disabled {
 /* ---------- Phase 2: primary nav (design §3.2B) ---------- */
 
 .primary-nav {
-  border-bottom: 1px solid var(--border, #2a3040);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
   margin-bottom: 8px;
 }
 
 .library-item--active {
-  background: var(--bg-panel, #1b2130);
-  outline: 1px solid var(--accent, #4da3ff);
+  background: var(--bg-panel);
+  outline: 1px solid var(--accent);
 }
 
 /* ---------- Phase 2: imports & reconciliation (plan M7) ---------- */
@@ -1522,7 +1573,7 @@ button:disabled {
 }
 
 .imports-panel__notice {
-  color: #e5b455;
+  color: var(--warn);
   font-size: 12px;
 }
 
@@ -1541,26 +1592,26 @@ button:disabled {
   width: 100%;
   padding: 6px 10px;
   background: transparent;
-  border: 1px solid var(--border, #2a3040);
+  border: 1px solid var(--border);
   border-radius: 4px;
   text-align: left;
 }
 
 .import-job--selected {
-  outline: 1px solid var(--accent, #4da3ff);
+  outline: 1px solid var(--accent);
 }
 
 .import-job__status--review {
-  color: #e5b455;
+  color: var(--warn);
 }
 .import-job__status--committed {
-  color: #4dc38a;
+  color: var(--ok);
 }
 .import-job__status--failed {
-  color: #e06c6c;
+  color: var(--danger);
 }
 .import-job__status--rolledBack {
-  color: #8b94a7;
+  color: var(--text-dim);
 }
 
 .import-review__actions {
@@ -1586,13 +1637,13 @@ button:disabled {
 .identities-table td,
 .conflict__diffs th,
 .conflict__diffs td {
-  border-bottom: 1px solid var(--border, #2a3040);
+  border-bottom: 1px solid var(--border);
   padding: 4px 6px;
   text-align: left;
 }
 
 .evidence-viewer__record {
-  border: 1px solid var(--border, #2a3040);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px;
   margin: 6px 0;
@@ -1600,7 +1651,7 @@ button:disabled {
 }
 
 .evidence-viewer__hash {
-  color: var(--text-dim, #8b94a7);
+  color: var(--text-dim);
   font-family: monospace;
   font-size: 11px;
   word-break: break-all;
@@ -1609,7 +1660,7 @@ button:disabled {
 .evidence-viewer__content {
   max-height: 240px;
   overflow: auto;
-  background: var(--bg-panel, #12151c);
+  background: var(--bg-panel);
   padding: 8px;
   font-size: 11px;
 }
@@ -1624,8 +1675,8 @@ button:disabled {
 }
 
 .conflict {
-  border: 1px solid var(--border, #2a3040);
-  border-left: 3px solid #4dc38a;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
   border-radius: 4px;
   padding: 8px;
   margin: 6px 0;
@@ -1633,7 +1684,7 @@ button:disabled {
 }
 
 .conflict--pending {
-  border-left-color: #e5b455;
+  border-left-color: var(--warn);
 }
 
 .conflict__actions {
@@ -1643,7 +1694,7 @@ button:disabled {
 }
 
 .conflict__resolution {
-  color: #4dc38a;
+  color: var(--ok);
   margin-top: 6px;
 }
 
@@ -1664,35 +1715,30 @@ button:disabled {
 }
 
 .provenance-status--accepted {
-  color: #4dc38a;
+  color: var(--ok);
 }
 .provenance-status--rejected {
-  color: #8b94a7;
+  color: var(--text-dim);
 }
 .provenance-status--overridden {
-  color: #e5b455;
+  color: var(--warn);
 }
 
 .device-node__confidence,
 .device-node__evidence {
   font-size: 9px;
-  color: #4dc38a;
+  color: var(--ok);
 }
 
 /* ---------- Phase 2: diff mode (ADR-0009) ---------- */
 
 .device-node--diff-added {
-  outline: 2px dashed #4dc38a;
+  outline: 2px dashed var(--ok);
 }
 
 .device-node--diff-removed {
-  outline: 2px dashed #e06c6c;
+  outline: 2px dashed var(--danger);
   opacity: 0.55;
-}
-
-.command-bar__modes {
-  display: inline-flex;
-  gap: 2px;
 }
 
 .diff-panel {
@@ -1711,20 +1757,20 @@ button:disabled {
 }
 
 .diff-badge--add {
-  color: #4dc38a;
+  color: var(--ok);
 }
 .diff-badge--remove {
-  color: #e06c6c;
+  color: var(--danger);
 }
 .diff-badge--mod {
-  color: #e5b455;
+  color: var(--warn);
 }
 .diff-before {
-  color: #e06c6c;
+  color: var(--danger);
   text-decoration: line-through;
 }
 .diff-after {
-  color: #4dc38a;
+  color: var(--ok);
 }
 
 /* ---------- Phase 2: identities (plan M10, §3.9) ---------- */
@@ -1737,7 +1783,7 @@ button:disabled {
 }
 
 .identities-table__row--selected {
-  outline: 1px solid var(--accent, #4da3ff);
+  outline: 1px solid var(--accent);
 }
 
 .identities-table tbody tr {

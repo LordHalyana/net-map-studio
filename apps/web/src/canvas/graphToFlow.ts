@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import { PORT_DOT_MARKER } from './EdgeMarkerDefs';
+import { EDGE_LABEL_BG, EDGE_LABEL_TEXT, EDGE_NEUTRAL, FLOW_AMBER } from './colors';
 import type {
   Device,
   FieldProvenance,
@@ -259,10 +260,10 @@ export function graphToFlow(
       type: edgeType,
       ...portDots,
       data: { linkIds: bundleLinks.map((l) => l.id) },
-      style: { stroke: '#8b94a7', strokeWidth: single ? 1.5 : 2.5 },
+      style: { stroke: EDGE_NEUTRAL, strokeWidth: single ? 1.5 : 2.5 },
       label: single ? first.label || first.kind : `${bundleLinks.length} links`,
-      labelStyle: { fill: '#d7dde8', fontSize: 10 },
-      labelBgStyle: { fill: '#161a22' },
+      labelStyle: { fill: EDGE_LABEL_TEXT, fontSize: 10 },
+      labelBgStyle: { fill: EDGE_LABEL_BG },
     });
   }
 
@@ -305,10 +306,10 @@ export function graphToFlow(
         type: edgeType,
         animated: true,
         data: { flowIds: bundle.map((f) => f.id) },
-        style: { stroke: '#e5b455', strokeDasharray: '4 3', opacity: 0.8 },
+        style: { stroke: FLOW_AMBER, strokeDasharray: '4 3', opacity: 0.8 },
         label,
-        labelStyle: { fill: '#e5b455', fontSize: 9 },
-        labelBgStyle: { fill: '#161a22' },
+        labelStyle: { fill: FLOW_AMBER, fontSize: 9 },
+        labelBgStyle: { fill: EDGE_LABEL_BG },
       });
     }
   }
@@ -350,7 +351,7 @@ export function graphToFlow(
         style: { stroke: color, strokeWidth: 1.5, opacity: 0.9 },
         label: iface.name,
         labelStyle: { fill: color, fontSize: 9 },
-        labelBgStyle: { fill: '#161a22' },
+        labelBgStyle: { fill: EDGE_LABEL_BG },
       });
     }
   }
