@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useAppStore } from '../state/store';
 import { buildNetwork, opCreateEntity, opDeleteEntity } from '../state/ops';
 
@@ -65,7 +66,7 @@ export function NetworksPanel() {
                   <td>{network.name}</td>
                   <td>{network.kind}</td>
                   <td>{network.vlanId ?? '—'}</td>
-                  <td>{network.cidr || '—'}</td>
+                  <td className="mono">{network.cidr || '—'}</td>
                   <td>{members}</td>
                   <td>
                     <button
@@ -84,7 +85,7 @@ export function NetworksPanel() {
                         );
                       }}
                     >
-                      ✕
+                      <X size={12} aria-hidden />
                     </button>
                   </td>
                 </tr>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useAppStore, type Toast } from '../state/store';
 
 const AUTO_DISMISS_MS = 6000;
@@ -37,9 +38,10 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         type="button"
         className="toast__dismiss"
         data-testid="toast-dismiss"
+        aria-label="Dismiss"
         onClick={onDismiss}
       >
-        ✕
+        <X size={13} aria-hidden />
       </button>
     </div>
   );

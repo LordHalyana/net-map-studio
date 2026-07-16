@@ -4,17 +4,11 @@
  * in id order. UUIDv7 ids sort by creation time, so adding a network never
  * recolors an existing one; removals only shift networks that had probed past
  * the removed slot (a collision chain, rare below palette size).
+ * Hexes live in palette.ts, mirroring the --vlan-* tokens in styles.css.
  */
-export const VLAN_PALETTE = [
-  '#ff8a3d', // staff orange
-  '#3ddc97', // guest green
-  '#a06bff', // pos purple
-  '#ffc44d', // cctv amber
-  '#4da3ff', // blue
-  '#5bd0d0', // teal
-  '#e06c6c', // red
-  '#9fd05b', // lime
-];
+import { NETWORK_FALLBACK, VLAN_PALETTE } from './palette';
+
+export { VLAN_PALETTE };
 
 function fnv1a(text: string): number {
   let hash = 0x811c9dc5;
@@ -48,7 +42,7 @@ export function networkColorMap(
       while (taken.has(slot)) slot = (slot + 1) % VLAN_PALETTE.length;
     }
     taken.add(slot);
-    map.set(id, VLAN_PALETTE[slot] ?? '#4da3ff');
+    map.set(id, VLAN_PALETTE[slot] ?? NETWORK_FALLBACK);
   }
   return map;
 }
@@ -57,5 +51,5 @@ export function networkColor(
   state: { networks: readonly { id: string; color?: string | null }[] },
   networkId: string,
 ): string {
-  return networkColorMap(state.networks).get(networkId) ?? '#4da3ff';
+  return networkColorMap(state.networks).get(networkId) ?? NETWORK_FALLBACK;
 }

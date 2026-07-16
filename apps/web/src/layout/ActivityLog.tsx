@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import type { Operation, OperationLogEntry } from '@netplan/domain';
 import { getLog } from '../api/client';
 import { useAppStore } from '../state/store';
@@ -58,7 +59,12 @@ export function ActivityLog() {
     };
   }, [project, graph, availability]);
 
-  if (error) return <p className="panel-empty">⚠ {error}</p>;
+  if (error)
+    return (
+      <p className="panel-empty">
+        <TriangleAlert size={12} className="inline-icon" aria-hidden /> {error}
+      </p>
+    );
   if (entries.length === 0) return <p className="panel-empty">No operations yet.</p>;
 
   return (

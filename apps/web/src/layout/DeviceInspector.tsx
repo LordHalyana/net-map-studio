@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
-import { Box } from 'lucide-react';
+import { ArrowLeftRight, Box, X } from 'lucide-react';
 import {
   addressKindSchema,
   criticalitySchema,
@@ -33,6 +33,7 @@ import {
   opSetField,
   opSetMembership,
 } from '../state/ops';
+import { Toggle } from '../ui';
 import { FieldSection, SelectField, TextAreaField, TextField } from './fields';
 import { ProvenanceSection } from './ProvenanceSection';
 
@@ -303,18 +304,15 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           options={enumOptions(['unknown', 'active', 'inactive'])}
           onCommit={(v) => setField('status', v, device.status)}
         />
-        <label className="field" title="Pinned devices are never moved by auto-arrange (§3.2C)">
+        <div className="field" title="Pinned devices are never moved by auto-arrange (§3.2C)">
           <span className="field__label">Pinned</span>
-          <span className="switch">
-            <input
-              type="checkbox"
-              checked={device.pinned}
-              data-testid="device-pinned-toggle"
-              onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
-            />
-            <span className="switch__track" />
-          </span>
-        </label>
+          <Toggle
+            checked={device.pinned}
+            data-testid="device-pinned-toggle"
+            label="Pinned"
+            onChange={(checked) => setField('pinned', checked, device.pinned)}
+          />
+        </div>
       </FieldSection>
 
       <FieldSection title="Interfaces" testId="inspector-interfaces">
@@ -552,7 +550,8 @@ function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectS
           <div key={link.id} className="inspector-connection">
             <span className="inspector-connection__kind">{link.kind}</span>
             <span className="inspector-connection__path">
-              {describe(near)} ⟷ {describe(far)}
+              {describe(near)} <ArrowLeftRight size={12} className="inline-icon" aria-hidden />{' '}
+              {describe(far)}
             </span>
           </div>
         );
@@ -607,25 +606,22 @@ function DeviceRulesSection({ device, graph }: { device: Device; graph: ProjectS
                 ? `${service.name}${service.portStart != null ? ` (${service.portStart}${service.portEnd != null && service.portEnd !== service.portStart ? `-${service.portEnd}` : ''})` : ''}`
                 : 'All Other'}
             </span>
-            <label className="switch" title="Logging">
-              <input
-                type="checkbox"
-                checked={rule.logging}
-                onChange={() =>
-                  dispatch(
-                    opSetField(
-                      projectId,
-                      'policyRule',
-                      rule.id,
-                      'logging',
-                      !rule.logging,
-                      rule.logging,
-                    ),
-                  )
-                }
-              />
-              <span className="switch__track" />
-            </label>
+            <Toggle
+              checked={rule.logging}
+              label="Logging"
+              onChange={() =>
+                dispatch(
+                  opSetField(
+                    projectId,
+                    'policyRule',
+                    rule.id,
+                    'logging',
+                    !rule.logging,
+                    rule.logging,
+                  ),
+                )
+              }
+            />
           </div>
         );
       })}
@@ -697,9 +693,10 @@ function InterfaceEditor({ iface, graph }: { iface: Interface; graph: ProjectSta
           type="button"
           className="interface-editor__remove"
           title="Remove interface"
+          aria-label="Remove interface"
           onClick={removeInterface}
         >
-          ✕
+          <X size={12} aria-hidden />
         </button>
       </div>
       <SelectField
@@ -731,11 +728,12 @@ function InterfaceEditor({ iface, graph }: { iface: Interface; graph: ProjectSta
             <button
               type="button"
               title="Remove address"
+              aria-label="Remove address"
               onClick={() =>
                 dispatch(opDeleteEntity(projectId, { entityType: 'address', entity: address }))
               }
             >
-              ✕
+              <X size={12} aria-hidden />
             </button>
           </li>
         ))}

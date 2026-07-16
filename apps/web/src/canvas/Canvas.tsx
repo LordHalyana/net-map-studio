@@ -30,7 +30,8 @@ import {
   type NetworkNodeData,
 } from './graphToFlow';
 import { nodeAccentColor } from './roleColors';
-import { CANVAS_BG, GRID_LINE, MINIMAP_NEUTRAL } from './colors';
+import { CANVAS_BG, GRID_LINE, MINIMAP_MASK, MINIMAP_NEUTRAL } from './colors';
+import { HotkeyCard } from './HotkeyCard';
 import { CanvasToolbar } from '../layout/CanvasToolbar';
 import { DND_MIME } from '../layout/LibraryPanel';
 
@@ -417,6 +418,7 @@ function CanvasInner() {
     <main className="canvas-region" data-testid="canvas-region">
       <CanvasToolbar />
       <div className="canvas-region__flow">
+        <HotkeyCard />
         {graph &&
           graph.devices.length === 0 &&
           graph.networks.length === 0 &&
@@ -463,7 +465,7 @@ function CanvasInner() {
             zoomable
             position="bottom-left"
             nodeColor={minimapNodeColor}
-            maskColor="rgb(11 14 19 / 65%)"
+            maskColor={MINIMAP_MASK}
             style={{ marginLeft: 52 }}
             // collapses to a corner tab unless hovered, so it never
             // permanently occludes bottom-left nodes (M4, #61)

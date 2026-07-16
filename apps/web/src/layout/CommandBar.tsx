@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  Check,
+  Download,
+  FileJson,
+  FileText,
+  Image,
+  Table,
+  TriangleAlert,
+  Upload,
+} from 'lucide-react';
 import { useAppStore } from '../state/store';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
+import { Menu, type MenuItem } from '../ui';
 import { GlobalSearch } from './GlobalSearch';
 
 /** "· just now" / "· N min ago" beside the save state (M6, #63). */
@@ -39,7 +50,18 @@ export function CommandBar() {
         className={`command-bar__status${!syncError && pendingOps === 0 ? ' command-bar__status--saved' : ''}`}
         data-testid="sync-status"
       >
-        {syncError ? `⚠ ${syncError}` : pendingOps > 0 ? 'Saving…' : 'Saved'}
+        {syncError ? (
+          <>
+            <TriangleAlert size={12} className="inline-icon" aria-hidden /> {syncError}
+          </>
+        ) : pendingOps > 0 ? (
+          'Saving…'
+        ) : (
+          <>
+            <Check size={12} className="inline-icon" aria-hidden strokeWidth={3} />
+            Saved
+          </>
+        )}
       </div>
       {!syncError && pendingOps === 0 && lastSavedAt !== null && (
         <span className="command-bar__saved-ago" data-testid="saved-ago">
@@ -59,13 +81,11 @@ function ExportMenu() {
   const project = useAppStore((s) => s.project);
   const importBundle = useAppStore((s) => s.importBundle);
   const pushToast = useAppStore((s) => s.pushToast);
-  const [open, setOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   if (!project) return null;
 
   const run = (action: () => Promise<void> | void) => () => {
-    setOpen(false);
     void Promise.resolve()
       .then(action)
       .catch((error: unknown) => {
@@ -83,99 +103,93 @@ function ExportMenu() {
     }
   }
 
+  const items: MenuItem[] = [
+    {
+      label: 'Project bundle (.netplan)',
+      icon: FileJson,
+      'data-testid': 'export-netplan',
+      onSelect: run(() => downloadNetplanBundle(project.id, project.name)),
+    },
+    'separator',
+    {
+      label: 'Topology image (PNG)',
+      icon: Image,
+      'data-testid': 'export-png',
+      onSelect: run(() => requestImageExport('png')),
+    },
+    {
+      label: 'Topology image (SVG)',
+      icon: Image,
+      'data-testid': 'export-svg',
+      onSelect: run(() => requestImageExport('svg')),
+    },
+    'separator',
+    {
+      label: 'Devices (CSV)',
+      icon: Table,
+      'data-testid': 'export-csv-devices',
+      onSelect: run(() => downloadCsv(project.id, 'devices')),
+    },
+    {
+      label: 'Rules (CSV)',
+      icon: Table,
+      'data-testid': 'export-csv-rules',
+      onSelect: run(() => downloadCsv(project.id, 'policyRules')),
+    },
+    {
+      label: 'Findings (CSV)',
+      icon: Table,
+      'data-testid': 'export-csv-findings',
+      onSelect: run(() => {
+        window.open(`/api/projects/${project.id}/export/csv/findings`, '_blank');
+      }),
+    },
+    'separator',
+    {
+      label: 'Design report (HTML)',
+      icon: FileText,
+      'data-testid': 'export-report',
+      onSelect: run(() => {
+        window.open(`/api/projects/${project.id}/report`, '_blank');
+      }),
+    },
+    {
+      label: 'Security findings report (HTML)',
+      icon: FileText,
+      'data-testid': 'export-findings-report',
+      onSelect: run(() => {
+        window.open(`/api/projects/${project.id}/report/findings`, '_blank');
+      }),
+    },
+    {
+      label: 'Security findings — client-safe (HTML)',
+      icon: FileText,
+      'data-testid': 'export-findings-report-safe',
+      onSelect: run(() => {
+        window.open(`/api/projects/${project.id}/report/findings?redact=client-safe`, '_blank');
+      }),
+    },
+    'separator',
+    {
+      label: 'Import bundle…',
+      icon: Upload,
+      'data-testid': 'import-netplan',
+      onSelect: () => fileInput.current?.click(),
+    },
+  ];
+
   return (
     <div className="export-menu">
-      <button type="button" data-testid="export-menu-toggle" onClick={() => setOpen(!open)}>
-        ⇩ Export / Import
-      </button>
-      {open && (
-        <div className="export-menu__list" data-testid="export-menu">
-          <button
-            type="button"
-            data-testid="export-netplan"
-            onClick={run(() => downloadNetplanBundle(project.id, project.name))}
-          >
-            Project bundle (.netplan)
-          </button>
-          <button
-            type="button"
-            data-testid="export-png"
-            onClick={run(() => requestImageExport('png'))}
-          >
-            Topology image (PNG)
-          </button>
-          <button
-            type="button"
-            data-testid="export-svg"
-            onClick={run(() => requestImageExport('svg'))}
-          >
-            Topology image (SVG)
-          </button>
-          <button
-            type="button"
-            data-testid="export-csv-devices"
-            onClick={run(() => downloadCsv(project.id, 'devices'))}
-          >
-            Devices (CSV)
-          </button>
-          <button
-            type="button"
-            data-testid="export-csv-rules"
-            onClick={run(() => downloadCsv(project.id, 'policyRules'))}
-          >
-            Rules (CSV)
-          </button>
-          <button
-            type="button"
-            data-testid="export-report"
-            onClick={run(() => {
-              window.open(`/api/projects/${project.id}/report`, '_blank');
-            })}
-          >
-            Design report (HTML)
-          </button>
-          <button
-            type="button"
-            data-testid="export-findings-report"
-            onClick={run(() => {
-              window.open(`/api/projects/${project.id}/report/findings`, '_blank');
-            })}
-          >
-            Security findings report (HTML)
-          </button>
-          <button
-            type="button"
-            data-testid="export-findings-report-safe"
-            onClick={run(() => {
-              window.open(
-                `/api/projects/${project.id}/report/findings?redact=client-safe`,
-                '_blank',
-              );
-            })}
-          >
-            Security findings — client-safe (HTML)
-          </button>
-          <button
-            type="button"
-            data-testid="export-csv-findings"
-            onClick={run(() => {
-              window.open(`/api/projects/${project.id}/export/csv/findings`, '_blank');
-            })}
-          >
-            Findings (CSV)
-          </button>
-          <button
-            type="button"
-            data-testid="import-netplan"
-            onClick={() => {
-              setOpen(false);
-              fileInput.current?.click();
-            }}
-          >
-            Import bundle…
-          </button>
-        </div>
-      )}
+      <Menu
+        triggerLabel={
+          <>
+            <Download size={14} className="inline-icon" aria-hidden /> Export / Import
+          </>
+        }
+        triggerTestId="export-menu-toggle"
+        items={items}
+        listTestId="export-menu"
+      />
       <input
         ref={fileInput}
         type="file"

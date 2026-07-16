@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { Box } from 'lucide-react';
+import { Box, TriangleAlert } from 'lucide-react';
 import type { Device } from '@netplan/domain';
 import { findLibraryItem } from '../library/catalog';
 import { useAppStore } from '../state/store';
@@ -139,7 +139,8 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
               focusFindingsForDevice(device.id);
             }}
           >
-            ⚠{findings.count}
+            <TriangleAlert size={9} className="inline-icon" aria-hidden />
+            {findings.count}
           </button>
         )}
         <span

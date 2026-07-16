@@ -1,3 +1,4 @@
+import { ArrowLeftRight } from 'lucide-react';
 import {
   linkKindSchema,
   type Endpoint,
@@ -157,7 +158,7 @@ export function LinkDetails({ linkIds, graph }: { linkIds: string[]; graph: Proj
             <div className="link-list__endpoints">
               <EndpointCard graph={graph} link={link} which="source" />
               <span className="link-list__arrows" aria-hidden>
-                ⟷
+                <ArrowLeftRight size={14} />
               </span>
               <EndpointCard graph={graph} link={link} which="target" />
             </div>

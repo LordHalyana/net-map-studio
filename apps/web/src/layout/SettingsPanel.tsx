@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DEFAULT_ENGINE_CONFIG } from '@netplan/domain';
 import { useAppStore } from '../state/store';
+import { Toggle } from '../ui';
 
 /**
  * SETTINGS destination (design §3.2B; improvements M11, #68): surfaces what
@@ -13,6 +14,8 @@ export function SettingsPanel() {
   const graph = useAppStore((s) => s.graph);
   const setView = useAppStore((s) => s.setView);
   const revealSecret = useAppStore((s) => s.revealSecret);
+  const hotkeyCardEnabled = useAppStore((s) => s.hotkeyCardEnabled);
+  const setHotkeyCardEnabled = useAppStore((s) => s.setHotkeyCardEnabled);
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   if (!project || !graph) return null;
 
@@ -26,6 +29,17 @@ export function SettingsPanel() {
       <p data-testid="settings-project">
         {project.name} · created {new Date(project.createdAt).toLocaleDateString()}
       </p>
+
+      <h3 className="field-section__title">Interface</h3>
+      <div className="settings-row" data-testid="settings-hotkey-card">
+        <span>Show the shortcut card on the canvas</span>
+        <Toggle
+          checked={hotkeyCardEnabled}
+          label="Show the shortcut card on the canvas"
+          data-testid="settings-hotkey-card-toggle"
+          onChange={setHotkeyCardEnabled}
+        />
+      </div>
 
       <h3 className="field-section__title">Egress &amp; threat intel</h3>
       <p className="panel-empty">
