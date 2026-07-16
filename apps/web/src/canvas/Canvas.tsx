@@ -46,6 +46,9 @@ function minimapNodeColor(node: Node): string {
   return MINIMAP_NEUTRAL;
 }
 
+/** One constant for snap AND the painted grid, so snapping lands on visible gridlines (M2, #59). */
+const GRID_SIZE = 22;
+
 const nodeTypes = {
   device: DeviceNode,
   site: SiteNode,
@@ -76,6 +79,7 @@ function CanvasInner() {
 
   const canvasMode = useAppStore((s) => s.canvasMode);
   const provenance = useAppStore((s) => s.provenance);
+  const gridEnabled = useAppStore((s) => s.gridEnabled);
 
   const flow = useMemo(
     () =>
@@ -268,8 +272,26 @@ function CanvasInner() {
     [dispatch],
   );
 
-  // command-bar requests: focus an entity, apply a zoom preset
-  const { setCenter, zoomTo } = useReactFlow();
+  // command-bar requests: focus an entity, apply a zoom preset, fit to screen
+  const { setCenter, zoomTo, fitView } = useReactFlow();
+  useEffect(() => {
+    function onFit() {
+      void fitView({ duration: 250 });
+    }
+    window.addEventListener('netplan:fit', onFit);
+    return () => window.removeEventListener('netplan:fit', onFit);
+  }, [fitView]);
+
+  // Escape clears the visual React Flow selection along with the store's (M2, #59)
+  useEffect(() => {
+    function onClearSelection() {
+      setNodes((nds) => nds.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)));
+    }
+    window.addEventListener('netplan:clear-selection', onClearSelection);
+    return () => window.removeEventListener('netplan:clear-selection', onClearSelection);
+  }, []);
+
   useEffect(() => {
     function onFocusNode(event: Event) {
       const detail = event instanceof CustomEvent ? event.detail : null;
@@ -366,15 +388,17 @@ function CanvasInner() {
           deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode={['Shift', 'Control']}
           colorMode="dark"
-          snapToGrid
-          snapGrid={[16, 16]}
+          snapToGrid={gridEnabled}
+          snapGrid={[GRID_SIZE, GRID_SIZE]}
           fitView
           // viewport culling once the canvas is big enough to care (design acceptance #1)
           onlyRenderVisibleElements={nodes.length > 60}
           minZoom={0.05}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Lines} gap={22} color={GRID_LINE} />
+          {gridEnabled && (
+            <Background variant={BackgroundVariant.Lines} gap={GRID_SIZE} color={GRID_LINE} />
+          )}
           <MiniMap
             pannable
             zoomable

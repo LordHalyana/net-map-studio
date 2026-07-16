@@ -98,6 +98,8 @@ interface AppState {
   connectNotice: string | null;
   view: WorkspaceView;
   canvasMode: CanvasMode;
+  /** Grid display + snap-to-grid (M2, #59) — one switch for both. */
+  gridEnabled: boolean;
   /** Whole-project provenance sidecar mirror — feeds badges and the inspector. */
   provenance: FieldProvenance[];
   importJobs: ImportJob[];
@@ -129,6 +131,7 @@ interface AppState {
   toggleRulesLayer: () => void;
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
+  toggleGrid: () => void;
   refreshProvenance: () => Promise<void>;
   refreshImports: () => Promise<void>;
   uploadImport: (input: UploadImportInput) => Promise<void>;
@@ -166,6 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   connectNotice: null,
   view: 'canvas',
   canvasMode: 'toBe',
+  gridEnabled: true,
   provenance: [],
   importJobs: [],
   selectedImport: null,
@@ -313,6 +317,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setView: (view) => set({ view }),
 
   setCanvasMode: (mode) => set({ canvasMode: mode }),
+
+  toggleGrid: () => set({ gridEnabled: !get().gridEnabled }),
 
   refreshProvenance: async () => {
     const project = get().project;

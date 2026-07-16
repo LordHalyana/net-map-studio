@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectState } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
 
@@ -73,6 +73,16 @@ export function GlobalSearch() {
   const setContextTab = useAppStore((s) => s.setContextTab);
   const [query, setQuery] = useState('');
   const results = useMemo(() => (graph ? searchGraph(graph, query) : []), [graph, query]);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Ctrl+F / `/` shortcut (M2, #59)
+  useEffect(() => {
+    function onFocusSearch() {
+      inputRef.current?.focus();
+    }
+    window.addEventListener('netplan:focus-search', onFocusSearch);
+    return () => window.removeEventListener('netplan:focus-search', onFocusSearch);
+  }, []);
 
   function open(result: SearchHit) {
     if (result.entityType === 'policyRule') {
@@ -91,6 +101,7 @@ export function GlobalSearch() {
   return (
     <div className="global-search">
       <input
+        ref={inputRef}
         value={query}
         placeholder="Search devices, IPs, VLANs, rules…"
         data-testid="global-search-input"
