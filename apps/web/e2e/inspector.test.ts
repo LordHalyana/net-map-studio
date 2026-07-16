@@ -132,3 +132,78 @@ test.describe('component library & device nodes (M5 DoD)', () => {
     await waitSaved(page);
   });
 });
+
+test.describe('inspector completion (improvements M9, #66)', () => {
+  const REPORT = JSON.stringify({
+    schemaVersion: '1.0.0',
+    hosts: [
+      {
+        deviceId: 'guid-ws-m9-01',
+        hostname: 'ws-m9-01',
+        os: { name: 'Windows 11' },
+        collectedAt: '2026-07-15T00:00:00.000Z',
+        interfaces: [{ name: 'eth0', addresses: [{ value: '10.9.9.10', kind: 'ipv4' }] }],
+        routes: [],
+        arp: [],
+        connections: [],
+        listeningPorts: [{ protocol: 'tcp', port: 3389, process: 'TermService' }],
+        localUsers: [{ name: 'jordan' }],
+        localGroups: [],
+        administrators: ['jordan'],
+        sudoers: [],
+        collection: { scope: ['interfaces', 'listeningPorts'], errors: [] },
+        remoteAccess: [{ name: 'AnyDesk' }],
+        fileInventory: [],
+      },
+    ],
+  });
+
+  test('an imported device shows Services, Findings, Users & Roles and OS confidence', async ({
+    page,
+  }) => {
+    await openApp(page);
+
+    await page.getByTestId('nav-imports').click();
+    await page.getByTestId('import-adapter-select').selectOption('device-state');
+    await page.getByTestId('import-evidence-file-input').setInputFiles({
+      name: 'report.json',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(REPORT, 'utf8'),
+    });
+    await expect(page.getByTestId('import-review')).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('import-commit-button').click();
+    await expect(page.getByTestId('import-review')).toContainText('committed');
+
+    // select via search — immune to canvas overlap
+    await page.getByTestId('nav-canvas').click();
+    await page.getByTestId('global-search-input').fill('ws-m9-01');
+    await page.getByTestId('search-result-ws-m9-01').click();
+    await expect(page.getByTestId('inspector-device')).toBeVisible();
+
+    // §3.2D sections with real data
+    await expect(page.getByTestId('inspector-device-services')).toContainText('TermService');
+    await expect(page.getByTestId('inspector-device-services')).toContainText('tcp/3389');
+    await expect(page.getByTestId('inspector-device-identities')).toContainText('jordan');
+    await expect(page.getByTestId('inspector-device-identities')).toContainText(
+      'localAdministrator',
+    );
+    await expect(page.getByTestId('inspector-device-findings')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('device-os-confidence')).toContainText('confidence');
+
+    // the OS field itself stays editable (read-view keeps full edit reach)
+    await page.getByTestId('device-os-input').fill('Windows 11 23H2');
+    await page.getByTestId('device-os-input').press('Enter');
+    await waitSaved(page);
+
+    // finding row links into the Findings view
+    await page.locator('[data-testid^="device-finding-"]').first().click();
+    await expect(page.getByTestId('findings-panel')).toBeVisible();
+    await expect(page.locator('.finding-card--focused')).toHaveCount(1);
+
+    // shared-DB hygiene: roll the committed import back
+    await page.getByTestId('nav-imports').click();
+    await page.getByTestId('import-job-device-state-committed').click();
+    await page.getByTestId('import-rollback-button').click();
+    await expect(page.getByTestId('import-review')).toContainText('rolledBack');
+  });
+});

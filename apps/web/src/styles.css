@@ -1011,6 +1011,67 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* inspector completion (M9, #66): section lists + OS confidence hint */
+.inspector-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inspector-list__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.inspector-list__primary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-list__meta {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.inspector-list__chip {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.inspector-list__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.field--meta {
+  margin-top: -4px;
+}
+
+.field__hint {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
 /* rule↔flow validation surfacing (M8, #65) */
 .rules-panel__flow-warnings {
   list-style: none;
