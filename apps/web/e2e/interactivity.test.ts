@@ -315,4 +315,56 @@ test.describe('Flow & rule interactivity (improvements M3, #60)', () => {
     await expect(page.getByTestId('context-tab-rules')).toHaveClass(/toggle--on/);
     await expect(page.locator('.rule-row--focused')).toHaveCount(1);
   });
+
+  test('rule↔flow validation: unmatched flow and unmatched rule both warn (M8, #65)', async ({
+    page,
+  }) => {
+    await openApp(page);
+    const a = await addDeviceViaLibrary(page, 'server');
+    const b = await addDeviceViaLibrary(page, 'nas');
+
+    const p = await project(page);
+    const graph = await graphOf(page, p.id);
+    const deviceA = graph.devices.find((d) => d.name === a);
+    const deviceB = graph.devices.find((d) => d.name === b);
+    if (!deviceA || !deviceB) throw new Error('devices not found');
+
+    // observed traffic A→B with no governing rule
+    await postOp(page, p.id, {
+      kind: 'CreateEntity',
+      payload: {
+        entityType: 'flow',
+        entity: {
+          id: newId(flowIdSchema),
+          projectId: p.id,
+          source: { kind: 'device', id: deviceA.id },
+          destination: { kind: 'device', id: deviceB.id },
+          protocol: 'tcp',
+          port: 22,
+          firstSeen: '2026-07-10T08:00:00.000Z',
+          lastSeen: '2026-07-15T17:30:00.000Z',
+          observationCount: 4,
+          confidence: 0.5,
+          lifecycleState: 'observed',
+        },
+      },
+    });
+
+    // an intended rule between two fresh networks that no flow matches
+    await page.getByTestId('add-network').click();
+    await waitSaved(page);
+    await page.getByTestId('add-network').click();
+    await waitSaved(page);
+    await page.getByTestId('context-tab-rules').click();
+    await page.getByTestId('rule-source-select').selectOption({ index: 1 });
+    await page.getByTestId('rule-destination-select').selectOption({ index: 2 });
+    await page.getByTestId('rule-create').click();
+    await waitSaved(page);
+
+    // observed-without-rule for the flow; planned-never-observed on the rule
+    await expect(page.getByTestId('flow-warnings')).toContainText(`${a} → ${b}`);
+    await expect(page.locator('[data-testid^="rule-info-"]').first()).toContainText(
+      'not necessarily unnecessary',
+    );
+  });
 });

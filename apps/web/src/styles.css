@@ -1011,6 +1011,25 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* rule↔flow validation surfacing (M8, #65) */
+.rules-panel__flow-warnings {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--warn);
+}
+
+.rule-row__info {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0 0 0 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 /* visual consistency & feedback sweep (M6, #63) */
 .toast-stack {
   position: fixed;

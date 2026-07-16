@@ -287,6 +287,9 @@ function RuleRow({
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
   const service = rule.serviceId ? graph.services.find((s) => s.id === rule.serviceId) : undefined;
+  // planned-never-observed is informational (§3.11, M8 #65) — muted, not a ⚠
+  const infoWarnings = warnings.filter((w) => w.category === 'plannedNeverObserved');
+  const hardWarnings = warnings.filter((w) => w.category !== 'plannedNeverObserved');
 
   // a callout click / search hit lands here scrolled into view (M3, #60)
   const rowRef = useRef<HTMLLIElement>(null);
@@ -346,11 +349,20 @@ function RuleRow({
           ✕
         </button>
       </div>
-      {warnings.length > 0 && (
+      {hardWarnings.length > 0 && (
         <ul className="rule-row__warnings" data-testid={`rule-warnings-${rule.id}`}>
-          {warnings.map((warning, index) => (
+          {hardWarnings.map((warning, index) => (
             <li key={index} data-warning={warning.category}>
               ⚠ {warning.message}
+            </li>
+          ))}
+        </ul>
+      )}
+      {infoWarnings.length > 0 && (
+        <ul className="rule-row__info" data-testid={`rule-info-${rule.id}`}>
+          {infoWarnings.map((warning, index) => (
+            <li key={index} data-warning={warning.category}>
+              ℹ {warning.message}
             </li>
           ))}
         </ul>
@@ -365,6 +377,8 @@ export function RulesPanel() {
   const dispatch = useAppStore((s) => s.dispatch);
   const focusedRuleId = useAppStore((s) => s.focusedRuleId);
   const warnings = useMemo(() => (graph ? validatePolicyRules(graph) : []), [graph]);
+  // observed-without-rule warnings belong to no rule row (M8, #65)
+  const flowWarnings = warnings.filter((w) => w.ruleId === null);
   if (!graph) return null;
   const projectId = graph.project.id;
 
@@ -375,6 +389,15 @@ export function RulesPanel() {
     <div className="rules-panel" data-testid="rules-panel">
       <div className="rules-panel__column">
         <h3 className="field-section__title">Policy rules</h3>
+        {flowWarnings.length > 0 && (
+          <ul className="rules-panel__flow-warnings" data-testid="flow-warnings">
+            {flowWarnings.map((warning, index) => (
+              <li key={index} data-warning={warning.category}>
+                ⚠ {warning.message}
+              </li>
+            ))}
+          </ul>
+        )}
         <NewRuleForm graph={graph} />
         <ul className="rule-list" data-testid="rule-list">
           {graph.policyRules.map((rule) => (
