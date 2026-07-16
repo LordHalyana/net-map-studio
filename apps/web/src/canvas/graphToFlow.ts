@@ -53,7 +53,58 @@ export type PolicyRuleCalloutData = {
   lines: PolicyRuleCalloutLine[];
   more: number;
   ruleIds: string[];
+  /** Direction (degrees) of the leader line back toward the subject (M4, #61). */
+  leaderAngle: number;
 };
+
+/** Smoothstep edges accept lane offsets; the base Edge type omits them. */
+type CanvasEdge = Edge & { pathOptions?: { offset?: number; borderRadius?: number } };
+
+/**
+ * Leaf-endpoint density (M4, #61; revisits divergence #51 as usability):
+ * degree-1 devices in endpoint categories render as compact mini-nodes once
+ * the scene is big enough for full cards to collide.
+ */
+const COMPACT_ENDPOINT_TYPES = new Set<Device['deviceType']>([
+  'workstation',
+  'laptop',
+  'mobileDevice',
+  'posClient',
+  'paymentTerminal',
+  'printer',
+  'camera',
+  'voipDevice',
+  'iotDevice',
+]);
+export const COMPACT_LEAF_MIN_DEVICES = 9;
+
+/** Rendered footprint of a compact leaf node — auto-arrange uses it too. */
+export const COMPACT_NODE_SIZE = { width: 52, height: 44 };
+
+/** The devices that render compact (M4, #61) — one rule for canvas AND auto-arrange. */
+export function compactLeafDeviceIds(state: ProjectState): Set<string> {
+  if (state.devices.length < COMPACT_LEAF_MIN_DEVICES) return new Set();
+  const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
+  const degree = new Map<string, number>();
+  const bump = (deviceId: string | null | undefined) => {
+    if (deviceId) degree.set(deviceId, (degree.get(deviceId) ?? 0) + 1);
+  };
+  for (const link of state.links) {
+    bump(deviceByInterface.get(link.source.id));
+    bump(deviceByInterface.get(link.target.id));
+  }
+  for (const iface of state.interfaces) {
+    if (iface.networkId) bump(iface.deviceId);
+  }
+  return new Set(
+    state.devices
+      .filter((d) => COMPACT_ENDPOINT_TYPES.has(d.deviceType) && (degree.get(d.id) ?? 0) <= 1)
+      .map((d) => d.id),
+  );
+}
+
+/** Perpendicular distance a rule callout sits from its subject (M4, #61). */
+const CALLOUT_OFFSET = 110;
 
 /** Lines a callout card shows before collapsing into "+n more" (M4). */
 export const POLICY_RULE_CALLOUT_MAX_LINES = 3;
@@ -69,6 +120,8 @@ export type NetworkNodeData = { network: Network; color: string };
 export type DeviceNodeData = {
   device: Device;
   memberships: Membership[];
+  /** Leaf-endpoint mini-node (M4, #61): icon + status only until selected. */
+  compact: boolean;
   /** Primary address for the node's second line (concept shows IP, gap G1). */
   primaryIp: string | null;
   showTint: boolean;
@@ -113,7 +166,9 @@ export function graphToFlow(
   const collapsed = new Set(options.collapsedSites);
   const collapsedZones = new Set(options.collapsedZones);
   const nodes: Node[] = [];
-  const edges: Edge[] = [];
+  const edges: CanvasEdge[] = [];
+  const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
+  const compactLeaves = compactLeafDeviceIds(state);
   // Orthogonal routing with port dots (M3 prototype verdict, issue #45):
   // smoothstep reads like the concept's right-angle lines at canvas zoom and
   // stays soft on dense fans. React Flow wraps the marker id in url(#...).
@@ -217,6 +272,7 @@ export function graphToFlow(
       data: {
         device,
         memberships,
+        compact: compactLeaves.has(device.id),
         primaryIp: primaryIps.get(device.id) ?? null,
         showTint: options.logical,
         confidence: deviceConfidence.get(device.id) ?? null,
@@ -230,7 +286,6 @@ export function graphToFlow(
 
   // Links render between the owning Devices, bundled per device pair: multiple
   // records between the same pair collapse into one expandable edge (§3.3).
-  const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
   const bundles = new Map<string, Link[]>();
   for (const link of options.physical ? state.links : []) {
     if (!modeVisible(link.lifecycleState, options.mode)) continue;
@@ -385,22 +440,77 @@ export function graphToFlow(
       }
     };
 
-    const groups = new Map<string, { position: XY; rules: PolicyRule[] }>();
+    // pushing callouts away from the scene centroid steers them into the
+    // sparse side of their subject edge instead of onto a node row
+    const anchored = [...state.devices.map((d) => d.position), ...networkPositions.values()];
+    const centroid = anchored.reduce(
+      (acc, p) => ({ x: acc.x + p.x / anchored.length, y: acc.y + p.y / anchored.length }),
+      { x: 0, y: 0 },
+    );
+
+    // approximate node rectangles for the collision nudge below
+    const CALLOUT_SIZE = { width: 160, height: 72 };
+    const nodeRects = [
+      ...state.devices.map((d) => ({
+        x: d.position.x,
+        y: d.position.y,
+        ...(compactLeaves.has(d.id) ? COMPACT_NODE_SIZE : { width: 190, height: 64 }),
+      })),
+      ...[...networkPositions.values()].map((p) => ({ x: p.x, y: p.y, width: 200, height: 52 })),
+    ];
+    const collides = (p: XY) =>
+      nodeRects.some(
+        (r) =>
+          p.x < r.x + r.width &&
+          r.x < p.x + CALLOUT_SIZE.width &&
+          p.y < r.y + r.height &&
+          r.y < p.y + CALLOUT_SIZE.height,
+      );
+
+    const groups = new Map<
+      string,
+      { position: XY; direction: XY; leaderAngle: number; rules: PolicyRule[] }
+    >();
     for (const rule of state.policyRules) {
       if (!modeVisible(rule.lifecycleState, options.mode)) continue;
       const source = anchorOf(rule.source);
       const destination = anchorOf(rule.destination);
       const anchor = destination ?? source;
       if (!anchor) continue;
-      const position: XY =
-        !source || !destination
-          ? { x: anchor.position.x + 190, y: anchor.position.y - 10 }
-          : {
-              x: (source.position.x + destination.position.x) / 2 + 60,
-              y: (source.position.y + destination.position.y) / 2 - 30,
-            };
+      // offset the card perpendicular to its subject edge so connection
+      // lines stop running through the callout band (M4, #61); the leader
+      // angle points back at the subject midpoint
+      let position: XY;
+      let direction: XY;
+      let leaderAngle: number;
+      if (!source || !destination) {
+        position = { x: anchor.position.x + 190, y: anchor.position.y - 10 };
+        direction = { x: 1, y: 0 };
+        leaderAngle = 180;
+      } else {
+        const mid = {
+          x: (source.position.x + destination.position.x) / 2,
+          y: (source.position.y + destination.position.y) / 2,
+        };
+        const dx = destination.position.x - source.position.x;
+        const dy = destination.position.y - source.position.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const normal = { x: -dy / length, y: dx / length };
+        const outward = (mid.x - centroid.x) * normal.x + (mid.y - centroid.y) * normal.y;
+        const side = outward >= 0 ? 1 : -1;
+        direction = { x: side * normal.x, y: side * normal.y };
+        position = {
+          x: mid.x + direction.x * CALLOUT_OFFSET,
+          y: mid.y + direction.y * CALLOUT_OFFSET,
+        };
+        leaderAngle = (Math.atan2(-direction.y, -direction.x) * 180) / Math.PI;
+      }
+      // nudge along the offset direction until the card sits clear of nodes
+      for (let step = 0; step < 6 && collides(position); step++) {
+        position = { x: position.x + direction.x * 50, y: position.y + direction.y * 50 };
+      }
       const key = `${source?.id ?? 'none'}~${destination?.id ?? 'none'}`;
-      const group = groups.get(key) ?? { position, rules: [] };
+      const group = groups.get(key) ?? { position, direction, leaderAngle, rules: [] };
       group.rules.push(rule);
       groups.set(key, group);
     }
@@ -437,6 +547,7 @@ export function graphToFlow(
           lines,
           more: Math.max(0, group.rules.length - POLICY_RULE_CALLOUT_MAX_LINES),
           ruleIds: group.rules.map((r) => r.id),
+          leaderAngle: group.leaderAngle,
         } satisfies PolicyRuleCalloutData,
         draggable: false,
         selectable: false,
@@ -444,6 +555,23 @@ export function graphToFlow(
         zIndex: 10,
       });
     }
+  }
+
+  // Parallel edge lanes (M4, #61): edges that share a device pair (a Link
+  // bundle plus a Flow bundle, or several memberships to one network) fan out
+  // via per-edge smoothstep offsets instead of stacking on one path.
+  const byPair = new Map<string, CanvasEdge[]>();
+  for (const edge of edges) {
+    const key = [edge.source, edge.target].sort().join('~');
+    const pair = byPair.get(key) ?? [];
+    pair.push(edge);
+    byPair.set(key, pair);
+  }
+  for (const pair of byPair.values()) {
+    if (pair.length < 2) continue;
+    pair.forEach((edge, index) => {
+      edge.pathOptions = { offset: 8 + index * 14, borderRadius: 5 };
+    });
   }
 
   return { nodes, edges };

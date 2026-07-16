@@ -1000,6 +1000,65 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* canvas readability (M4, #61): compact leaves, minimap, callout leaders */
+.device-node--compact {
+  min-width: 0;
+  width: 52px;
+  height: 44px;
+  justify-content: center;
+  gap: 0;
+  padding: 6px;
+}
+
+.device-node--compact .device-node__tile {
+  width: 26px;
+  height: 26px;
+}
+
+.device-node__hover-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  translate: -50%;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  white-space: nowrap;
+  z-index: 30;
+}
+
+.device-node--compact:hover .device-node__hover-label {
+  display: flex;
+}
+
+.minimap-collapsible {
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
+  transform-origin: bottom left;
+}
+
+.minimap-collapsible:not(:hover) {
+  transform: scale(0.3);
+  opacity: 0.75;
+}
+
+.policy-rule-callout__leader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 90px;
+  height: 0;
+  border-top: 1px dashed var(--border);
+  transform-origin: left center;
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* flow details, focused rules, governing rules (M3, #60) */
 .flow-list {
   list-style: none;
@@ -1206,6 +1265,7 @@ button:disabled {
 /* ---------- rule callouts (visual-parity M4, gap G4) ---------- */
 
 .policy-rule-callout {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;

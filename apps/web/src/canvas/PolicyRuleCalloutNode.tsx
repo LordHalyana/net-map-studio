@@ -13,7 +13,7 @@ export const PolicyRuleCalloutNode = memo(function PolicyRuleCalloutNode({
   data,
 }: NodeProps<Node<PolicyRuleCalloutData, 'policyRuleCallout'>>) {
   const focusRule = useAppStore((s) => s.focusRule);
-  const { lines, more, ruleIds } = data;
+  const { lines, more, ruleIds, leaderAngle } = data;
   const first = ruleIds[0];
   return (
     <div
@@ -26,6 +26,11 @@ export const PolicyRuleCalloutNode = memo(function PolicyRuleCalloutNode({
         if ((event.key === 'Enter' || event.key === ' ') && first) focusRule(first);
       }}
     >
+      <span
+        className="policy-rule-callout__leader"
+        style={{ transform: `rotate(${leaderAngle}deg)` }}
+        aria-hidden
+      />
       <span className="policy-rule-callout__title">Rule</span>
       {lines.map((line, index) => (
         <span

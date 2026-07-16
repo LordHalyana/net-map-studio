@@ -1,11 +1,16 @@
 import dagre from '@dagrejs/dagre';
 import type { ChangeSet, Operation, ProjectState } from '@netplan/domain';
 import { changeSet, opSetField } from '../state/ops';
+import { COMPACT_NODE_SIZE, compactLeafDeviceIds } from './graphToFlow';
 
-const NODE_WIDTH = 170;
+// Full-card footprint: generous enough that long names/IPs never make
+// siblings touch at 100% zoom (M4, #61 fan-out spacing).
+const NODE_WIDTH = 190;
 const NODE_HEIGHT = 64;
 const NETWORK_WIDTH = 200;
 const NETWORK_HEIGHT = 52;
+const NODE_SEP = 56;
+const RANK_SEP = 96;
 
 /**
  * Auto-arrange (design §3.2C; hierarchical since visual-parity M2, gap G2):
@@ -23,11 +28,16 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
   if (movable.length === 0) return null;
 
   const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 80, marginx: 40, marginy: 40 });
+  graph.setGraph({ rankdir: 'TB', nodesep: NODE_SEP, ranksep: RANK_SEP, marginx: 40, marginy: 40 });
   graph.setDefaultEdgeLabel(() => ({}));
 
+  // compact leaves take their mini-node footprint (M4, #61)
+  const compactLeaves = compactLeafDeviceIds(state);
   for (const device of candidates) {
-    graph.setNode(device.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    const size = compactLeaves.has(device.id)
+      ? COMPACT_NODE_SIZE
+      : { width: NODE_WIDTH, height: NODE_HEIGHT };
+    graph.setNode(device.id, { ...size });
   }
   for (const network of state.networks) {
     graph.setNode(network.id, { width: NETWORK_WIDTH, height: NETWORK_HEIGHT });
@@ -64,9 +74,12 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
   const ops: Operation[] = movable.flatMap((device) => {
     const node = graph.node(device.id);
     if (!node) return [];
+    const size = compactLeaves.has(device.id)
+      ? COMPACT_NODE_SIZE
+      : { width: NODE_WIDTH, height: NODE_HEIGHT };
     const position = {
-      x: Math.round(node.x - NODE_WIDTH / 2),
-      y: Math.round(node.y - NODE_HEIGHT / 2),
+      x: Math.round(node.x - size.width / 2),
+      y: Math.round(node.y - size.height / 2),
     };
     if (position.x === device.position.x && position.y === device.position.y) return [];
     return [

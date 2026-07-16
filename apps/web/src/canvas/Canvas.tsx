@@ -127,7 +127,7 @@ function CanvasInner() {
   }, [flow.nodes]);
 
   useEffect(() => {
-    const edgeContent = (e: Edge) =>
+    const edgeContent = (e: Edge & { pathOptions?: unknown }) =>
       JSON.stringify([
         e.source,
         e.target,
@@ -137,6 +137,7 @@ function CanvasInner() {
         e.label,
         e.data,
         e.hidden,
+        e.pathOptions,
       ]);
     setEdges((current) => {
       const byId = new Map(current.map((e) => [e.id, e]));
@@ -415,6 +416,9 @@ function CanvasInner() {
             nodeColor={minimapNodeColor}
             maskColor="rgb(11 14 19 / 65%)"
             style={{ marginLeft: 52 }}
+            // collapses to a corner tab unless hovered, so it never
+            // permanently occludes bottom-left nodes (M4, #61)
+            className="minimap-collapsible"
           />
           <Controls position="bottom-left" />
           <EdgeMarkerDefs />

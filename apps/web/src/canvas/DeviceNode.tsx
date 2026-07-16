@@ -30,6 +30,7 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
   const {
     device,
     memberships,
+    compact,
     primaryIp,
     showTint,
     confidence,
@@ -49,6 +50,37 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
       : diffState === 'removed'
         ? ' device-node--diff-removed'
         : '';
+
+  // Leaf-endpoint mini-node (M4, #61): icon tile + status dot; name/IP appear
+  // on hover; the full card returns while selected.
+  if (compact && !selected) {
+    return (
+      <div
+        className={`device-node device-node--compact${diffClass}`}
+        style={accentStyle(accent)}
+        data-testid={`device-node-${device.name}`}
+      >
+        <Handle type="source" position={Position.Top} id="membership" className="hidden-handle" />
+        <Handle type="source" position={Position.Right} id="link-out" className="hidden-handle" />
+        <Handle type="target" position={Position.Left} id="link-in" className="hidden-handle" />
+        <span className="device-node__tile">
+          {device.customIconKey ? (
+            <img className="device-node__icon" src={device.customIconKey} alt={typeLabel} />
+          ) : (
+            <Icon size={15} aria-hidden />
+          )}
+        </span>
+        <span
+          className={`device-node__status device-node__status--${device.status}`}
+          title={`Status: ${device.status}`}
+        />
+        <span className="device-node__hover-label">
+          <span className="device-node__name">{device.name}</span>
+          <span className="device-node__meta">{primaryIp ?? typeLabel}</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
