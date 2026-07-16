@@ -162,6 +162,10 @@ Single-parent _physical_ nesting (Site › Zone › Device). Rendered as collaps
 **Membership**:
 Many-valued _logical_ belonging (a Device's Interface in a Network). Rendered as network-nodes or overlays — never as Containment, so a dual-homed Device in two VLANs is expressible.
 
+**Pinned**:
+A per-Device flag meaning the operator has placed this Device deliberately: Auto-arrange never emits an Operation moving it, but it still participates in layout as fixed context and its footprint is respected as an obstacle.
+_Avoid_: Locked, frozen, anchored.
+
 ### Output
 
 **Report**:
