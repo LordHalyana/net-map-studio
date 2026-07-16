@@ -85,6 +85,13 @@
       "when": 1784196418037,
       "tag": "0011_peaceful_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784201250078,
+      "tag": "0012_thin_hairball",
+      "breakpoints": true
     }
   ]
 }

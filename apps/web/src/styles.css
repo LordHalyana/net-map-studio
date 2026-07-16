@@ -22,7 +22,7 @@
   --role-firewall: #e05252;
   --role-vpn: #aab4c4;
   --role-core: #4da3ff;
-  --role-server: #d7dde8;
+  --role-server: #7ea8dc; /* steel blue — distinct from --text (M6, #63) */
   --role-endpoint: #8b94a7;
 
   /* VLAN palette (gap G2) — keep in sync with VLAN_PALETTE in networkColor.ts */
@@ -673,12 +673,20 @@ button:disabled {
   display: inline-flex;
   flex-shrink: 0;
   cursor: pointer;
+  position: relative;
 }
 
+/* invisible but full-size and clickable, so both the pointer and
+   accessibility/automation land on the real control (M6, #63) */
 .switch input {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .switch__track {
@@ -1001,6 +1009,114 @@ button:disabled {
 .zone-node__name {
   font-size: 11px;
   color: var(--text-dim);
+}
+
+/* visual consistency & feedback sweep (M6, #63) */
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-dim);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 26px rgb(0 0 0 / 45%);
+  font-size: 12px;
+}
+
+.toast--error {
+  border-left-color: var(--danger);
+}
+
+.toast--success {
+  border-left-color: var(--ok);
+}
+
+.toast--info {
+  border-left-color: var(--role-core);
+}
+
+.toast__message {
+  flex: 1;
+}
+
+.toast__dismiss {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+}
+
+.command-bar__saved-ago {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-left: -10px;
+}
+
+.switch--inline {
+  margin-left: 0;
+  margin-right: 6px;
+}
+
+.canvas-empty-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+.canvas-empty-hint strong {
+  color: var(--text);
+}
+
+.color-swatches {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.color-swatch--on {
+  border-color: var(--text);
+  box-shadow:
+    0 0 0 1.5px var(--bg),
+    0 0 0 3px var(--text-dim);
+}
+
+.color-swatch--auto {
+  background: var(--bg-raised);
+  border-color: var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1;
 }
 
 /* findings on the canvas (M5, #62): warning badge + severity layer tint */

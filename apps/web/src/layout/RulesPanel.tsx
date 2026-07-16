@@ -236,12 +236,15 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
         ))}
       </select>
       <label className="rule-add__logging">
-        <input
-          type="checkbox"
-          checked={logging}
-          data-testid="rule-logging-toggle"
-          onChange={(e) => setLogging(e.target.checked)}
-        />
+        <span className="switch switch--inline">
+          <input
+            type="checkbox"
+            checked={logging}
+            data-testid="rule-logging-toggle"
+            onChange={(e) => setLogging(e.target.checked)}
+          />
+          <span className="switch__track" />
+        </span>
         log
       </label>
       <input
@@ -313,22 +316,25 @@ function RuleRow({
           }
         />
         <label className="rule-add__logging" title="Logging">
-          <input
-            type="checkbox"
-            checked={rule.logging}
-            onChange={(e) =>
-              dispatch(
-                opSetField(
-                  projectId,
-                  'policyRule',
-                  rule.id,
-                  'logging',
-                  e.target.checked,
-                  rule.logging,
-                ),
-              )
-            }
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              checked={rule.logging}
+              onChange={(e) =>
+                dispatch(
+                  opSetField(
+                    projectId,
+                    'policyRule',
+                    rule.id,
+                    'logging',
+                    e.target.checked,
+                    rule.logging,
+                  ),
+                )
+              }
+            />
+            <span className="switch__track" />
+          </span>
           log
         </label>
         <button

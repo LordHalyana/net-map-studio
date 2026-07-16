@@ -121,6 +121,8 @@ export const networks = sqliteTable('networks', {
   vlanId: integer('vlan_id'),
   cidr: text('cidr').notNull(),
   description: text('description').notNull(),
+  /** Operator-pinned canvas tint (M6, #63); null = hash-stable palette. */
+  color: text('color'),
   lifecycleState: lifecycleState(),
   tags: tags(),
   layoutHints: text('layout_hints', { mode: 'json' }).$type<Record<string, Position>>().notNull(),

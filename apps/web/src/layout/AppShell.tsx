@@ -8,6 +8,7 @@ import { UsersRolesPanel } from './UsersRolesPanel';
 import { FindingsPanel } from './FindingsPanel';
 import { EgressPanel } from './EgressPanel';
 import { ShortcutHelp } from './ShortcutHelp';
+import { Toasts } from './Toasts';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
 import { Canvas } from '../canvas/Canvas';
 import { useAppStore } from '../state/store';
@@ -35,6 +36,7 @@ export function AppShell() {
       <InspectorPanel />
       <ContextPanel />
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
+      <Toasts />
     </div>
   );
 }

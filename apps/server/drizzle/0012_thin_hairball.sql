@@ -1,0 +1,1 @@
+ALTER TABLE `networks` ADD `color` text;

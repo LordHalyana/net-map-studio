@@ -302,15 +302,17 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           options={enumOptions(['unknown', 'active', 'inactive'])}
           onCommit={(v) => setField('status', v, device.status)}
         />
-        <label className="field">
+        <label className="field" title="Pinned devices are never moved by auto-arrange (§3.2C)">
           <span className="field__label">Pinned</span>
-          <input
-            type="checkbox"
-            checked={device.pinned}
-            data-testid="device-pinned-toggle"
-            title="Pinned devices are never moved by auto-arrange (§3.2C)"
-            onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
-          />
+          <span className="switch">
+            <input
+              type="checkbox"
+              checked={device.pinned}
+              data-testid="device-pinned-toggle"
+              onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
+            />
+            <span className="switch__track" />
+          </span>
         </label>
       </FieldSection>
 

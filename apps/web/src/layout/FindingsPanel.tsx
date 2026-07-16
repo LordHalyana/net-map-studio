@@ -41,7 +41,6 @@ export function FindingsPanel() {
   const graph = useAppStore((s) => s.graph);
   const report = useAppStore((s) => s.findings);
   const loading = useAppStore((s) => s.findingsLoading);
-  const error = useAppStore((s) => s.findingsError);
   const refreshFindings = useAppStore((s) => s.refreshFindings);
   const disposeFinding = useAppStore((s) => s.disposeFinding);
 
@@ -112,8 +111,6 @@ export function FindingsPanel() {
           </button>
         </div>
       </div>
-
-      {error && <p className="panel-empty findings-error">⚠ {error}</p>}
 
       <div className="findings-filters" data-testid="findings-filters">
         <label>

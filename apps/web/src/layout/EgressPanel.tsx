@@ -190,42 +190,54 @@ export function EgressPanel() {
           </strong>
         </p>
         <label className="egress-check">
-          <input
-            type="checkbox"
-            data-testid="egress-enable"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              data-testid="egress-enable"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            <span className="switch__track" />
+          </span>
           Enable egress for this project
         </label>
         <label className="egress-check">
-          <input
-            type="checkbox"
-            data-testid="egress-allow-ip"
-            checked={allowIp}
-            onChange={(e) => setAllowIp(e.target.checked)}
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              data-testid="egress-allow-ip"
+              checked={allowIp}
+              onChange={(e) => setAllowIp(e.target.checked)}
+            />
+            <span className="switch__track" />
+          </span>
           Allow {INDICATOR_LABELS.ip} to leave (per-type opt-in)
         </label>
         <label className="egress-check">
-          <input
-            type="checkbox"
-            data-testid="egress-allow-domain"
-            checked={allowDomain}
-            onChange={(e) => setAllowDomain(e.target.checked)}
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              data-testid="egress-allow-domain"
+              checked={allowDomain}
+              onChange={(e) => setAllowDomain(e.target.checked)}
+            />
+            <span className="switch__track" />
+          </span>
           Allow {INDICATOR_LABELS.domain} to leave (per-type opt-in)
         </label>
         <p className="egress-disclosure" data-testid="egress-disclosure">
           {DISCLOSURE}
         </p>
         <label className="egress-check">
-          <input
-            type="checkbox"
-            data-testid="egress-acknowledge"
-            checked={acknowledged}
-            onChange={(e) => setAcknowledged(e.target.checked)}
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              data-testid="egress-acknowledge"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+            />
+            <span className="switch__track" />
+          </span>
           I have read the disclosure and understand what leaves this machine.
         </label>
         <button type="button" data-testid="egress-save" onClick={saveSettings}>

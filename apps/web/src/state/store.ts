@@ -78,6 +78,15 @@ export interface ConnectDraft {
   targetInterfaceId: string | null;
 }
 
+/** One queued notification (M6, #63): auto-dismissed, severity-tinted. */
+export interface Toast {
+  id: number;
+  message: string;
+  severity: 'info' | 'success' | 'error';
+}
+
+let toastSeq = 0;
+
 const emptyDraft: ConnectDraft = {
   sourceDeviceId: null,
   sourceInterfaceId: null,
@@ -92,12 +101,17 @@ interface AppState {
   selection: Selection | null;
   syncError: string | null;
   pendingOps: number;
+  /** Epoch ms of the last acknowledged save (M6, #63 relative timestamp). */
+  lastSavedAt: number | null;
+  /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
+  toasts: Toast[];
+  pushToast: (message: string, severity?: Toast['severity']) => void;
+  dismissToast: (id: number) => void;
   layers: LayerState;
   collapsedSites: string[];
   collapsedZones: string[];
   connectMode: boolean;
   connectDraft: ConnectDraft;
-  connectNotice: string | null;
   view: WorkspaceView;
   canvasMode: CanvasMode;
   /** Grid display + snap-to-grid (M2, #59) — one switch for both. */
@@ -112,11 +126,9 @@ interface AppState {
   provenance: FieldProvenance[];
   importJobs: ImportJob[];
   selectedImport: ImportJobDetail | null;
-  importNotice: string | null;
   /** Findings report (ADR-0023), recomputed on demand — always current. */
   findings: FindingsReport | null;
   findingsLoading: boolean;
-  findingsError: string | null;
   refreshFindings: () => Promise<void>;
   disposeFinding: (
     fingerprint: string,
@@ -175,6 +187,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
+  lastSavedAt: null,
+  toasts: [],
   layers: {
     logical: true,
     physical: true,
@@ -188,7 +202,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   contextTab: 'details',
   connectMode: false,
   connectDraft: emptyDraft,
-  connectNotice: null,
   view: 'canvas',
   canvasMode: 'toBe',
   gridEnabled: true,
@@ -198,22 +211,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   provenance: [],
   importJobs: [],
   selectedImport: null,
-  importNotice: null,
   findings: null,
   findingsLoading: false,
-  findingsError: null,
+
+  pushToast: (message, severity = 'error') =>
+    set({ toasts: [...get().toasts, { id: ++toastSeq, message, severity }] }),
+
+  dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 
   refreshFindings: async () => {
     const project = get().project;
     if (!project) return;
-    set({ findingsLoading: true, findingsError: null });
+    set({ findingsLoading: true });
     try {
       set({ findings: await getFindings(project.id), findingsLoading: false });
     } catch (error) {
-      set({
-        findingsLoading: false,
-        findingsError: error instanceof Error ? error.message : 'Failed to load findings',
-      });
+      set({ findingsLoading: false });
+      get().pushToast(error instanceof Error ? error.message : 'Failed to load findings');
     }
   },
 
@@ -272,11 +286,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           pendingOps: pending,
           availability: response.availability,
-          ...(pending === 0 ? { graph: response.state } : {}),
+          ...(pending === 0 ? { graph: response.state, lastSavedAt: Date.now() } : {}),
         });
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Sync failed';
+        get().pushToast(message);
         try {
           const graphNow = await getGraph(project.id);
           set({ graph: graphNow, pendingOps: 0, syncError: message });
@@ -290,14 +305,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     if (!project || !get().availability.canUndo) return;
     const response = await postUndo(project.id);
-    set({ graph: response.state, availability: response.availability });
+    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
   },
 
   redo: async () => {
     const project = get().project;
     if (!project || !get().availability.canRedo) return;
     const response = await postRedo(project.id);
-    set({ graph: response.state, availability: response.availability });
+    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
   },
 
   select: (selection) => set({ selection }),
@@ -375,7 +390,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadImport: async (input) => {
     const project = get().project;
     if (!project) return;
-    set({ importNotice: null });
     try {
       const job = await createImport(project.id, input);
       set({ importJobs: [...get().importJobs, job] });
@@ -396,9 +410,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      set({ importNotice: 'Import is still parsing — check the job list.' });
+      get().pushToast('Import is still parsing — check the job list.', 'info');
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Import failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Import failed');
     }
   },
 
@@ -416,12 +430,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const proposal = await resolveImportConflict(project.id, selected.job.id, conflictId, action);
       set({ selectedImport: { ...selected, proposal } });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Resolve failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Resolve failed');
     }
   },
 
@@ -429,7 +442,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const result = await commitImport(project.id, selected.job.id);
       set({
@@ -447,7 +459,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         findings: null,
       });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Commit failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Commit failed');
     }
   },
 
@@ -455,7 +467,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const result = await rollbackImport(project.id, selected.job.id);
       set({
@@ -473,7 +484,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         findings: null,
       });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Rollback failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Rollback failed');
     }
   },
 
@@ -495,15 +506,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  toggleConnectMode: () =>
-    set({ connectMode: !get().connectMode, connectDraft: emptyDraft, connectNotice: null }),
+  toggleConnectMode: () => set({ connectMode: !get().connectMode, connectDraft: emptyDraft }),
 
   connectPickNode: (nodeType, nodeId) => {
     if (!get().connectMode) return;
     if (nodeType !== 'device') {
-      set({
-        connectNotice: `A Link cannot terminate on a ${nodeType} — endpoints must be Interfaces.`,
-      });
+      get().pushToast(
+        `A Link cannot terminate on a ${nodeType} — endpoints must be Interfaces.`,
+        'info',
+      );
       return;
     }
     const graph = get().graph;
@@ -512,12 +523,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!draft.sourceDeviceId) {
       set({
         connectDraft: { ...draft, sourceDeviceId: nodeId, sourceInterfaceId: firstInterface },
-        connectNotice: null,
       });
     } else if (nodeId !== draft.sourceDeviceId) {
       set({
         connectDraft: { ...draft, targetDeviceId: nodeId, targetInterfaceId: firstInterface },
-        connectNotice: null,
       });
     }
   },
@@ -532,5 +541,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  resetConnectDraft: () => set({ connectDraft: emptyDraft, connectNotice: null }),
+  resetConnectDraft: () => set({ connectDraft: emptyDraft }),
 }));

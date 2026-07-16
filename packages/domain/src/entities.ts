@@ -176,6 +176,12 @@ export const networkSchema = z.object({
   vlanId: z.number().int().min(1).max(4094).nullable().default(null),
   cidr: z.string().default(''),
   description: z.string().default(''),
+  /** Operator-pinned canvas tint (M6, #63); null = hash-stable palette. */
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
   lifecycleState: lifecycleStateSchema,
   tags: tagsSchema,
   layoutHints: layoutHintsSchema,

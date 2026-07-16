@@ -100,7 +100,8 @@ test.describe('connect mode: Links (M7 DoD, ADR-0011/0012)', () => {
     await fitCanvas(page);
 
     await page.locator('.network-node').first().click();
-    await expect(page.getByTestId('connect-notice')).toContainText('Interfaces');
+    // the rejection surfaces as a toast (M6, #63)
+    await expect(page.getByTestId('toast-info')).toContainText('Interfaces');
     // Create stays disabled without two interface endpoints
     await expect(page.getByTestId('connect-create')).toBeDisabled();
   });

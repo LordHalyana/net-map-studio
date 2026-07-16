@@ -417,6 +417,21 @@ function CanvasInner() {
     <main className="canvas-region" data-testid="canvas-region">
       <CanvasToolbar />
       <div className="canvas-region__flow">
+        {graph &&
+          graph.devices.length === 0 &&
+          graph.networks.length === 0 &&
+          graph.sites.length === 0 && (
+            <div className="canvas-empty-hint" data-testid="canvas-empty-hint">
+              <p>
+                Drag a component from the <strong>library</strong> onto the canvas to start
+                planning…
+              </p>
+              <p>
+                …or open <strong>Imports and Evidence</strong> to reconstruct an existing network
+                from evidence.
+              </p>
+            </div>
+          )}
         <ReactFlow
           nodes={nodes}
           edges={edges}

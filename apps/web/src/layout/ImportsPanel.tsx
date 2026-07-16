@@ -29,7 +29,6 @@ function guessAdapter(filename: string): string {
 export function ImportsPanel() {
   const importJobs = useAppStore((s) => s.importJobs);
   const selected = useAppStore((s) => s.selectedImport);
-  const notice = useAppStore((s) => s.importNotice);
   const refreshImports = useAppStore((s) => s.refreshImports);
   const uploadImport = useAppStore((s) => s.uploadImport);
   const selectImport = useAppStore((s) => s.selectImport);
@@ -50,11 +49,6 @@ export function ImportsPanel() {
       <div className="imports-panel__column imports-panel__jobs">
         <h2 className="panel-title">Imports and Evidence</h2>
         <ImportWizard onUpload={uploadImport} />
-        {notice && (
-          <p className="imports-panel__notice" data-testid="import-notice">
-            ⚠ {notice}
-          </p>
-        )}
         <ul className="imports-panel__job-list" data-testid="import-job-list">
           {importJobs.length === 0 && <li className="panel-empty">No imports yet.</li>}
           {importJobs.map((job) => (
