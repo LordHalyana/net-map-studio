@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Info, TriangleAlert, X } from 'lucide-react';
 import {
   endpointSchema,
   policyActionSchema,
@@ -22,6 +23,7 @@ import {
   opDeletePolicyRule,
   opSetField,
 } from '../state/ops';
+import { Toggle } from '../ui';
 import { SelectField } from './fields';
 
 /** endpoint selects encode values as `${kind}:${id}` */
@@ -235,18 +237,16 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
           </option>
         ))}
       </select>
-      <label className="rule-add__logging">
-        <span className="switch switch--inline">
-          <input
-            type="checkbox"
-            checked={logging}
-            data-testid="rule-logging-toggle"
-            onChange={(e) => setLogging(e.target.checked)}
-          />
-          <span className="switch__track" />
-        </span>
+      <span className="rule-add__logging">
+        <Toggle
+          checked={logging}
+          className="switch--inline"
+          label="Logging"
+          data-testid="rule-logging-toggle"
+          onChange={setLogging}
+        />
         log
-      </label>
+      </span>
       <input
         value={owner}
         placeholder="owner"
@@ -318,42 +318,34 @@ function RuleRow({
             dispatch(opSetField(projectId, 'policyRule', rule.id, 'action', v, rule.action))
           }
         />
-        <label className="rule-add__logging" title="Logging">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              checked={rule.logging}
-              onChange={(e) =>
-                dispatch(
-                  opSetField(
-                    projectId,
-                    'policyRule',
-                    rule.id,
-                    'logging',
-                    e.target.checked,
-                    rule.logging,
-                  ),
-                )
-              }
-            />
-            <span className="switch__track" />
-          </span>
+        <span className="rule-add__logging" title="Logging">
+          <Toggle
+            checked={rule.logging}
+            className="switch--inline"
+            label="Logging"
+            onChange={(checked) =>
+              dispatch(
+                opSetField(projectId, 'policyRule', rule.id, 'logging', checked, rule.logging),
+              )
+            }
+          />
           log
-        </label>
+        </span>
         <button
           type="button"
           title="Delete rule"
+          aria-label="Delete rule"
           data-testid={`rule-delete-${rule.id}`}
           onClick={() => dispatch(opDeletePolicyRule(projectId, rule))}
         >
-          ✕
+          <X size={12} aria-hidden />
         </button>
       </div>
       {hardWarnings.length > 0 && (
         <ul className="rule-row__warnings" data-testid={`rule-warnings-${rule.id}`}>
           {hardWarnings.map((warning, index) => (
             <li key={index} data-warning={warning.category}>
-              ⚠ {warning.message}
+              <TriangleAlert size={12} className="inline-icon" aria-hidden /> {warning.message}
             </li>
           ))}
         </ul>
@@ -362,7 +354,7 @@ function RuleRow({
         <ul className="rule-row__info" data-testid={`rule-info-${rule.id}`}>
           {infoWarnings.map((warning, index) => (
             <li key={index} data-warning={warning.category}>
-              ℹ {warning.message}
+              <Info size={12} className="inline-icon" aria-hidden /> {warning.message}
             </li>
           ))}
         </ul>
@@ -447,7 +439,7 @@ export function RulesPanel({ page = false }: { page?: boolean } = {}) {
           <ul className="rules-panel__flow-warnings" data-testid="flow-warnings">
             {flowWarnings.map((warning, index) => (
               <li key={index} data-warning={warning.category}>
-                ⚠ {warning.message}
+                <TriangleAlert size={12} className="inline-icon" aria-hidden /> {warning.message}
               </li>
             ))}
           </ul>
@@ -475,12 +467,13 @@ export function RulesPanel({ page = false }: { page?: boolean } = {}) {
               <button
                 type="button"
                 title={serviceInUse(service) ? 'In use by a rule' : 'Delete service'}
+                aria-label="Delete service"
                 disabled={serviceInUse(service)}
                 onClick={() =>
                   dispatch(opDeleteEntity(projectId, { entityType: 'service', entity: service }))
                 }
               >
-                ✕
+                <X size={12} aria-hidden />
               </button>
             </li>
           ))}

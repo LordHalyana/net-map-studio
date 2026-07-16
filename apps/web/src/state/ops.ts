@@ -26,6 +26,7 @@ import {
   type Device,
   type DeviceType,
   type EntityPayload,
+  type Flow,
   type Interface,
   type InterfaceId,
   type Link,
@@ -356,6 +357,89 @@ export function deleteDevicesChangeSet(state: ProjectState, deviceIds: string[])
   const label =
     targets.length === 1 ? `Delete ${targets[0]?.name}` : `Delete ${targets.length} devices`;
   return changeSet(projectId, label, ops);
+}
+
+/** What deleting Zones will touch — drives the confirm dialog and the ops. */
+export interface ZoneDeleteImpact {
+  devices: Device[];
+  rules: PolicyRule[];
+  flows: Flow[];
+}
+
+function zonesDeleteImpact(state: ProjectState, zoneIds: ReadonlySet<string>): ZoneDeleteImpact {
+  // one filter pass per collection: a rule or flow touching a zone on both
+  // endpoints — or two zones of the same site — still appears exactly once
+  const devices = state.devices.filter((d) => d.zoneId !== null && zoneIds.has(d.zoneId));
+  const rules = state.policyRules.filter((r) =>
+    [r.source, r.destination].some((e) => e.kind === 'zone' && zoneIds.has(e.id)),
+  );
+  const flows = state.flows.filter((f) =>
+    [f.source, f.destination].some((e) => e.kind === 'zone' && zoneIds.has(e.id)),
+  );
+  return { devices, rules, flows };
+}
+
+export function deleteZoneImpact(state: ProjectState, zoneId: string): ZoneDeleteImpact {
+  return zonesDeleteImpact(state, new Set([zoneId]));
+}
+
+export interface SiteDeleteImpact extends ZoneDeleteImpact {
+  zones: Zone[];
+}
+
+export function deleteSiteImpact(state: ProjectState, siteId: string): SiteDeleteImpact {
+  const zones = state.zones.filter((z) => z.siteId === siteId);
+  return { ...zonesDeleteImpact(state, new Set(zones.map((z) => z.id))), zones };
+}
+
+/**
+ * Everything that must let go before Zones go. Devices are unparented, not
+ * deleted (containment is grouping, not ownership — ADR-0013); zone-targeting
+ * rules and flows are removed. Op order clears every reference before the
+ * zone rows so the server's dependent check (ADR-0012) passes mid-changeset.
+ * Baseline scopes referencing a zone are deliberately left to orphan — that
+ * surfaces as a Finding, not a block (ADR-0025).
+ */
+function deleteZonesOps(state: ProjectState, zones: Zone[]): Operation[] {
+  const projectId = state.project.id;
+  const impact = zonesDeleteImpact(state, new Set(zones.map((z) => z.id)));
+  const ops: Operation[] = [];
+  for (const device of impact.devices) {
+    ops.push(opSetContainment(projectId, device.id, null, device.zoneId));
+    // back to the open canvas: positions inside a zone are zone-relative, so
+    // restore an absolute one (mirrors DeviceInspector's commitZone)
+    const zone = state.zones.find((z) => z.id === device.zoneId);
+    const site = zone ? state.sites.find((s) => s.id === zone.siteId) : undefined;
+    const absolute = {
+      x: (site?.position.x ?? 0) + (zone?.position.x ?? 0) + device.position.x,
+      y: (site?.position.y ?? 0) + (zone?.position.y ?? 0) + device.position.y,
+    };
+    ops.push(opSetField(projectId, 'device', device.id, 'position', absolute, device.position));
+  }
+  for (const rule of impact.rules) ops.push(opDeletePolicyRule(projectId, rule));
+  for (const flow of impact.flows) {
+    ops.push(opDeleteEntity(projectId, { entityType: 'flow', entity: flow }));
+  }
+  for (const zone of zones) {
+    ops.push(opDeleteEntity(projectId, { entityType: 'zone', entity: zone }));
+  }
+  return ops;
+}
+
+export function deleteZoneChangeSet(state: ProjectState, zoneId: string): ChangeSet | null {
+  const zone = state.zones.find((z) => z.id === zoneId);
+  if (!zone) return null;
+  return changeSet(state.project.id, `Delete zone ${zone.name}`, deleteZonesOps(state, [zone]));
+}
+
+/** A Site takes its Zones with it — same unparent-don't-delete rule per zone. */
+export function deleteSiteChangeSet(state: ProjectState, siteId: string): ChangeSet | null {
+  const site = state.sites.find((s) => s.id === siteId);
+  if (!site) return null;
+  const zones = state.zones.filter((z) => z.siteId === siteId);
+  const ops = deleteZonesOps(state, zones);
+  ops.push(opDeleteEntity(state.project.id, { entityType: 'site', entity: site }));
+  return changeSet(state.project.id, `Delete site ${site.name}`, ops);
 }
 
 /** Snapshot taken by Ctrl+C so paste survives later edits to the graph (M2, #59). */

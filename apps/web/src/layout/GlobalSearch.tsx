@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
 import type { ProjectState } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
 import type { FindingsReport } from '../api/findings';
@@ -146,6 +147,7 @@ export function GlobalSearch() {
 
   return (
     <div className="global-search">
+      <Search size={13} className="global-search__icon" aria-hidden />
       <input
         ref={inputRef}
         value={query}

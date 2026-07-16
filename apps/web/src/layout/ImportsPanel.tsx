@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Check, TriangleAlert } from 'lucide-react';
 import { buildCandidates, type Evidence, type ImportJob, type Observation } from '@netplan/domain';
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { useAppStore } from '../state/store';
@@ -185,7 +186,11 @@ function ImportReview() {
       <h3>
         {job.parserName} <span className={`import-job__status--${job.status}`}>{job.status}</span>
       </h3>
-      {job.error && <p className="imports-panel__notice">⚠ {job.error}</p>}
+      {job.error && (
+        <p className="imports-panel__notice">
+          <TriangleAlert size={12} className="inline-icon" aria-hidden /> {job.error}
+        </p>
+      )}
       {job.status === 'review' && proposal && (
         <>
           <p data-testid="proposal-summary">
@@ -207,7 +212,7 @@ function ImportReview() {
               }
               onClick={() => void commit()}
             >
-              ✓ Commit import
+              <Check size={12} className="inline-icon" aria-hidden /> Commit import
             </button>
           </div>
         </>

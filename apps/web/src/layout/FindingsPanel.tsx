@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import type { Severity } from '@netplan/domain';
 import { useAppStore } from '../state/store';
 
@@ -147,9 +148,10 @@ export function FindingsPanel() {
               type="button"
               data-testid="findings-device-filter-clear"
               title="Show findings for all devices"
+              aria-label="Show findings for all devices"
               onClick={() => focusFindingsForDevice(null)}
             >
-              ✕
+              <X size={12} aria-hidden />
             </button>
           </span>
         )}

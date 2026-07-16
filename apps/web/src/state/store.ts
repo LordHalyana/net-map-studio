@@ -39,6 +39,18 @@ import {
 } from '../api/imports';
 import { applyOperationOptimistic } from './reducer';
 
+/** UI preference (ui-polish M7): the canvas shortcut card, on unless
+ *  explicitly dismissed/disabled — the first localStorage-persisted pref. */
+const HOTKEY_CARD_PREF_KEY = 'netplan.hotkeyCard';
+
+function readHotkeyCardPref(): boolean {
+  try {
+    return localStorage.getItem(HOTKEY_CARD_PREF_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 export interface Selection {
   entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity' | 'flow';
   ids: string[];
@@ -126,6 +138,8 @@ interface AppState {
   canvasMode: CanvasMode;
   /** Grid display + snap-to-grid (M2, #59) — one switch for both. */
   gridEnabled: boolean;
+  /** Canvas shortcut cheat card (ui-polish M7) — persisted, on by default. */
+  hotkeyCardEnabled: boolean;
   /** Rule row to highlight/scroll to in the Rules tab (M3, #60). */
   focusedRuleId: string | null;
   /** Finding card to highlight/scroll to in the Findings view (M3, #60). */
@@ -167,6 +181,7 @@ interface AppState {
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
   toggleGrid: () => void;
+  setHotkeyCardEnabled: (enabled: boolean) => void;
   /** Open the Rules tab with one rule focused (M3, #60). */
   focusRule: (ruleId: string) => void;
   /** Open the Findings view with one finding focused (M3, #60). */
@@ -217,6 +232,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   view: 'canvas',
   canvasMode: 'toBe',
   gridEnabled: true,
+  hotkeyCardEnabled: readHotkeyCardPref(),
   focusedRuleId: null,
   focusedFindingFingerprint: null,
   findingsDeviceFilter: null,
@@ -405,6 +421,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCanvasMode: (mode) => set({ canvasMode: mode }),
 
   toggleGrid: () => set({ gridEnabled: !get().gridEnabled }),
+
+  setHotkeyCardEnabled: (enabled) => {
+    try {
+      localStorage.setItem(HOTKEY_CARD_PREF_KEY, enabled ? 'on' : 'off');
+    } catch {
+      // storage unavailable — the preference just won't survive a reload
+    }
+    set({ hotkeyCardEnabled: enabled });
+  },
 
   focusRule: (ruleId) => set({ contextTab: 'rules', focusedRuleId: ruleId }),
 

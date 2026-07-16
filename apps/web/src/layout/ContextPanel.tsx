@@ -1,4 +1,5 @@
 import { useAppStore } from '../state/store';
+import { Tabs } from '../ui';
 import { ConnectForm } from './ConnectForm';
 import { FlowDetails } from './FlowDetails';
 import { LinkDetails } from './LinkDetails';
@@ -31,28 +32,22 @@ export function ContextPanel() {
   }
 
   const tabs = [
-    ['details', detailsTitle],
-    ['rules', 'Rules'],
-    ['activity', 'Activity'],
-    ['conflicts', conflictCount > 0 ? `Conflicts (${conflictCount})` : 'Conflicts'],
-    ['diff', 'Diff'],
-  ] as const;
+    { id: 'details', label: detailsTitle },
+    { id: 'rules', label: 'Rules' },
+    { id: 'activity', label: 'Activity' },
+    { id: 'conflicts', label: conflictCount > 0 ? `Conflicts (${conflictCount})` : 'Conflicts' },
+    { id: 'diff', label: 'Diff' },
+  ];
 
   return (
     <section className="context-panel" data-testid="context-panel">
-      <div className="context-panel__tabs">
-        {tabs.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            className={tab === key && !connectMode ? 'toggle--on' : ''}
-            data-testid={`context-tab-${key}`}
-            onClick={() => setTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="context-panel__tabs"
+        tabs={tabs}
+        active={connectMode ? null : tab}
+        onSelect={(id) => setTab(id as typeof tab)}
+        testIdPrefix="context-tab-"
+      />
       {connectMode || tab === 'details' ? (
         details
       ) : tab === 'rules' ? (

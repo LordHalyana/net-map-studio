@@ -1,15 +1,16 @@
 /**
- * Canvas color constants (M7 cleanup, gap G10). React Flow takes inline
- * style values, not CSS custom properties, so each constant mirrors the
- * like-named token in styles.css :root — change both together.
+ * Canvas color constants (M7 cleanup, gap G10). All hexes live in palette.ts
+ * (ui-polish M1) — this module keeps the consumer-facing names and the
+ * accent-style helper.
  */
-export const CANVAS_BG = '#0b0e13'; // --bg
-export const EDGE_NEUTRAL = '#8b94a7'; // --text-dim
-export const EDGE_LABEL_TEXT = '#d7dde8'; // --text
-export const EDGE_LABEL_BG = '#10151d'; // --bg-panel
-export const FLOW_AMBER = '#e5b455'; // --warn
-export const GRID_LINE = '#131926'; // --grid-line
-export const MINIMAP_NEUTRAL = '#2c3547'; // --minimap-neutral
+import { BG, BG_PANEL, TEXT, TEXT_DIM, WARN } from './palette';
+
+export const CANVAS_BG = BG;
+export const EDGE_NEUTRAL = TEXT_DIM;
+export const EDGE_LABEL_TEXT = TEXT;
+export const EDGE_LABEL_BG = BG_PANEL;
+export const FLOW_AMBER = WARN;
+export { GRID_LINE, MINIMAP_NEUTRAL, MINIMAP_MASK } from './palette';
 
 /**
  * The node-accent custom property set inline by node components and read by

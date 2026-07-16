@@ -114,3 +114,26 @@ test.describe('Keyboard shortcuts & canvas basics (improvements M2, #59)', () =>
       .not.toBe(before);
   });
 });
+
+test.describe('Canvas hotkey card (ui-polish M7)', () => {
+  test('shows by default, dismiss persists across reload, settings re-enables', async ({
+    page,
+  }) => {
+    await openApp(page);
+    await expect(page.getByTestId('hotkey-card')).toBeVisible();
+
+    // dismiss hides it and the preference survives a reload
+    await page.getByTestId('hotkey-card-dismiss').click();
+    await expect(page.getByTestId('hotkey-card')).not.toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('app-shell')).toBeVisible();
+    await expect(page.getByTestId('hotkey-card')).not.toBeVisible();
+
+    // Settings → Interface turns it back on
+    await page.getByTestId('nav-settings').click();
+    await expect(page.getByTestId('settings-hotkey-card')).toBeVisible();
+    await page.getByTestId('settings-hotkey-card-toggle').click();
+    await page.getByTestId('nav-canvas').click();
+    await expect(page.getByTestId('hotkey-card')).toBeVisible();
+  });
+});

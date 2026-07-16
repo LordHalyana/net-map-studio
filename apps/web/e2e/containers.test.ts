@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { newId, operationIdSchema, zoneIdSchema, zoneSchema } from '@netplan/domain';
 
 async function openApp(page: Page) {
   await page.goto('/');
@@ -122,5 +123,159 @@ test.describe('Resizable Site & Zone containers (improvements M1, #58)', () => {
     expect(site.size.width).toBeGreaterThanOrEqual(20 + zone.size.width);
     expect(site.size.height).toBeGreaterThanOrEqual(44 + zone.size.height);
     expect(site.size.width).toBeLessThan(460);
+  });
+});
+
+type FullGraph = {
+  sites: { id: string; name: string }[];
+  zones: { id: string; name: string; siteId: string }[];
+  devices: { id: string; name: string; zoneId: string | null }[];
+};
+
+async function fetchFullGraph(page: Page): Promise<FullGraph & { projectId: string }> {
+  const [project] = await (await page.request.get('/api/projects')).json();
+  const graph = (await (
+    await page.request.get(`/api/projects/${project.id}/graph`)
+  ).json()) as FullGraph;
+  return { ...graph, projectId: project.id as string };
+}
+
+/** Copy of inspector.test.ts's helper: click a library tile, return the new name. */
+async function addDeviceViaLibrary(page: Page, deviceType: string): Promise<string> {
+  const nodes = page.locator('.react-flow__node');
+  const before = await nodes.count();
+  const namesBefore = await page.locator('.device-node__name').allTextContents();
+  await page.getByTestId(`library-item-${deviceType}`).click();
+  await expect(nodes).toHaveCount(before + 1);
+  let added: string[] = [];
+  await expect
+    .poll(async () => {
+      const namesNow = await page.locator('.device-node__name').allTextContents();
+      added = namesNow.filter((n) => n && !namesBefore.includes(n));
+      return added.length;
+    })
+    .toBe(1);
+  await waitSaved(page);
+  const name = added[0];
+  if (!name) throw new Error('no new device name found');
+  return name;
+}
+
+/** The add-zone button always attaches to sites[0]; cascade tests need a zone
+ *  on a specific fresh site, so arrange that through the API. */
+async function addZoneToSiteViaApi(page: Page, siteName: string): Promise<string> {
+  const graph = await fetchFullGraph(page);
+  const site = graph.sites.find((s) => s.name === siteName);
+  if (!site) throw new Error(`site ${siteName} not found`);
+  const name = nextName(graph.zones, 'zone');
+  const zone = zoneSchema.parse({
+    id: newId(zoneIdSchema),
+    projectId: graph.projectId,
+    siteId: site.id,
+    name,
+    position: { x: 20, y: 44 },
+  });
+  const response = await page.request.post(`/api/projects/${graph.projectId}/operations`, {
+    data: {
+      id: newId(operationIdSchema),
+      projectId: graph.projectId,
+      kind: 'CreateEntity',
+      payload: { entityType: 'zone', entity: zone },
+    },
+  });
+  if (!response.ok()) throw new Error(`zone create failed: ${response.status()}`);
+  return name;
+}
+
+test.describe('Site & Zone delete from the inspector (ui-polish M3)', () => {
+  test('deleting a zone unparents its device; cancel is a no-op; undo restores', async ({
+    page,
+  }) => {
+    await openApp(page);
+    let graph = await fetchFullGraph(page);
+    if (graph.sites.length === 0) await addSite(page);
+    const zoneName = await addZone(page);
+    const deviceName = await addDeviceViaLibrary(page, 'server');
+
+    // place the device in the zone via the inspector's containment select
+    graph = await fetchFullGraph(page);
+    const zone = graph.zones.find((z) => z.name === zoneName);
+    if (!zone) throw new Error('zone not found after add');
+    await page.locator('.react-flow__controls-fitview').click();
+    await page.getByTestId(`device-node-${deviceName}`).click();
+    await page.getByTestId('device-zone-select').selectOption(zone.id);
+    await waitSaved(page);
+
+    await page.locator('.react-flow__controls-fitview').click();
+    await page.getByTestId(`zone-node-${zoneName}`).click({ position: { x: 60, y: 12 } });
+    await expect(page.getByTestId('inspector-zone')).toBeVisible();
+
+    // cancel path: dialog closes, nothing changes
+    await page.getByTestId('inspector-delete-zone').click();
+    const dialog = page.getByTestId('confirm-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('1 device will stay on the canvas');
+    await page.getByTestId('confirm-dialog-cancel').click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByTestId(`zone-node-${zoneName}`)).toBeVisible();
+
+    // confirm path: zone gone, device survives unparented — one changeset
+    await page.getByTestId('inspector-delete-zone').click();
+    await page.getByTestId('confirm-dialog-confirm').click();
+    await expect(page.getByTestId(`zone-node-${zoneName}`)).not.toBeVisible();
+    await waitSaved(page);
+    graph = await fetchFullGraph(page);
+    expect(graph.zones.find((z) => z.name === zoneName)).toBeUndefined();
+    expect(graph.devices.find((d) => d.name === deviceName)?.zoneId).toBeNull();
+
+    // undo restores the zone and the containment in one step
+    await page.getByTestId('undo-button').click();
+    await waitSaved(page);
+    graph = await fetchFullGraph(page);
+    expect(graph.zones.find((z) => z.name === zoneName)).toBeDefined();
+    expect(graph.devices.find((d) => d.name === deviceName)?.zoneId).toBe(zone.id);
+
+    // leave no zone-contained device behind: auto-arrange deliberately skips
+    // contained devices, and a later suite asserts arrange yields zero
+    // overlapping nodes across the shared e2e database
+    await page.locator('.react-flow__controls-fitview').click();
+    await page.getByTestId(`device-node-${deviceName}`).click();
+    await page.keyboard.press('Delete');
+    await expect(page.getByTestId(`device-node-${deviceName}`)).not.toBeVisible();
+    await waitSaved(page);
+  });
+
+  test('deleting a site cascades its zones', async ({ page }) => {
+    await openApp(page);
+    // the shortcut card overlays the canvas top-right, where fit-view puts
+    // this test's site corner — clear it out of the way first
+    await page.getByTestId('hotkey-card-dismiss').click();
+    const siteName = await addSite(page);
+    const zoneName = await addZoneToSiteViaApi(page, siteName);
+    await page.reload();
+    await expect(page.getByTestId('app-shell')).toBeVisible();
+    await expect(page.getByTestId(`zone-node-${zoneName}`)).toBeVisible();
+
+    await page.locator('.react-flow__controls-fitview').click();
+    // sites stack at small offsets, so a neighbouring container can cover the
+    // header's left side — click the top-right corner, which stays exposed
+    const siteNode = page.getByTestId(`site-node-${siteName}`);
+    await expect(siteNode).toBeVisible();
+    const box = await siteNode.boundingBox();
+    if (!box) throw new Error('no bounding box for site node');
+    await page.mouse.click(box.x + box.width - 12, box.y + 10);
+    await expect(page.getByTestId('inspector-site')).toBeVisible();
+
+    await page.getByTestId('inspector-delete-site').click();
+    const dialog = page.getByTestId('confirm-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('1 zone will be deleted');
+    await page.getByTestId('confirm-dialog-confirm').click();
+    await expect(page.getByTestId(`site-node-${siteName}`)).not.toBeVisible();
+    await waitSaved(page);
+
+    const graph = await fetchFullGraph(page);
+    expect(graph.sites.find((s) => s.name === siteName)).toBeUndefined();
+    expect(graph.zones.find((z) => z.name === zoneName)).toBeUndefined();
   });
 });
