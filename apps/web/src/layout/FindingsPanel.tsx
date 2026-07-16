@@ -47,10 +47,19 @@ export function FindingsPanel() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const focusedFingerprint = useAppStore((s) => s.focusedFindingFingerprint);
 
   useEffect(() => {
     if (project && !report) void refreshFindings();
   }, [project, report, refreshFindings]);
+
+  // a search hit lands here scrolled to its card (M3, #60)
+  useEffect(() => {
+    if (!focusedFingerprint || !report) return;
+    document
+      .querySelector(`[data-testid="finding-${focusedFingerprint}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusedFingerprint, report]);
 
   if (!project) return null;
 
@@ -150,7 +159,9 @@ export function FindingsPanel() {
               {group.map((f) => (
                 <article
                   key={f.fingerprint}
-                  className={`finding-card${f.stale ? ' finding-card--stale' : ''}`}
+                  className={`finding-card${f.stale ? ' finding-card--stale' : ''}${
+                    f.fingerprint === focusedFingerprint ? ' finding-card--focused' : ''
+                  }`}
                   data-testid={`finding-${f.fingerprint}`}
                 >
                   <header className="finding-card__head">

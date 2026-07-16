@@ -225,14 +225,23 @@ function CanvasInner() {
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
       if (selectedNodes.length === 0 && selectedEdges.length > 0) {
-        // link edges carry the underlying Link ids (bundles carry several)
-        const linkIds = selectedEdges.flatMap((edge) => {
-          const data = edge.data;
-          return data && Array.isArray(data['linkIds'])
-            ? data['linkIds'].filter((v): v is string => typeof v === 'string')
-            : [];
-        });
-        select(linkIds.length > 0 ? { entityType: 'link', ids: linkIds } : null);
+        // link edges carry Link ids; flow edges carry Flow ids (M3, #60)
+        const idsFrom = (key: 'linkIds' | 'flowIds') =>
+          selectedEdges.flatMap((edge) => {
+            const data = edge.data;
+            return data && Array.isArray(data[key])
+              ? data[key].filter((v): v is string => typeof v === 'string')
+              : [];
+          });
+        const linkIds = idsFrom('linkIds');
+        const flowIds = idsFrom('flowIds');
+        select(
+          linkIds.length > 0
+            ? { entityType: 'link', ids: linkIds }
+            : flowIds.length > 0
+              ? { entityType: 'flow', ids: flowIds }
+              : null,
+        );
         return;
       }
       if (selectedNodes.length === 0) {

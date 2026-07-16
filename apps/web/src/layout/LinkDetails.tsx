@@ -1,4 +1,10 @@
-import { linkKindSchema, type Link, type ProjectState } from '@netplan/domain';
+import {
+  linkKindSchema,
+  type Endpoint,
+  type Link,
+  type PolicyRule,
+  type ProjectState,
+} from '@netplan/domain';
 import { useAppStore } from '../state/store';
 import { opDeleteLink, opSetField } from '../state/ops';
 import { networkColorMap } from '../canvas/networkColor';
@@ -44,6 +50,68 @@ function EndpointCard({
         {info.deviceName} ({info.interfaceName})
       </span>
       <span className="endpoint-card__ip">{info.ip ?? '—'}</span>
+    </div>
+  );
+}
+
+/**
+ * The PolicyRules governing the selected Links' endpoints (M3, #60; absorbs
+ * the feature half of divergence #53). A projection, not schema — a rule
+ * governs a Link when either rule endpoint resolves to one of the Link's
+ * endpoint interfaces, their devices, those devices' networks or zones.
+ */
+function governingRules(graph: ProjectState, links: Link[]): PolicyRule[] {
+  const ifaceIds = new Set(links.flatMap((l) => [l.source.id, l.target.id]));
+  const deviceIds = new Set(
+    graph.interfaces.filter((i) => ifaceIds.has(i.id)).map((i) => i.deviceId),
+  );
+  const networkIds = new Set(
+    graph.interfaces
+      .filter((i) => deviceIds.has(i.deviceId))
+      .flatMap((i) => (i.networkId ? [i.networkId] : [])),
+  );
+  const zoneIds = new Set(
+    graph.devices.filter((d) => deviceIds.has(d.id)).flatMap((d) => (d.zoneId ? [d.zoneId] : [])),
+  );
+  const matches = (endpoint: Endpoint) =>
+    (endpoint.kind === 'interface' && ifaceIds.has(endpoint.id)) ||
+    (endpoint.kind === 'device' && deviceIds.has(endpoint.id)) ||
+    ((endpoint.kind === 'network' || endpoint.kind === 'subnet') && networkIds.has(endpoint.id)) ||
+    (endpoint.kind === 'zone' && zoneIds.has(endpoint.id));
+  return graph.policyRules.filter((rule) => matches(rule.source) || matches(rule.destination));
+}
+
+function GoverningRules({ graph, links }: { graph: ProjectState; links: Link[] }) {
+  const focusRule = useAppStore((s) => s.focusRule);
+  const rules = governingRules(graph, links);
+  if (rules.length === 0) return null;
+  return (
+    <div className="governing-rules" data-testid="governing-rules">
+      <h3 className="field-section__title">Governing policy rules</h3>
+      <ul className="governing-rules__list">
+        {rules.map((rule) => {
+          const service = rule.serviceId
+            ? graph.services.find((s) => s.id === rule.serviceId)
+            : undefined;
+          return (
+            <li key={rule.id}>
+              <button
+                type="button"
+                className="governing-rules__row"
+                data-testid={`governing-rule-${rule.id}`}
+                title="Open in the Rules tab"
+                onClick={() => focusRule(rule.id)}
+              >
+                <span className={`rule-row__action rule-row__action--${rule.action}`}>
+                  {rule.action}
+                </span>
+                <span>{service ? service.name : 'any service'}</span>
+                <span className="rule-row__direction">{rule.direction}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -104,6 +172,7 @@ export function LinkDetails({ linkIds, graph }: { linkIds: string[]; graph: Proj
           </li>
         ))}
       </ul>
+      <GoverningRules graph={graph} links={links} />
     </div>
   );
 }

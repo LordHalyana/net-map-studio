@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectState } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
+import type { FindingsReport } from '../api/findings';
 
 interface SearchHit {
-  entityType: Selection['entityType'];
+  entityType: Selection['entityType'] | 'finding';
   id: string;
   label: string;
   detail: string;
@@ -11,7 +12,11 @@ interface SearchHit {
   focusId: string | null;
 }
 
-function searchGraph(graph: ProjectState, query: string): SearchHit[] {
+function searchGraph(
+  graph: ProjectState,
+  findings: FindingsReport | null,
+  query: string,
+): SearchHit[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   const hit = (...values: (string | number | null)[]) =>
@@ -64,16 +69,54 @@ function searchGraph(graph: ProjectState, query: string): SearchHit[] {
       });
     }
   }
+  // identities & findings (M3, #60; design §3.2A names both)
+  for (const identity of graph.identities) {
+    if (hit(identity.name, identity.domain)) {
+      const host = identity.deviceId
+        ? graph.devices.find((d) => d.id === identity.deviceId)
+        : undefined;
+      results.push({
+        entityType: 'identity',
+        id: identity.id,
+        label: identity.scope === 'domain' ? `${identity.domain}\\${identity.name}` : identity.name,
+        detail: `identity · ${identity.kind}${host ? ` on ${host.name}` : ''}`,
+        focusId: identity.deviceId,
+      });
+    }
+  }
+  for (const finding of findings?.findings ?? []) {
+    const title = finding.detection?.title;
+    if (title && hit(title, finding.detection?.category ?? null)) {
+      results.push({
+        entityType: 'finding',
+        id: finding.fingerprint,
+        label: title,
+        detail: `finding · ${finding.detection?.severity ?? 'info'}`,
+        focusId: null,
+      });
+    }
+  }
   return results.slice(0, 12);
 }
 
 export function GlobalSearch() {
   const graph = useAppStore((s) => s.graph);
+  const findings = useAppStore((s) => s.findings);
+  const refreshFindings = useAppStore((s) => s.refreshFindings);
   const select = useAppStore((s) => s.select);
-  const setContextTab = useAppStore((s) => s.setContextTab);
+  const focusRule = useAppStore((s) => s.focusRule);
+  const focusFinding = useAppStore((s) => s.focusFinding);
   const [query, setQuery] = useState('');
-  const results = useMemo(() => (graph ? searchGraph(graph, query) : []), [graph, query]);
+  const results = useMemo(
+    () => (graph ? searchGraph(graph, findings, query) : []),
+    [graph, findings, query],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // findings are analyzed on demand — fetch once so titles are searchable
+  useEffect(() => {
+    if (query.trim() && !findings) void refreshFindings();
+  }, [query, findings, refreshFindings]);
 
   // Ctrl+F / `/` shortcut (M2, #59)
   useEffect(() => {
@@ -86,7 +129,10 @@ export function GlobalSearch() {
 
   function open(result: SearchHit) {
     if (result.entityType === 'policyRule') {
-      setContextTab('rules');
+      // land on the focused rule row, not just the tab flip (M3, #60)
+      focusRule(result.id);
+    } else if (result.entityType === 'finding') {
+      focusFinding(result.id);
     } else {
       select({ entityType: result.entityType, ids: [result.id] });
       if (result.focusId) {
@@ -103,7 +149,7 @@ export function GlobalSearch() {
       <input
         ref={inputRef}
         value={query}
-        placeholder="Search devices, IPs, VLANs, rules…"
+        placeholder="Search devices, IPs, VLANs, rules, identities, findings…"
         data-testid="global-search-input"
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {

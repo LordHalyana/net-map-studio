@@ -43,8 +43,17 @@ export interface FlowOptions {
   rules: boolean;
 }
 
-export type PolicyRuleCalloutLine = { action: PolicyRule['action']; text: string };
-export type PolicyRuleCalloutData = { lines: PolicyRuleCalloutLine[]; more: number };
+export type PolicyRuleCalloutLine = {
+  action: PolicyRule['action'];
+  text: string;
+  /** Clicking a line lands on this rule in the Rules tab (M3, #60). */
+  ruleId: string;
+};
+export type PolicyRuleCalloutData = {
+  lines: PolicyRuleCalloutLine[];
+  more: number;
+  ruleIds: string[];
+};
 
 /** Lines a callout card shows before collapsing into "+n more" (M4). */
 export const POLICY_RULE_CALLOUT_MAX_LINES = 3;
@@ -417,6 +426,7 @@ export function graphToFlow(
           return {
             action: rule.action,
             text: service ? `${service.name}${port}` : 'All Other',
+            ruleId: rule.id,
           };
         });
       nodes.push({
@@ -426,6 +436,7 @@ export function graphToFlow(
         data: {
           lines,
           more: Math.max(0, group.rules.length - POLICY_RULE_CALLOUT_MAX_LINES),
+          ruleIds: group.rules.map((r) => r.id),
         } satisfies PolicyRuleCalloutData,
         draggable: false,
         selectable: false,

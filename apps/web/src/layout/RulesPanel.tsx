@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   endpointSchema,
   policyActionSchema,
@@ -274,17 +274,29 @@ function RuleRow({
   rule,
   graph,
   warnings,
+  focused,
 }: {
   rule: PolicyRule;
   graph: ProjectState;
   warnings: RuleWarning[];
+  focused: boolean;
 }) {
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
   const service = rule.serviceId ? graph.services.find((s) => s.id === rule.serviceId) : undefined;
 
+  // a callout click / search hit lands here scrolled into view (M3, #60)
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focused]);
+
   return (
-    <li className="rule-row" data-testid={`rule-row-${rule.id}`}>
+    <li
+      ref={rowRef}
+      className={`rule-row${focused ? ' rule-row--focused' : ''}`}
+      data-testid={`rule-row-${rule.id}`}
+    >
       <div className="rule-row__main">
         <span className={`rule-row__action rule-row__action--${rule.action}`}>{rule.action}</span>
         <span className="rule-row__traffic">
@@ -345,6 +357,7 @@ function RuleRow({
 export function RulesPanel() {
   const graph = useAppStore((s) => s.graph);
   const dispatch = useAppStore((s) => s.dispatch);
+  const focusedRuleId = useAppStore((s) => s.focusedRuleId);
   const warnings = useMemo(() => (graph ? validatePolicyRules(graph) : []), [graph]);
   if (!graph) return null;
   const projectId = graph.project.id;
@@ -364,6 +377,7 @@ export function RulesPanel() {
               rule={rule}
               graph={graph}
               warnings={warnings.filter((w) => w.ruleId === rule.id)}
+              focused={rule.id === focusedRuleId}
             />
           ))}
         </ul>

@@ -40,7 +40,7 @@ import {
 import { applyOperationOptimistic } from './reducer';
 
 export interface Selection {
-  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity';
+  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity' | 'flow';
   ids: string[];
 }
 
@@ -100,6 +100,10 @@ interface AppState {
   canvasMode: CanvasMode;
   /** Grid display + snap-to-grid (M2, #59) — one switch for both. */
   gridEnabled: boolean;
+  /** Rule row to highlight/scroll to in the Rules tab (M3, #60). */
+  focusedRuleId: string | null;
+  /** Finding card to highlight/scroll to in the Findings view (M3, #60). */
+  focusedFindingFingerprint: string | null;
   /** Whole-project provenance sidecar mirror — feeds badges and the inspector. */
   provenance: FieldProvenance[];
   importJobs: ImportJob[];
@@ -132,6 +136,10 @@ interface AppState {
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
   toggleGrid: () => void;
+  /** Open the Rules tab with one rule focused (M3, #60). */
+  focusRule: (ruleId: string) => void;
+  /** Open the Findings view with one finding focused (M3, #60). */
+  focusFinding: (fingerprint: string) => void;
   refreshProvenance: () => Promise<void>;
   refreshImports: () => Promise<void>;
   uploadImport: (input: UploadImportInput) => Promise<void>;
@@ -170,6 +178,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   view: 'canvas',
   canvasMode: 'toBe',
   gridEnabled: true,
+  focusedRuleId: null,
+  focusedFindingFingerprint: null,
   provenance: [],
   importJobs: [],
   selectedImport: null,
@@ -319,6 +329,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCanvasMode: (mode) => set({ canvasMode: mode }),
 
   toggleGrid: () => set({ gridEnabled: !get().gridEnabled }),
+
+  focusRule: (ruleId) => set({ contextTab: 'rules', focusedRuleId: ruleId }),
+
+  focusFinding: (fingerprint) => set({ view: 'findings', focusedFindingFingerprint: fingerprint }),
 
   refreshProvenance: async () => {
     const project = get().project;
