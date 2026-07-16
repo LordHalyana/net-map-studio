@@ -229,28 +229,39 @@ button:disabled {
   margin: 0;
 }
 
-/* ---------- device node ---------- */
+/* ---------- device node (visual-parity M1, gap G1) ---------- */
 
 .device-node {
+  --node-accent: var(--role-endpoint);
+
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 130px;
-  padding: 8px 10px;
+  gap: 9px;
+  min-width: 150px;
+  padding: 9px 12px;
   background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1.5px solid var(--node-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--node-accent) 18%, transparent);
   position: relative;
 }
 
 .device-node--selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow:
+    0 0 0 2px var(--node-accent),
+    0 0 18px color-mix(in srgb, var(--node-accent) 33%, transparent);
 }
 
-.device-node__glyph {
+.device-node__tile {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--node-accent) 13%, transparent);
+  color: var(--node-accent);
+  flex-shrink: 0;
 }
 
 .device-node__body {
@@ -260,7 +271,10 @@ button:disabled {
 }
 
 .device-node__name {
-  font-weight: 600;
+  font-weight: 650;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -268,7 +282,7 @@ button:disabled {
 
 .device-node__meta {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 /* ---------- fields & inspector forms ---------- */
@@ -395,18 +409,29 @@ button:disabled {
 
 /* ---------- device node badges ---------- */
 
+/* Badge policy (M1 prototype verdict, issue #43): lifecycle/confidence/
+   evidence appear on hover or selection only; the status dot is always on. */
 .device-node__badges {
   position: absolute;
-  top: -8px;
-  right: -6px;
-  display: flex;
+  top: -9px;
+  left: 8px;
+  display: none;
   gap: 3px;
   align-items: center;
+  pointer-events: none;
+}
+
+.device-node:hover .device-node__badges,
+.device-node--selected .device-node__badges {
+  display: flex;
 }
 
 .device-node__status {
-  width: 8px;
-  height: 8px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-dim);
 }

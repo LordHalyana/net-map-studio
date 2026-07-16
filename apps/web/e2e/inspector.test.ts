@@ -12,14 +12,16 @@ async function waitSaved(page: Page) {
 async function addDeviceViaLibrary(page: Page, deviceType: string): Promise<string> {
   const nodes = page.locator('.react-flow__node');
   const before = await nodes.count();
-  const namesBefore = await page.locator('.device-node__name').allInnerTexts();
+  // textContent, not innerText: the node renders names uppercase (M1) but
+  // testids carry the raw name
+  const namesBefore = await page.locator('.device-node__name').allTextContents();
   await page.getByTestId(`library-item-${deviceType}`).click();
   await expect(nodes).toHaveCount(before + 1);
 
   let added: string[] = [];
   await expect
     .poll(async () => {
-      const namesNow = await page.locator('.device-node__name').allInnerTexts();
+      const namesNow = await page.locator('.device-node__name').allTextContents();
       added = namesNow.filter((n) => n && !namesBefore.includes(n));
       return added.length;
     })
@@ -50,7 +52,9 @@ test.describe('component library & device nodes (M5 DoD)', () => {
     await openApp(page);
     const name = await addDeviceViaLibrary(page, 'firewall');
     const node = page.getByTestId(`device-node-${name}`);
-    await expect(node.locator('.device-node__glyph')).toBeVisible();
+    await expect(node.locator('.device-node__tile')).toBeVisible();
+    // badge strip reveals on hover (visual-parity M1 badge policy)
+    await node.hover();
     await expect(node.locator('.device-node__lifecycle')).toHaveText('PLN');
     await expect(node.getByTestId('badge-confidence')).toBeAttached();
     await expect(node.getByTestId('badge-evidence')).toBeAttached();

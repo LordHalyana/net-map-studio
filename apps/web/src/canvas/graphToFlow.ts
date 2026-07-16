@@ -48,6 +48,8 @@ export type NetworkNodeData = { network: Network; color: string };
 export type DeviceNodeData = {
   device: Device;
   memberships: Membership[];
+  /** Primary address for the node's second line (concept shows IP, gap G1). */
+  primaryIp: string | null;
   showTint: boolean;
   /** Highest accepted provenance confidence across fields (M8); null = manual object. */
   confidence: number | null;
@@ -94,6 +96,21 @@ export function graphToFlow(
 
   const zoneById = new Map(state.zones.map((z) => [z.id, z]));
   const hiddenDeviceIds = new Set<string>();
+
+  // primary IP per device: first ipv4 (falling back to ipv6) across its interfaces
+  const primaryIpByDevice = new Map<string, string>();
+  {
+    const interfaceOwner = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
+    for (const kind of ['ipv4', 'ipv6'] as const) {
+      for (const address of state.addresses) {
+        if (address.kind !== kind) continue;
+        const deviceId = interfaceOwner.get(address.interfaceId);
+        if (deviceId && !primaryIpByDevice.has(deviceId)) {
+          primaryIpByDevice.set(deviceId, address.value);
+        }
+      }
+    }
+  }
 
   // provenance badges (M8): winning confidence + distinct evidence per device
   const deviceConfidence = new Map<string, number>();
@@ -186,6 +203,7 @@ export function graphToFlow(
       data: {
         device,
         memberships,
+        primaryIp: primaryIpByDevice.get(device.id) ?? null,
         showTint: options.logical,
         confidence: deviceConfidence.get(device.id) ?? null,
         evidenceCount: deviceEvidence.get(device.id)?.size ?? 0,
