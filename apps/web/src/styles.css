@@ -505,6 +505,215 @@ button:disabled {
   font-size: 10px;
 }
 
+/* ---------- inspector redesign (visual-parity M6, gap G8) ---------- */
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.inspector-head__tile {
+  --node-accent: var(--role-endpoint);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--node-accent) 14%, transparent);
+  color: var(--node-accent);
+  flex-shrink: 0;
+}
+
+.inspector-head__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inspector-head__name {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspector-head__ip {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.inspector-head__status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.inspector-head__status--active {
+  color: var(--accent-green);
+}
+
+.inspector-head__status--inactive {
+  color: var(--danger);
+}
+
+.interface-editor__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.interface-editor__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.interface-editor__name {
+  font-weight: 650;
+  font-size: 12px;
+}
+
+.interface-editor__ip {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+
+.inspector-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.inspector-rule__action {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.inspector-rule__action--allow {
+  color: var(--accent-green);
+}
+
+.inspector-rule__action--deny,
+.inspector-rule__action--reject {
+  color: var(--danger);
+}
+
+.inspector-rule__action--monitor {
+  color: var(--warn);
+}
+
+.inspector-rule__service {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* iOS-style switch (concept toggles) */
+.switch {
+  margin-left: auto;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch__track {
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 120ms ease;
+}
+
+.switch__track::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 1.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition:
+    left 120ms ease,
+    background 120ms ease;
+}
+
+.switch input:checked + .switch__track {
+  background: color-mix(in srgb, var(--accent-green) 70%, transparent);
+  border-color: transparent;
+}
+
+.switch input:checked + .switch__track::after {
+  left: 15px;
+  background: var(--bg);
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.tag-chip {
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* quiet inputs (M6 prototype verdict, issue #48): always-edit fields that
+   read like the concept's key-value rows until hovered or focused */
+.inspector-panel .field input,
+.inspector-panel .field select,
+.inspector-panel .field textarea {
+  background: transparent;
+  border-color: transparent;
+}
+
+.inspector-panel .field input:hover,
+.inspector-panel .field select:hover,
+.inspector-panel .field textarea:hover {
+  border-color: var(--border);
+}
+
+.inspector-panel .field input:focus,
+.inspector-panel .field select:focus,
+.inspector-panel .field textarea:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
 /* ---------- fields & inspector forms ---------- */
 
 .field {
