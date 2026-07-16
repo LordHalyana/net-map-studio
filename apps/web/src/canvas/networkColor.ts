@@ -25,10 +25,23 @@ function fnv1a(text: string): number {
   return hash;
 }
 
-export function networkColorMap(networks: readonly { id: string }[]): Map<string, string> {
-  const sorted = [...networks].map((n) => n.id).sort();
-  const taken = new Set<number>();
+export function networkColorMap(
+  networks: readonly { id: string; color?: string | null }[],
+): Map<string, string> {
   const map = new Map<string, string>();
+  const taken = new Set<number>();
+  // operator-pinned colors win (M6, #63); pinned palette hues also reserve
+  // their slot so the hash never hands the same hue to a second network
+  for (const network of networks) {
+    if (!network.color) continue;
+    map.set(network.id, network.color);
+    const slot = VLAN_PALETTE.indexOf(network.color);
+    if (slot >= 0) taken.add(slot);
+  }
+  const sorted = [...networks]
+    .filter((n) => !n.color)
+    .map((n) => n.id)
+    .sort();
   for (const id of sorted) {
     let slot = fnv1a(id) % VLAN_PALETTE.length;
     if (taken.size < VLAN_PALETTE.length) {
@@ -41,7 +54,7 @@ export function networkColorMap(networks: readonly { id: string }[]): Map<string
 }
 
 export function networkColor(
-  state: { networks: readonly { id: string }[] },
+  state: { networks: readonly { id: string; color?: string | null }[] },
   networkId: string,
 ): string {
   return networkColorMap(state.networks).get(networkId) ?? '#4da3ff';

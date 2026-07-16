@@ -21,6 +21,14 @@ export const changeSetIdSchema = z.uuidv7().brand<'ChangeSetId'>();
 export const flowIdSchema = z.uuidv7().brand<'FlowId'>();
 export const identityIdSchema = z.uuidv7().brand<'IdentityId'>();
 export const roleAssignmentIdSchema = z.uuidv7().brand<'RoleAssignmentId'>();
+/** Secret matches (§3.13; improvements M13, #70): masked credentials found in evidence. */
+export const secretMatchIdSchema = z.uuidv7().brand<'SecretMatchId'>();
+/** Import profiles (§3.6; improvements M12, #69): operator line-format templates. */
+export const importProfileIdSchema = z.uuidv7().brand<'ImportProfileId'>();
+/** Report records (improvements M11, #68): the §3.4 deliverable audit trail. */
+export const reportIdSchema = z.uuidv7().brand<'ReportId'>();
+/** Host security artifacts (improvements M7, #64): detection inputs per Device. */
+export const hostArtifactIdSchema = z.uuidv7().brand<'HostArtifactId'>();
 /** Phase-3 findings (ADR-0023): the persisted disposition's primary key. */
 export const findingIdSchema = z.uuidv7().brand<'FindingId'>();
 /** Phase-3 Baseline (ADR-0025): the expected-state yardstick's primary key. */
@@ -39,6 +47,10 @@ export type PolicyRuleId = z.infer<typeof policyRuleIdSchema>;
 export type OperationId = z.infer<typeof operationIdSchema>;
 export type ChangeSetId = z.infer<typeof changeSetIdSchema>;
 export type FlowId = z.infer<typeof flowIdSchema>;
+export type HostArtifactId = z.infer<typeof hostArtifactIdSchema>;
+export type ReportId = z.infer<typeof reportIdSchema>;
+export type ImportProfileId = z.infer<typeof importProfileIdSchema>;
+export type SecretMatchId = z.infer<typeof secretMatchIdSchema>;
 export type IdentityId = z.infer<typeof identityIdSchema>;
 export type RoleAssignmentId = z.infer<typeof roleAssignmentIdSchema>;
 export type FindingId = z.infer<typeof findingIdSchema>;

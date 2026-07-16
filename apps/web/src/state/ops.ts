@@ -339,6 +339,12 @@ export function deleteDevicesChangeSet(state: ProjectState, deviceIds: string[])
     }
   }
 
+  for (const artifact of state.hostArtifacts) {
+    if (targetDeviceIds.has(artifact.deviceId)) {
+      ops.push(opDeleteEntity(projectId, { entityType: 'hostArtifact', entity: artifact }));
+    }
+  }
+
   for (const iface of ifaces) {
     ops.push(opDeleteEntity(projectId, { entityType: 'interface', entity: iface }));
   }
@@ -349,6 +355,73 @@ export function deleteDevicesChangeSet(state: ProjectState, deviceIds: string[])
 
   const label =
     targets.length === 1 ? `Delete ${targets[0]?.name}` : `Delete ${targets.length} devices`;
+  return changeSet(projectId, label, ops);
+}
+
+/** Snapshot taken by Ctrl+C so paste survives later edits to the graph (M2, #59). */
+export interface DeviceClipboard {
+  devices: Device[];
+  interfaces: Interface[];
+  addresses: Address[];
+}
+
+/**
+ * Paste copied Devices: fresh ids, unique names, offset positions. Links and
+ * Memberships are deliberately not copied in v1 (#59) — interfaces arrive
+ * detached from any Network.
+ */
+export function pasteDevicesChangeSet(
+  state: ProjectState,
+  copied: DeviceClipboard,
+): ChangeSet | null {
+  if (copied.devices.length === 0) return null;
+  const projectId = state.project.id;
+  const existingNames = new Set(state.devices.map((d) => d.name));
+  const zoneIds = new Set(state.zones.map((z) => z.id));
+  const ops: Operation[] = [];
+
+  for (const device of copied.devices) {
+    let name: string;
+    let copy = 0;
+    do {
+      copy += 1;
+      name = `${device.name}-copy${copy > 1 ? `-${copy}` : ''}`;
+    } while (existingNames.has(name));
+    existingNames.add(name);
+
+    const clone = deviceSchema.parse({
+      ...device,
+      id: newId(deviceIdSchema),
+      name,
+      // drop a containment reference that no longer resolves
+      zoneId: device.zoneId && zoneIds.has(device.zoneId) ? device.zoneId : null,
+      position: { x: device.position.x + 48, y: device.position.y + 48 },
+    });
+    ops.push(opCreateEntity(projectId, { entityType: 'device', entity: clone }));
+
+    for (const iface of copied.interfaces.filter((i) => i.deviceId === device.id)) {
+      const ifaceClone = interfaceSchema.parse({
+        ...iface,
+        id: newId(interfaceIdSchema),
+        deviceId: clone.id,
+        networkId: null,
+      });
+      ops.push(opCreateEntity(projectId, { entityType: 'interface', entity: ifaceClone }));
+      for (const address of copied.addresses.filter((a) => a.interfaceId === iface.id)) {
+        const addressClone = addressSchema.parse({
+          ...address,
+          id: newId(addressIdSchema),
+          interfaceId: ifaceClone.id,
+        });
+        ops.push(opCreateEntity(projectId, { entityType: 'address', entity: addressClone }));
+      }
+    }
+  }
+
+  const label =
+    copied.devices.length === 1
+      ? `Paste ${copied.devices[0]?.name}`
+      : `Paste ${copied.devices.length} devices`;
   return changeSet(projectId, label, ops);
 }
 

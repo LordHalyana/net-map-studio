@@ -40,6 +40,10 @@ function emptyState(): ProjectState {
     services: [],
     policyRules: [],
     flows: [],
+    hostArtifacts: [],
+    reports: [],
+    importProfiles: [],
+    secretMatches: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
@@ -129,7 +133,14 @@ describe('buildProposal against an empty graph', () => {
     ]);
     for (const operation of proposal.operations) {
       expect(operation.kind).toBe('CreateEntity');
-      if (operation.kind === 'CreateEntity') {
+      // report records (M11) and import profiles (M12) carry no lifecycle and
+      // never appear in proposals
+      if (
+        operation.kind === 'CreateEntity' &&
+        operation.payload.entityType !== 'report' &&
+        operation.payload.entityType !== 'importProfile' &&
+        operation.payload.entityType !== 'secretMatch'
+      ) {
         expect(operation.payload.entity.lifecycleState).toBe('observed');
         expect(operation.payload.entity.projectId).toBe(project.id);
       }

@@ -247,6 +247,15 @@ describe('no write route bypasses the operation engine (M3 DoD)', () => {
       // job + read-only Evidence) — entity tables are untouched.
       'PUT /projects/:id/threat-intel/feed',
       'POST /projects/:id/enrichments',
+      // Privacy & audit (§3.13, improvements M13 #70). Reveal and the
+      // retention sweep write only secretMatch/report rows through
+      // engine.applyOperation (the engine gate). Purge is the one sanctioned
+      // secure-deletion — it drops an evidence blob but preserves the record
+      // and its manifest hash, and is audited as a Report record; it is
+      // deliberately not undoable (§3.13).
+      'POST /projects/:id/secrets/:secretId/reveal',
+      'POST /projects/:id/evidence/:evidenceId/purge',
+      'POST /projects/:id/retention/sweep',
     ]);
 
     const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

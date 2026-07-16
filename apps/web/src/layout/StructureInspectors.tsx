@@ -8,6 +8,7 @@ import {
 } from '@netplan/domain';
 import { useAppStore } from '../state/store';
 import { opSetField } from '../state/ops';
+import { VLAN_PALETTE } from '../canvas/networkColor';
 import { FieldSection, SelectField, TextField } from './fields';
 
 export function NetworkInspector({ network, graph }: { network: Network; graph: ProjectState }) {
@@ -53,6 +54,33 @@ export function NetworkInspector({ network, graph }: { network: Network; graph: 
           placeholder="10.0.10.0/24"
           onCommit={(v) => set('cidr', v.trim(), network.cidr)}
         />
+        {/* persisted tint (M6, #63; divergence #50): swatches pin a hue,
+            Auto returns to the hash-stable palette */}
+        <div className="field" data-testid="network-color-picker">
+          <span className="field__label">Color</span>
+          <span className="color-swatches">
+            {VLAN_PALETTE.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                className={`color-swatch${network.color === hex ? ' color-swatch--on' : ''}`}
+                style={{ background: hex }}
+                title={hex}
+                data-testid={`network-color-${hex.slice(1)}`}
+                onClick={() => set('color', hex, network.color)}
+              />
+            ))}
+            <button
+              type="button"
+              className={`color-swatch color-swatch--auto${network.color === null ? ' color-swatch--on' : ''}`}
+              title="Automatic (hash-stable palette)"
+              data-testid="network-color-auto"
+              onClick={() => set('color', null, network.color)}
+            >
+              A
+            </button>
+          </span>
+        </div>
       </FieldSection>
       <FieldSection title="Members">
         {members.length === 0 ? (

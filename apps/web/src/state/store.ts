@@ -40,7 +40,7 @@ import {
 import { applyOperationOptimistic } from './reducer';
 
 export interface Selection {
-  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity';
+  entityType: 'device' | 'network' | 'zone' | 'site' | 'link' | 'policyRule' | 'identity' | 'flow';
   ids: string[];
 }
 
@@ -55,12 +55,24 @@ export interface LayerState {
   identities: boolean;
   /** Planned-rule callout cards on the canvas (visual-parity M4, gap G4). */
   rules: boolean;
+  /** Findings layer (M5, #62): severity tint on affected devices. */
+  findings: boolean;
 }
 
 export type ContextTab = 'details' | 'rules' | 'activity' | 'conflicts' | 'diff';
 
 /** Which primary workspace fills the central region (design §3.2B). */
-export type WorkspaceView = 'canvas' | 'imports' | 'identities' | 'findings' | 'egress';
+export type WorkspaceView =
+  | 'overview'
+  | 'canvas'
+  | 'networks'
+  | 'rules'
+  | 'imports'
+  | 'identities'
+  | 'findings'
+  | 'reports'
+  | 'egress'
+  | 'settings';
 
 /** AS-IS / TO-BE / Diff rendering mode (ADR-0009, design §3.10). */
 export type CanvasMode = 'asIs' | 'toBe' | 'diff';
@@ -76,6 +88,15 @@ export interface ConnectDraft {
   targetInterfaceId: string | null;
 }
 
+/** One queued notification (M6, #63): auto-dismissed, severity-tinted. */
+export interface Toast {
+  id: number;
+  message: string;
+  severity: 'info' | 'success' | 'error';
+}
+
+let toastSeq = 0;
+
 const emptyDraft: ConnectDraft = {
   sourceDeviceId: null,
   sourceInterfaceId: null,
@@ -90,23 +111,34 @@ interface AppState {
   selection: Selection | null;
   syncError: string | null;
   pendingOps: number;
+  /** Epoch ms of the last acknowledged save (M6, #63 relative timestamp). */
+  lastSavedAt: number | null;
+  /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
+  toasts: Toast[];
+  pushToast: (message: string, severity?: Toast['severity']) => void;
+  dismissToast: (id: number) => void;
   layers: LayerState;
   collapsedSites: string[];
   collapsedZones: string[];
   connectMode: boolean;
   connectDraft: ConnectDraft;
-  connectNotice: string | null;
   view: WorkspaceView;
   canvasMode: CanvasMode;
+  /** Grid display + snap-to-grid (M2, #59) — one switch for both. */
+  gridEnabled: boolean;
+  /** Rule row to highlight/scroll to in the Rules tab (M3, #60). */
+  focusedRuleId: string | null;
+  /** Finding card to highlight/scroll to in the Findings view (M3, #60). */
+  focusedFindingFingerprint: string | null;
+  /** Findings view scoped to one device — set by the canvas badge (M5, #62). */
+  findingsDeviceFilter: string | null;
   /** Whole-project provenance sidecar mirror — feeds badges and the inspector. */
   provenance: FieldProvenance[];
   importJobs: ImportJob[];
   selectedImport: ImportJobDetail | null;
-  importNotice: string | null;
   /** Findings report (ADR-0023), recomputed on demand — always current. */
   findings: FindingsReport | null;
   findingsLoading: boolean;
-  findingsError: string | null;
   refreshFindings: () => Promise<void>;
   disposeFinding: (
     fingerprint: string,
@@ -115,6 +147,8 @@ interface AppState {
   ) => Promise<void>;
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
+  /** Reveal a masked secret's original value — audited server-side (M13, #70). */
+  revealSecret: (secretId: string) => Promise<string>;
   dispatch: (payload: Operation | ChangeSet) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -127,8 +161,16 @@ interface AppState {
   toggleObservedLayer: () => void;
   toggleIdentityOverlay: () => void;
   toggleRulesLayer: () => void;
+  toggleFindingsLayer: () => void;
+  /** Open the Findings view filtered to one device (M5, #62). */
+  focusFindingsForDevice: (deviceId: string | null) => void;
   setView: (view: WorkspaceView) => void;
   setCanvasMode: (mode: CanvasMode) => void;
+  toggleGrid: () => void;
+  /** Open the Rules tab with one rule focused (M3, #60). */
+  focusRule: (ruleId: string) => void;
+  /** Open the Findings view with one finding focused (M3, #60). */
+  focusFinding: (fingerprint: string) => void;
   refreshProvenance: () => Promise<void>;
   refreshImports: () => Promise<void>;
   uploadImport: (input: UploadImportInput) => Promise<void>;
@@ -157,34 +199,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   selection: null,
   syncError: null,
   pendingOps: 0,
-  layers: { logical: true, physical: true, observed: true, identities: false, rules: true },
+  lastSavedAt: null,
+  toasts: [],
+  layers: {
+    logical: true,
+    physical: true,
+    observed: true,
+    identities: false,
+    rules: true,
+    findings: true,
+  },
   collapsedSites: [],
   collapsedZones: [],
   contextTab: 'details',
   connectMode: false,
   connectDraft: emptyDraft,
-  connectNotice: null,
   view: 'canvas',
   canvasMode: 'toBe',
+  gridEnabled: true,
+  focusedRuleId: null,
+  focusedFindingFingerprint: null,
+  findingsDeviceFilter: null,
   provenance: [],
   importJobs: [],
   selectedImport: null,
-  importNotice: null,
   findings: null,
   findingsLoading: false,
-  findingsError: null,
+
+  pushToast: (message, severity = 'error') =>
+    set({ toasts: [...get().toasts, { id: ++toastSeq, message, severity }] }),
+
+  dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 
   refreshFindings: async () => {
     const project = get().project;
     if (!project) return;
-    set({ findingsLoading: true, findingsError: null });
+    set({ findingsLoading: true });
     try {
       set({ findings: await getFindings(project.id), findingsLoading: false });
     } catch (error) {
-      set({
-        findingsLoading: false,
-        findingsError: error instanceof Error ? error.message : 'Failed to load findings',
-      });
+      set({ findingsLoading: false });
+      get().pushToast(error instanceof Error ? error.message : 'Failed to load findings');
     }
   },
 
@@ -224,6 +279,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ graph, provenance });
   },
 
+  revealSecret: async (secretId) => {
+    const project = get().project;
+    if (!project) throw new Error('no project');
+    const response = await fetch(`/api/projects/${project.id}/secrets/${secretId}/reveal`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      const message =
+        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+          ? body.error
+          : `Reveal failed: ${response.status}`;
+      get().pushToast(message);
+      throw new Error(message);
+    }
+    const body: unknown = await response.json();
+    const value =
+      body && typeof body === 'object' && 'value' in body && typeof body.value === 'string'
+        ? body.value
+        : '';
+    // the reveal flag moved server-side; refresh so the audit + state reflect it
+    await get().reload();
+    return value;
+  },
+
   dispatch: (payload) => {
     const { project, graph } = get();
     if (!project || !graph) return;
@@ -243,11 +323,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           pendingOps: pending,
           availability: response.availability,
-          ...(pending === 0 ? { graph: response.state } : {}),
+          ...(pending === 0 ? { graph: response.state, lastSavedAt: Date.now() } : {}),
         });
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Sync failed';
+        get().pushToast(message);
         try {
           const graphNow = await getGraph(project.id);
           set({ graph: graphNow, pendingOps: 0, syncError: message });
@@ -261,14 +342,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     if (!project || !get().availability.canUndo) return;
     const response = await postUndo(project.id);
-    set({ graph: response.state, availability: response.availability });
+    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
   },
 
   redo: async () => {
     const project = get().project;
     if (!project || !get().availability.canRedo) return;
     const response = await postRedo(project.id);
-    set({ graph: response.state, availability: response.availability });
+    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
   },
 
   select: (selection) => set({ selection }),
@@ -310,9 +391,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleRulesLayer: () => set({ layers: { ...get().layers, rules: !get().layers.rules } }),
 
+  toggleFindingsLayer: () => set({ layers: { ...get().layers, findings: !get().layers.findings } }),
+
+  focusFindingsForDevice: (deviceId) =>
+    set(
+      deviceId
+        ? { view: 'findings', findingsDeviceFilter: deviceId }
+        : { findingsDeviceFilter: null },
+    ),
+
   setView: (view) => set({ view }),
 
   setCanvasMode: (mode) => set({ canvasMode: mode }),
+
+  toggleGrid: () => set({ gridEnabled: !get().gridEnabled }),
+
+  focusRule: (ruleId) => set({ contextTab: 'rules', focusedRuleId: ruleId }),
+
+  focusFinding: (fingerprint) => set({ view: 'findings', focusedFindingFingerprint: fingerprint }),
 
   refreshProvenance: async () => {
     const project = get().project;
@@ -331,7 +427,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadImport: async (input) => {
     const project = get().project;
     if (!project) return;
-    set({ importNotice: null });
     try {
       const job = await createImport(project.id, input);
       set({ importJobs: [...get().importJobs, job] });
@@ -352,9 +447,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      set({ importNotice: 'Import is still parsing — check the job list.' });
+      get().pushToast('Import is still parsing — check the job list.', 'info');
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Import failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Import failed');
     }
   },
 
@@ -372,12 +467,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const proposal = await resolveImportConflict(project.id, selected.job.id, conflictId, action);
       set({ selectedImport: { ...selected, proposal } });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Resolve failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Resolve failed');
     }
   },
 
@@ -385,7 +479,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const result = await commitImport(project.id, selected.job.id);
       set({
@@ -399,9 +492,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
         availability: await getAvailability(project.id),
         provenance: await listProjectProvenance(project.id),
+        // committed/rolled-back evidence changes the detection surface (M5, #62)
+        findings: null,
       });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Commit failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Commit failed');
     }
   },
 
@@ -409,7 +504,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     const selected = get().selectedImport;
     if (!project || !selected) return;
-    set({ importNotice: null });
     try {
       const result = await rollbackImport(project.id, selected.job.id);
       set({
@@ -423,9 +517,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         importJobs: get().importJobs.map((j) => (j.id === result.job.id ? result.job : j)),
         availability: await getAvailability(project.id),
         provenance: await listProjectProvenance(project.id),
+        // committed/rolled-back evidence changes the detection surface (M5, #62)
+        findings: null,
       });
     } catch (error) {
-      set({ importNotice: error instanceof Error ? error.message : 'Rollback failed' });
+      get().pushToast(error instanceof Error ? error.message : 'Rollback failed');
     }
   },
 
@@ -447,15 +543,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  toggleConnectMode: () =>
-    set({ connectMode: !get().connectMode, connectDraft: emptyDraft, connectNotice: null }),
+  toggleConnectMode: () => set({ connectMode: !get().connectMode, connectDraft: emptyDraft }),
 
   connectPickNode: (nodeType, nodeId) => {
     if (!get().connectMode) return;
     if (nodeType !== 'device') {
-      set({
-        connectNotice: `A Link cannot terminate on a ${nodeType} — endpoints must be Interfaces.`,
-      });
+      get().pushToast(
+        `A Link cannot terminate on a ${nodeType} — endpoints must be Interfaces.`,
+        'info',
+      );
       return;
     }
     const graph = get().graph;
@@ -464,12 +560,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!draft.sourceDeviceId) {
       set({
         connectDraft: { ...draft, sourceDeviceId: nodeId, sourceInterfaceId: firstInterface },
-        connectNotice: null,
       });
     } else if (nodeId !== draft.sourceDeviceId) {
       set({
         connectDraft: { ...draft, targetDeviceId: nodeId, targetInterfaceId: firstInterface },
-        connectNotice: null,
       });
     }
   },
@@ -484,5 +578,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  resetConnectDraft: () => set({ connectDraft: emptyDraft, connectNotice: null }),
+  resetConnectDraft: () => set({ connectDraft: emptyDraft }),
 }));

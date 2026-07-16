@@ -1,5 +1,6 @@
 import { useAppStore } from '../state/store';
 import { ConnectForm } from './ConnectForm';
+import { FlowDetails } from './FlowDetails';
 import { LinkDetails } from './LinkDetails';
 import { RulesPanel } from './RulesPanel';
 import { ActivityLog } from './ActivityLog';
@@ -24,6 +25,9 @@ export function ContextPanel() {
   } else if (graph && selection?.entityType === 'link') {
     detailsTitle = 'Link info';
     details = <LinkDetails linkIds={selection.ids} graph={graph} />;
+  } else if (graph && selection?.entityType === 'flow') {
+    detailsTitle = 'Flow details';
+    details = <FlowDetails flowIds={selection.ids} graph={graph} />;
   }
 
   const tabs = [

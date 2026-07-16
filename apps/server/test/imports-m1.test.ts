@@ -81,10 +81,13 @@ describe('M1: ImportJob framework', () => {
       .inject({ method: 'GET', url: `/projects/${project.id}/evidence/${evidence.id}` })
       .then((r) => r.json());
     expect(blob.content).toBe(FIXTURE_FILE);
+    // evidence content is read-only after ingestion (§3.13) — the sole write
+    // route is the audited secure-deletion purge (improvements M13, #70),
+    // which drops the blob but preserves the record and its manifest hash
     const evidenceWrites = app.registeredRoutes.filter(
       (r) => r.includes('/evidence') && !r.startsWith('GET') && !r.startsWith('HEAD'),
     );
-    expect(evidenceWrites).toEqual([]);
+    expect(evidenceWrites).toEqual(['POST /projects/:id/evidence/:evidenceId/purge']);
   });
 
   it('a malformed file fails the job without crashing the app', async () => {

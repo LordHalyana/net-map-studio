@@ -77,7 +77,6 @@ function InterfacePicker({
 export function ConnectForm() {
   const graph = useAppStore((s) => s.graph);
   const draft = useAppStore((s) => s.connectDraft);
-  const notice = useAppStore((s) => s.connectNotice);
   const dispatch = useAppStore((s) => s.dispatch);
   const resetConnectDraft = useAppStore((s) => s.resetConnectDraft);
   const [kind, setKind] = useState<Link['kind']>('cable');
@@ -107,11 +106,6 @@ export function ConnectForm() {
         Connect mode: click a source device, then a destination device. Links terminate on
         Interfaces (ADR-0012).
       </p>
-      {notice && (
-        <p className="connect-form__notice" data-testid="connect-notice">
-          ⚠ {notice}
-        </p>
-      )}
       <div className="connect-form__row">
         <InterfacePicker
           side="source"

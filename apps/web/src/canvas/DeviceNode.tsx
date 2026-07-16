@@ -3,6 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Box } from 'lucide-react';
 import type { Device } from '@netplan/domain';
 import { findLibraryItem } from '../library/catalog';
+import { useAppStore } from '../state/store';
 import { accentStyle } from './colors';
 import { nodeAccentColor } from './roleColors';
 import type { DeviceNodeData } from './graphToFlow';
@@ -30,13 +31,17 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
   const {
     device,
     memberships,
+    compact,
     primaryIp,
     showTint,
     confidence,
     evidenceCount,
     identityChips,
     diffState,
+    findings,
+    findingsTint,
   } = data;
+  const focusFindingsForDevice = useAppStore((s) => s.focusFindingsForDevice);
   const accent = nodeAccentColor(device, memberships);
   const Icon = findLibraryItem(device.deviceType)?.icon ?? Box;
   const typeLabel =
@@ -49,10 +54,44 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
       : diffState === 'removed'
         ? ' device-node--diff-removed'
         : '';
+  // severity tint rides the findings layer toggle; the badge always renders
+  // in the cluster (M5, #62)
+  const findingClass = findings && findingsTint ? ` device-node--finding-${findings.severity}` : '';
+
+  // Leaf-endpoint mini-node (M4, #61): icon tile + status dot; name/IP appear
+  // on hover; the full card returns while selected.
+  if (compact && !selected) {
+    return (
+      <div
+        className={`device-node device-node--compact${diffClass}${findingClass}`}
+        style={accentStyle(accent)}
+        data-testid={`device-node-${device.name}`}
+      >
+        <Handle type="source" position={Position.Top} id="membership" className="hidden-handle" />
+        <Handle type="source" position={Position.Right} id="link-out" className="hidden-handle" />
+        <Handle type="target" position={Position.Left} id="link-in" className="hidden-handle" />
+        <span className="device-node__tile">
+          {device.customIconKey ? (
+            <img className="device-node__icon" src={device.customIconKey} alt={typeLabel} />
+          ) : (
+            <Icon size={15} aria-hidden />
+          )}
+        </span>
+        <span
+          className={`device-node__status device-node__status--${device.status}`}
+          title={`Status: ${device.status}`}
+        />
+        <span className="device-node__hover-label">
+          <span className="device-node__name">{device.name}</span>
+          <span className="device-node__meta">{primaryIp ?? typeLabel}</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
-      className={`device-node${selected ? ' device-node--selected' : ''}${diffClass}`}
+      className={`device-node${selected ? ' device-node--selected' : ''}${diffClass}${findingClass}`}
       style={accentStyle(accent)}
       data-testid={`device-node-${device.name}`}
     >
@@ -89,6 +128,20 @@ export const DeviceNode = memo(function DeviceNode({ data, selected }: NodeProps
         title={`Status: ${device.status}`}
       />
       <div className="device-node__badges">
+        {findings && (
+          <button
+            type="button"
+            className={`device-node__warning device-node__warning--${findings.severity}`}
+            data-testid="badge-findings"
+            title={`${findings.count} open finding(s) — click to review`}
+            onClick={(event) => {
+              event.stopPropagation();
+              focusFindingsForDevice(device.id);
+            }}
+          >
+            ⚠{findings.count}
+          </button>
+        )}
         <span
           className={`device-node__lifecycle device-node__lifecycle--${device.lifecycleState}`}
           title={`Lifecycle: ${device.lifecycleState}`}

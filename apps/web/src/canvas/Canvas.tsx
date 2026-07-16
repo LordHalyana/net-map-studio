@@ -16,14 +16,19 @@ import {
   type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { deviceTypeSchema } from '@netplan/domain';
+import { deviceTypeSchema, type Severity } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
 import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { PolicyRuleCalloutNode } from './PolicyRuleCalloutNode';
-import { graphToFlow, type DeviceNodeData, type NetworkNodeData } from './graphToFlow';
+import {
+  graphToFlow,
+  type DeviceFindingsBadge,
+  type DeviceNodeData,
+  type NetworkNodeData,
+} from './graphToFlow';
 import { nodeAccentColor } from './roleColors';
 import { CANVAS_BG, GRID_LINE, MINIMAP_NEUTRAL } from './colors';
 import { CanvasToolbar } from '../layout/CanvasToolbar';
@@ -45,6 +50,9 @@ function minimapNodeColor(node: Node): string {
   if (node.type === 'network' && isNetworkData(node.data)) return node.data.color;
   return MINIMAP_NEUTRAL;
 }
+
+/** One constant for snap AND the painted grid, so snapping lands on visible gridlines (M2, #59). */
+const GRID_SIZE = 22;
 
 const nodeTypes = {
   device: DeviceNode,
@@ -76,6 +84,34 @@ function CanvasInner() {
 
   const canvasMode = useAppStore((s) => s.canvasMode);
   const provenance = useAppStore((s) => s.provenance);
+  const gridEnabled = useAppStore((s) => s.gridEnabled);
+
+  // findings feed the warning badges + layer tint (M5, #62)
+  const findingsReport = useAppStore((s) => s.findings);
+  const refreshFindings = useAppStore((s) => s.refreshFindings);
+  useEffect(() => {
+    if (project && !findingsReport) void refreshFindings();
+  }, [project, findingsReport, refreshFindings]);
+
+  const openFindingsByDevice = useMemo(() => {
+    const order: Severity[] = ['info', 'low', 'medium', 'high', 'critical'];
+    const map = new Map<string, DeviceFindingsBadge>();
+    for (const finding of findingsReport?.findings ?? []) {
+      if (finding.status !== 'new' || finding.stale) continue;
+      const affected = finding.detection?.affected;
+      if (!affected || affected.kind !== 'device') continue;
+      const severity = finding.detection?.severity ?? 'info';
+      const current = map.get(affected.id);
+      map.set(affected.id, {
+        count: (current?.count ?? 0) + 1,
+        severity:
+          current && order.indexOf(current.severity) > order.indexOf(severity)
+            ? current.severity
+            : severity,
+      });
+    }
+    return map;
+  }, [findingsReport]);
 
   const flow = useMemo(
     () =>
@@ -86,13 +122,15 @@ function CanvasInner() {
             observed: layers.observed,
             identities: layers.identities,
             rules: layers.rules,
+            findingsLayer: layers.findings,
+            openFindingsByDevice,
             mode: canvasMode,
             provenance,
             collapsedSites,
             collapsedZones,
           })
         : { nodes: [], edges: [] },
-    [graph, layers, canvasMode, provenance, collapsedSites, collapsedZones],
+    [graph, layers, canvasMode, provenance, collapsedSites, collapsedZones, openFindingsByDevice],
   );
 
   // Adopt graph-derived nodes, preserving drag/selection state AND object
@@ -123,7 +161,7 @@ function CanvasInner() {
   }, [flow.nodes]);
 
   useEffect(() => {
-    const edgeContent = (e: Edge) =>
+    const edgeContent = (e: Edge & { pathOptions?: unknown }) =>
       JSON.stringify([
         e.source,
         e.target,
@@ -133,6 +171,7 @@ function CanvasInner() {
         e.label,
         e.data,
         e.hidden,
+        e.pathOptions,
       ]);
     setEdges((current) => {
       const byId = new Map(current.map((e) => [e.id, e]));
@@ -221,14 +260,23 @@ function CanvasInner() {
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
       if (selectedNodes.length === 0 && selectedEdges.length > 0) {
-        // link edges carry the underlying Link ids (bundles carry several)
-        const linkIds = selectedEdges.flatMap((edge) => {
-          const data = edge.data;
-          return data && Array.isArray(data['linkIds'])
-            ? data['linkIds'].filter((v): v is string => typeof v === 'string')
-            : [];
-        });
-        select(linkIds.length > 0 ? { entityType: 'link', ids: linkIds } : null);
+        // link edges carry Link ids; flow edges carry Flow ids (M3, #60)
+        const idsFrom = (key: 'linkIds' | 'flowIds') =>
+          selectedEdges.flatMap((edge) => {
+            const data = edge.data;
+            return data && Array.isArray(data[key])
+              ? data[key].filter((v): v is string => typeof v === 'string')
+              : [];
+          });
+        const linkIds = idsFrom('linkIds');
+        const flowIds = idsFrom('flowIds');
+        select(
+          linkIds.length > 0
+            ? { entityType: 'link', ids: linkIds }
+            : flowIds.length > 0
+              ? { entityType: 'flow', ids: flowIds }
+              : null,
+        );
         return;
       }
       if (selectedNodes.length === 0) {
@@ -268,8 +316,26 @@ function CanvasInner() {
     [dispatch],
   );
 
-  // command-bar requests: focus an entity, apply a zoom preset
-  const { setCenter, zoomTo } = useReactFlow();
+  // command-bar requests: focus an entity, apply a zoom preset, fit to screen
+  const { setCenter, zoomTo, fitView } = useReactFlow();
+  useEffect(() => {
+    function onFit() {
+      void fitView({ duration: 250 });
+    }
+    window.addEventListener('netplan:fit', onFit);
+    return () => window.removeEventListener('netplan:fit', onFit);
+  }, [fitView]);
+
+  // Escape clears the visual React Flow selection along with the store's (M2, #59)
+  useEffect(() => {
+    function onClearSelection() {
+      setNodes((nds) => nds.map((n) => (n.selected ? { ...n, selected: false } : n)));
+      setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)));
+    }
+    window.addEventListener('netplan:clear-selection', onClearSelection);
+    return () => window.removeEventListener('netplan:clear-selection', onClearSelection);
+  }, []);
+
   useEffect(() => {
     function onFocusNode(event: Event) {
       const detail = event instanceof CustomEvent ? event.detail : null;
@@ -351,6 +417,21 @@ function CanvasInner() {
     <main className="canvas-region" data-testid="canvas-region">
       <CanvasToolbar />
       <div className="canvas-region__flow">
+        {graph &&
+          graph.devices.length === 0 &&
+          graph.networks.length === 0 &&
+          graph.sites.length === 0 && (
+            <div className="canvas-empty-hint" data-testid="canvas-empty-hint">
+              <p>
+                Drag a component from the <strong>library</strong> onto the canvas to start
+                planning…
+              </p>
+              <p>
+                …or open <strong>Imports and Evidence</strong> to reconstruct an existing network
+                from evidence.
+              </p>
+            </div>
+          )}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -366,15 +447,17 @@ function CanvasInner() {
           deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode={['Shift', 'Control']}
           colorMode="dark"
-          snapToGrid
-          snapGrid={[16, 16]}
+          snapToGrid={gridEnabled}
+          snapGrid={[GRID_SIZE, GRID_SIZE]}
           fitView
           // viewport culling once the canvas is big enough to care (design acceptance #1)
           onlyRenderVisibleElements={nodes.length > 60}
           minZoom={0.05}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Lines} gap={22} color={GRID_LINE} />
+          {gridEnabled && (
+            <Background variant={BackgroundVariant.Lines} gap={GRID_SIZE} color={GRID_LINE} />
+          )}
           <MiniMap
             pannable
             zoomable
@@ -382,6 +465,9 @@ function CanvasInner() {
             nodeColor={minimapNodeColor}
             maskColor="rgb(11 14 19 / 65%)"
             style={{ marginLeft: 52 }}
+            // collapses to a corner tab unless hovered, so it never
+            // permanently occludes bottom-left nodes (M4, #61)
+            className="minimap-collapsible"
           />
           <Controls position="bottom-left" />
           <EdgeMarkerDefs />

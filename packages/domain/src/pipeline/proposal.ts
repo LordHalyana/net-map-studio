@@ -4,6 +4,7 @@ import {
   changeSetIdSchema,
   deviceIdSchema,
   flowIdSchema,
+  hostArtifactIdSchema,
   identityIdSchema,
   interfaceIdSchema,
   newId,
@@ -17,6 +18,7 @@ import {
   addressSchema,
   deviceSchema,
   flowSchema,
+  hostArtifactSchema,
   identitySchema,
   interfaceSchema,
   roleAssignmentSchema,
@@ -416,6 +418,29 @@ export function buildProposal(
     op({ ...opBase(), kind: 'CreateEntity', payload: { entityType: 'roleAssignment', entity } });
   }
 
+  // --- host artifacts (improvements M7, #64) ---
+  for (const candidate of candidates.hostArtifacts) {
+    const artifactId = newId(hostArtifactIdSchema);
+    entityIds[candidate.key] = artifactId;
+    const entity = hostArtifactSchema.parse({
+      id: artifactId,
+      projectId,
+      deviceId: entityIds[candidate.deviceKey],
+      kind: candidate.kind,
+      name: candidate.name,
+      path: candidate.path,
+      command: candidate.command,
+      persistenceKind: candidate.persistenceKind,
+      sha256: candidate.sha256,
+      publisher: candidate.publisher,
+      version: candidate.version,
+      remoteAccess: candidate.remoteAccess,
+      confidence: candidate.confidence,
+      lifecycleState: 'observed',
+    });
+    op({ ...opBase(), kind: 'CreateEntity', payload: { entityType: 'hostArtifact', entity } });
+  }
+
   // --- flows ---
   const deviceKeyByHint = new Map<string, string>();
   for (const candidate of candidates.devices) {
@@ -703,6 +728,11 @@ function dedupChildrenAgainstExisting(
       .filter((i) => i.deviceId === deviceId)
       .map((i) => `${i.scope}:${i.name.toLowerCase()}`),
   );
+  const existingArtifacts = new Set(
+    state.hostArtifacts
+      .filter((a) => a.deviceId === deviceId)
+      .map((a) => `${a.kind}:${a.name.toLowerCase()}:${(a.path ?? '').toLowerCase()}`),
+  );
 
   // duplicate interfaces: remap references to the existing interface, drop the create
   for (const operation of [...proposal.operations]) {
@@ -746,6 +776,13 @@ function dedupChildrenAgainstExisting(
         return !(
           payload.entity.deviceId === deviceId &&
           existingIdentityNames.has(`${payload.entity.scope}:${payload.entity.name.toLowerCase()}`)
+        );
+      case 'hostArtifact':
+        return !(
+          payload.entity.deviceId === deviceId &&
+          existingArtifacts.has(
+            `${payload.entity.kind}:${payload.entity.name.toLowerCase()}:${(payload.entity.path ?? '').toLowerCase()}`,
+          )
         );
       default:
         return true;
@@ -995,6 +1032,17 @@ export function generateProvenanceRows(
       entityId,
       'observationCount',
       syntheticValue(candidate.count, candidate.confidence, candidate.observations),
+    );
+  }
+  for (const candidate of candidates.hostArtifacts) {
+    if (ignored.has(candidate.deviceKey)) continue;
+    const entityId = proposal.entityIds[candidate.key];
+    if (!entityId) continue;
+    emit(
+      'hostArtifact',
+      entityId,
+      'name',
+      syntheticValue(candidate.name, candidate.confidence, candidate.observations),
     );
   }
 

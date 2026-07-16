@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   endpointSchema,
   policyActionSchema,
@@ -236,12 +236,15 @@ function NewRuleForm({ graph }: { graph: ProjectState }) {
         ))}
       </select>
       <label className="rule-add__logging">
-        <input
-          type="checkbox"
-          checked={logging}
-          data-testid="rule-logging-toggle"
-          onChange={(e) => setLogging(e.target.checked)}
-        />
+        <span className="switch switch--inline">
+          <input
+            type="checkbox"
+            checked={logging}
+            data-testid="rule-logging-toggle"
+            onChange={(e) => setLogging(e.target.checked)}
+          />
+          <span className="switch__track" />
+        </span>
         log
       </label>
       <input
@@ -274,17 +277,32 @@ function RuleRow({
   rule,
   graph,
   warnings,
+  focused,
 }: {
   rule: PolicyRule;
   graph: ProjectState;
   warnings: RuleWarning[];
+  focused: boolean;
 }) {
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
   const service = rule.serviceId ? graph.services.find((s) => s.id === rule.serviceId) : undefined;
+  // planned-never-observed is informational (§3.11, M8 #65) — muted, not a ⚠
+  const infoWarnings = warnings.filter((w) => w.category === 'plannedNeverObserved');
+  const hardWarnings = warnings.filter((w) => w.category !== 'plannedNeverObserved');
+
+  // a callout click / search hit lands here scrolled into view (M3, #60)
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focused]);
 
   return (
-    <li className="rule-row" data-testid={`rule-row-${rule.id}`}>
+    <li
+      ref={rowRef}
+      className={`rule-row${focused ? ' rule-row--focused' : ''}`}
+      data-testid={`rule-row-${rule.id}`}
+    >
       <div className="rule-row__main">
         <span className={`rule-row__action rule-row__action--${rule.action}`}>{rule.action}</span>
         <span className="rule-row__traffic">
@@ -301,22 +319,25 @@ function RuleRow({
           }
         />
         <label className="rule-add__logging" title="Logging">
-          <input
-            type="checkbox"
-            checked={rule.logging}
-            onChange={(e) =>
-              dispatch(
-                opSetField(
-                  projectId,
-                  'policyRule',
-                  rule.id,
-                  'logging',
-                  e.target.checked,
-                  rule.logging,
-                ),
-              )
-            }
-          />
+          <span className="switch switch--inline">
+            <input
+              type="checkbox"
+              checked={rule.logging}
+              onChange={(e) =>
+                dispatch(
+                  opSetField(
+                    projectId,
+                    'policyRule',
+                    rule.id,
+                    'logging',
+                    e.target.checked,
+                    rule.logging,
+                  ),
+                )
+              }
+            />
+            <span className="switch__track" />
+          </span>
           log
         </label>
         <button
@@ -328,11 +349,20 @@ function RuleRow({
           ✕
         </button>
       </div>
-      {warnings.length > 0 && (
+      {hardWarnings.length > 0 && (
         <ul className="rule-row__warnings" data-testid={`rule-warnings-${rule.id}`}>
-          {warnings.map((warning, index) => (
+          {hardWarnings.map((warning, index) => (
             <li key={index} data-warning={warning.category}>
               ⚠ {warning.message}
+            </li>
+          ))}
+        </ul>
+      )}
+      {infoWarnings.length > 0 && (
+        <ul className="rule-row__info" data-testid={`rule-info-${rule.id}`}>
+          {infoWarnings.map((warning, index) => (
+            <li key={index} data-warning={warning.category}>
+              ℹ {warning.message}
             </li>
           ))}
         </ul>
@@ -341,29 +371,96 @@ function RuleRow({
   );
 }
 
-/** The bottom-panel rule editor (design §3.11, concept LINK INFO panel). */
-export function RulesPanel() {
+/**
+ * The rule editor (design §3.11, concept LINK INFO panel). Renders as the
+ * bottom context tab AND, with `page`, as the full-width RULES destination
+ * (M10, #67) — the page adds endpoint/action filters over the same table.
+ */
+export function RulesPanel({ page = false }: { page?: boolean } = {}) {
   const graph = useAppStore((s) => s.graph);
   const dispatch = useAppStore((s) => s.dispatch);
+  const focusedRuleId = useAppStore((s) => s.focusedRuleId);
   const warnings = useMemo(() => (graph ? validatePolicyRules(graph) : []), [graph]);
+  const [endpointFilter, setEndpointFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  // observed-without-rule warnings belong to no rule row (M8, #65)
+  const flowWarnings = warnings.filter((w) => w.ruleId === null);
   if (!graph) return null;
   const projectId = graph.project.id;
 
   const serviceInUse = (service: Service) =>
     graph.policyRules.some((r) => r.serviceId === service.id);
 
+  const visibleRules = graph.policyRules.filter((rule) => {
+    if (actionFilter && rule.action !== actionFilter) return false;
+    if (
+      endpointFilter &&
+      rule.source.id !== endpointFilter &&
+      rule.destination.id !== endpointFilter
+    ) {
+      return false;
+    }
+    return true;
+  });
+
   return (
-    <div className="rules-panel" data-testid="rules-panel">
+    <div className={`rules-panel${page ? ' rules-panel--page' : ''}`} data-testid="rules-panel">
       <div className="rules-panel__column">
         <h3 className="field-section__title">Policy rules</h3>
+        {page && (
+          <div className="rules-panel__filters" data-testid="rules-filters">
+            <select
+              value={endpointFilter}
+              data-testid="rules-filter-endpoint"
+              onChange={(e) => setEndpointFilter(e.target.value)}
+            >
+              <option value="">all endpoints</option>
+              {graph.networks.map((n) => (
+                <option key={n.id} value={n.id}>
+                  ⊞ {n.name}
+                </option>
+              ))}
+              {graph.devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  ▢ {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={actionFilter}
+              data-testid="rules-filter-action"
+              onChange={(e) => setActionFilter(e.target.value)}
+            >
+              <option value="">all actions</option>
+              {policyActionSchema.options.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+            <span className="rules-panel__filter-count" data-testid="rules-filter-count">
+              {visibleRules.length} of {graph.policyRules.length} rules
+            </span>
+          </div>
+        )}
+        {flowWarnings.length > 0 && (
+          <ul className="rules-panel__flow-warnings" data-testid="flow-warnings">
+            {flowWarnings.map((warning, index) => (
+              <li key={index} data-warning={warning.category}>
+                ⚠ {warning.message}
+              </li>
+            ))}
+          </ul>
+        )}
         <NewRuleForm graph={graph} />
         <ul className="rule-list" data-testid="rule-list">
-          {graph.policyRules.map((rule) => (
+          {visibleRules.map((rule) => (
             <RuleRow
               key={rule.id}
               rule={rule}
               graph={graph}
               warnings={warnings.filter((w) => w.ruleId === rule.id)}
+              focused={rule.id === focusedRuleId}
             />
           ))}
         </ul>

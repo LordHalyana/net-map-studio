@@ -6,6 +6,7 @@ import {
   buildCandidates,
   buildProposal,
   changeSetIdSchema,
+  detectSecrets,
   evidenceIdSchema,
   evidenceSchema,
   generateProvenanceRows,
@@ -14,6 +15,8 @@ import {
   importProposalSchema,
   importResolutionActionSchema,
   invertOperation,
+  maskValue,
+  NETPLAN_BUNDLE_VERSION,
   newId,
   observationDraftSchema,
   observationIdSchema,
@@ -21,7 +24,12 @@ import {
   operationIdSchema,
   operationSchema,
   projectIdSchema,
+  reportIdSchema,
+  reportRecordSchema,
+  secretMatchIdSchema,
+  secretMatchSchema,
   evidenceManifestPath,
+  DEFAULT_SECRETS_CONFIG,
   type BundleEvidenceFile,
   type Evidence,
   type ImportJob,
@@ -30,6 +38,8 @@ import {
   type ImportResolutionAction,
   type NetplanBundle,
   type Observation,
+  type ProjectState,
+  type ReportType,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
 import {
@@ -53,13 +63,13 @@ import {
   startBudget,
   type ParseLimits,
 } from './guards.js';
-import { fixtureAdapter } from './adapters/fixture.js';
-import { deviceStateAdapter } from './adapters/device-state.js';
-import { ldifAdapter } from './adapters/ldif.js';
-import { nmapXmlAdapter } from './adapters/nmap-xml.js';
-import { tsharkFlowsAdapter } from './adapters/tshark-flows.js';
-import { zeekConnAdapter } from './adapters/zeek-conn.js';
+import { builtInAdapters } from './adapters/registry.js';
 import type { Adapter } from './adapters/types.js';
+import {
+  createInlineAdapterRunner,
+  createWorkerAdapterRunner,
+  type AdapterRunner,
+} from './worker-runner.js';
 
 /** Wire input of POST /projects/:id/imports. */
 export const createImportBodySchema = z.object({
@@ -69,6 +79,8 @@ export const createImportBodySchema = z.object({
   content: z.string(),
   encoding: z.enum(['utf8', 'base64', 'gzip+base64']).default('utf8'),
   collectedAt: z.iso.datetime().nullable().default(null),
+  /** ImportProfile for profile-driven adapters like netcat-text (M12, #69). */
+  profileId: z.uuidv7().optional(),
   /** ADR-0019 opt-in: embed a binary capture's raw blob instead of hash-only. */
   retainRaw: z.boolean().default(false),
 });
@@ -93,21 +105,18 @@ function isBinaryCapture(filename: string): boolean {
 export function createImportStore(
   db: Db,
   engine: Engine,
-  options: { limits?: Partial<ParseLimits>; adapters?: Adapter[] } = {},
+  options: { limits?: Partial<ParseLimits>; adapters?: Adapter[]; runner?: AdapterRunner } = {},
 ) {
   const limits: ParseLimits = { ...DEFAULT_PARSE_LIMITS, ...options.limits };
-  const adapters = new Map<string, Adapter>(
-    (
-      options.adapters ?? [
-        fixtureAdapter,
-        deviceStateAdapter,
-        nmapXmlAdapter,
-        tsharkFlowsAdapter,
-        ldifAdapter,
-        zeekConnAdapter,
-      ]
-    ).map((a) => [a.name, a]),
-  );
+  const adapters: ReadonlyMap<string, Adapter> = options.adapters
+    ? new Map(options.adapters.map((a) => [a.name, a]))
+    : builtInAdapters;
+  // Adapter execution (M12, #69): built-in adapters run isolated in a worker
+  // process; injected test adapters cannot cross a process boundary, so they
+  // fall back to the in-process runner (which is also the injectable seam).
+  const runner: AdapterRunner =
+    options.runner ??
+    (options.adapters ? createInlineAdapterRunner(adapters) : createWorkerAdapterRunner());
   /** In-flight parse jobs, so tests and shutdown can await quiescence. */
   const inFlight = new Set<Promise<void>>();
 
@@ -145,7 +154,12 @@ export function createImportStore(
   }
 
   /** Enqueue a parse with backpressure; the API response leaves before it runs. */
-  function enqueueParse(job: ImportJob, evidenceRecord: Evidence, content: string): void {
+  function enqueueParse(
+    job: ImportJob,
+    evidenceRecord: Evidence,
+    content: string,
+    profile?: unknown,
+  ): void {
     ensureQueueCapacity();
     active.add(job.id);
     let release: () => void = () => undefined;
@@ -160,7 +174,7 @@ export function createImportStore(
           if (cancelRequested.has(job.id)) {
             finishCancel(job.id);
           } else {
-            await runParse(job, evidenceRecord, content);
+            await runParse(job, evidenceRecord, content, profile);
           }
         } finally {
           active.delete(job.id);
@@ -240,15 +254,23 @@ export function createImportStore(
     job: ImportJob,
     evidenceRecord: Evidence,
     content: string,
+    profile?: unknown,
   ): Promise<void> {
     setStatus(job.id, 'parsing', { progressStage: 'parsing' });
-    const adapter = getAdapter(job.parserName);
+    getAdapter(job.parserName); // fail fast on an unknown parser
     try {
+      // parent-side budget: the cancellation window between parse and persist
       const budget = startBudget(limits, Date.now, {
         jobId: job.id,
         isCancelled: () => cancelRequested.has(job.id),
       });
-      const drafts = await adapter.parse(content, { budget, limits });
+      const drafts = await runner({
+        adapterName: job.parserName,
+        content,
+        profile,
+        limits,
+        isCancelled: () => cancelRequested.has(job.id),
+      });
       if (drafts.length > limits.maxObservations) {
         throw new ParseLimitError(
           `Parse produced ${drafts.length} observations, over the ${limits.maxObservations} bound — aggregate harder or split the capture`,
@@ -313,6 +335,19 @@ export function createImportStore(
     const bytes = decodeContent(body);
     checkFileSize(bytes.length, limits);
 
+    // profile-driven adapters (§3.6, M12 #69): resolve the ImportProfile now
+    // so an unknown id fails the request, not the background job
+    let profile: unknown;
+    if (body.profileId) {
+      const found = engine
+        .getState(projectId)
+        .importProfiles.find((candidate) => candidate.id === body.profileId);
+      if (!found) {
+        throw new OperationError('NOT_FOUND', `ImportProfile ${body.profileId} not found`);
+      }
+      profile = found;
+    }
+
     const now = new Date().toISOString();
     const contentClass = isBinaryCapture(body.filename) ? 'binaryCapture' : 'structured';
     const retention =
@@ -361,7 +396,7 @@ export function createImportStore(
       }
     });
 
-    enqueueParse(job, record, bytes.toString(encoding));
+    enqueueParse(job, record, bytes.toString(encoding), profile);
     return job;
   }
 
@@ -655,6 +690,47 @@ export function createImportStore(
 
   // ---------- bundle attachment (ADR-0016 evidence subtree) ----------
 
+  /**
+   * Stream a `.netplan` bundle as JSON text chunks (ADR-0016; improvements
+   * M14, #71): evidence blobs are read one at a time straight from the DB, so
+   * a project with hundreds of MB of captures never materializes as one giant
+   * base64 array or serialized string. Yields byte-identical output to
+   * `makeBundle` so import round-trips are unaffected.
+   */
+  function* streamBundle(
+    projectId: string,
+    state: ProjectState,
+    exportedAt: string,
+  ): Generator<string> {
+    const jobs = listJobs(projectId);
+    const records = listEvidence(projectId);
+    // the manifest lists every record's hash — retained even when its blob is not
+    const manifest = {
+      files: records.map((r) => ({ path: evidenceManifestPath(r), sha256: r.sha256 })),
+    };
+    yield '{"format":"netplan"';
+    yield `,"version":${NETPLAN_BUNDLE_VERSION}`;
+    yield `,"exportedAt":${JSON.stringify(exportedAt)}`;
+    yield `,"project":${JSON.stringify(state)}`;
+    yield `,"importJobs":${JSON.stringify(jobs)}`;
+    yield `,"manifest":${JSON.stringify(manifest)}`;
+    yield ',"evidence":[';
+    let first = true;
+    for (const record of records) {
+      const blob = db
+        .select()
+        .from(evidenceBlobs)
+        .where(eq(evidenceBlobs.evidenceId, record.id))
+        .get();
+      const file: BundleEvidenceFile = blob
+        ? { record, encoding: blob.encoding, content: blob.content }
+        : { record, encoding: 'utf8', content: null };
+      yield `${first ? '' : ','}${JSON.stringify(file)}`;
+      first = false;
+    }
+    yield ']}';
+  }
+
   function exportAttachments(projectId: string): {
     evidence: BundleEvidenceFile[];
     importJobs: ImportJob[];
@@ -711,6 +787,173 @@ export function createImportStore(
     });
   }
 
+  // ---------- privacy & audit (§3.13; improvements M13, #70) ----------
+
+  /** Append a §3.13 audit event to the Report table (the audit hook, M11). */
+  function writeAudit(
+    projectId: string,
+    type: ReportType,
+    parameters: Record<string, string>,
+  ): void {
+    engine.applyOperation({
+      id: newId(operationIdSchema),
+      projectId: projectIdSchema.parse(projectId),
+      kind: 'CreateEntity',
+      payload: {
+        entityType: 'report',
+        entity: reportRecordSchema.parse({
+          id: newId(reportIdSchema),
+          projectId,
+          type,
+          createdAt: new Date().toISOString(),
+          redactionProfile: '',
+          parameters,
+          outputSha256: '',
+        }),
+      },
+    });
+  }
+
+  /**
+   * Detect secrets across a project's retained evidence and persist them
+   * masked-by-default (§3.13). The raw value never lands — only its mask,
+   * kind and (evidenceId, offset, length) so an audited reveal can re-read
+   * the original from the source blob. Idempotent per (evidence, offset).
+   */
+  function scanEvidenceSecrets(projectId: string): number {
+    const existing = new Set(
+      engine.getState(projectId).secretMatches.map((s) => `${s.evidenceId}:${s.offset}`),
+    );
+    let created = 0;
+    for (const record of listEvidence(projectId)) {
+      const blob = getEvidenceBlob(projectId, record.id);
+      if (!blob) continue; // hashOnly — nothing to scan
+      const text =
+        blob.encoding === 'base64'
+          ? Buffer.from(blob.content, 'base64').toString('utf8')
+          : blob.content;
+      for (const found of detectSecrets(text, DEFAULT_SECRETS_CONFIG)) {
+        const key = `${record.id}:${found.index}`;
+        if (existing.has(key)) continue;
+        existing.add(key);
+        engine.applyOperation({
+          id: newId(operationIdSchema),
+          projectId: projectIdSchema.parse(projectId),
+          kind: 'CreateEntity',
+          payload: {
+            entityType: 'secretMatch',
+            entity: secretMatchSchema.parse({
+              id: newId(secretMatchIdSchema),
+              projectId,
+              kind: found.kind,
+              label: found.label,
+              masked: maskValue(found.value),
+              evidenceId: record.id,
+              offset: found.index,
+              length: found.value.length,
+              revealed: false,
+            }),
+          },
+        });
+        created += 1;
+      }
+    }
+    return created;
+  }
+
+  /**
+   * Reveal one masked secret — an explicit, audited action (§3.13). Re-reads
+   * the original from its source evidence, flips `revealed`, writes an audit
+   * record, and returns the raw value once. Fails if the evidence was purged.
+   */
+  function revealSecret(projectId: string, secretId: string): string {
+    const match = engine.getState(projectId).secretMatches.find((s) => s.id === secretId);
+    if (!match) throw new OperationError('NOT_FOUND', `Secret ${secretId} not found`);
+    const blob = getEvidenceBlob(projectId, match.evidenceId);
+    if (!blob) {
+      throw new OperationError(
+        'CONFLICT',
+        'The source evidence was purged — the original value no longer exists',
+      );
+    }
+    const text =
+      blob.encoding === 'base64'
+        ? Buffer.from(blob.content, 'base64').toString('utf8')
+        : blob.content;
+    const value = text.slice(match.offset, match.offset + match.length);
+    if (!match.revealed) {
+      engine.applyOperation({
+        id: newId(operationIdSchema),
+        projectId: projectIdSchema.parse(projectId),
+        kind: 'SetField',
+        entityType: 'secretMatch',
+        entityId: secretId,
+        field: 'revealed',
+        value: true,
+        previousValue: match.revealed,
+      });
+    }
+    writeAudit(projectId, 'secretReveal', { secretId, kind: match.kind });
+    return value;
+  }
+
+  /**
+   * Secure deletion (§3.13): drop an evidence blob while preserving the
+   * evidence record and its manifest hash — evidence *identity* survives, the
+   * raw bytes do not. Non-undoable by design; the audit record is its only
+   * trace. A secret whose source blob is gone can no longer be revealed
+   * (see `revealSecret`), so its stored mask is now the only form it has.
+   */
+  function purgeEvidence(projectId: string, evidenceId: string): void {
+    const record = db
+      .select()
+      .from(evidenceTable)
+      .where(and(eq(evidenceTable.id, evidenceId), eq(evidenceTable.projectId, projectId)))
+      .get();
+    if (!record) throw new OperationError('NOT_FOUND', `Evidence ${evidenceId} not found`);
+    db.transaction((tx) => {
+      tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, evidenceId)).run();
+      tx.update(evidenceTable)
+        .set({ retention: 'hashOnly' })
+        .where(eq(evidenceTable.id, evidenceId))
+        .run();
+    });
+    writeAudit(projectId, 'evidencePurge', {
+      evidenceId,
+      sha256: record.sha256,
+      filename: record.filename,
+    });
+  }
+
+  /**
+   * Retention sweep (§3.13): downgrade retained raw evidence older than
+   * `maxAgeDays` to hashOnly, keeping the record and hash. Returns the count
+   * downgraded and writes one audit record when it did anything.
+   */
+  function sweepRetention(projectId: string, maxAgeDays: number): number {
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    let purged = 0;
+    for (const record of listEvidence(projectId)) {
+      if (record.retention !== 'inline') continue;
+      if (new Date(record.importedAt).getTime() >= cutoff) continue;
+      db.transaction((tx) => {
+        tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, record.id)).run();
+        tx.update(evidenceTable)
+          .set({ retention: 'hashOnly' })
+          .where(eq(evidenceTable.id, record.id))
+          .run();
+      });
+      purged += 1;
+    }
+    if (purged > 0) {
+      writeAudit(projectId, 'retentionSweep', {
+        maxAgeDays: String(maxAgeDays),
+        purged: String(purged),
+      });
+    }
+    return purged;
+  }
+
   return {
     limits,
     createJob,
@@ -719,6 +962,10 @@ export function createImportStore(
     whenIdle,
     getJob,
     listJobs,
+    scanEvidenceSecrets,
+    revealSecret,
+    purgeEvidence,
+    sweepRetention,
     listEvidence,
     listObservations,
     getJobDetail,
@@ -728,6 +975,7 @@ export function createImportStore(
     rollback,
     getEvidenceBlob,
     exportAttachments,
+    streamBundle,
     verifyEvidenceHashes,
     restoreAttachments,
   };

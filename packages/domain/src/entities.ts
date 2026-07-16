@@ -4,6 +4,10 @@ import {
   baselineIdSchema,
   deviceIdSchema,
   flowIdSchema,
+  hostArtifactIdSchema,
+  importProfileIdSchema,
+  reportIdSchema,
+  secretMatchIdSchema,
   identityIdSchema,
   interfaceIdSchema,
   linkIdSchema,
@@ -21,6 +25,10 @@ import { confidenceSchema } from './confidence.js';
 
 const positionSchema = z.object({ x: z.number(), y: z.number() });
 export type Position = z.infer<typeof positionSchema>;
+
+/** Operator-set container dimensions; null = the renderer's default size. */
+const sizeSchema = z.object({ width: z.number().positive(), height: z.number().positive() });
+export type Size = z.infer<typeof sizeSchema>;
 
 /**
  * Per-(network, view) layout hints (ADR-0013): a network-node on the canvas is
@@ -49,6 +57,7 @@ export const siteSchema = z.object({
   tags: tagsSchema,
   notes: z.string().default(''),
   position: positionSchema.default({ x: 0, y: 0 }),
+  size: sizeSchema.nullable().default(null),
 });
 export type Site = z.infer<typeof siteSchema>;
 
@@ -73,6 +82,7 @@ export const zoneSchema = z.object({
   tags: tagsSchema,
   notes: z.string().default(''),
   position: positionSchema.default({ x: 0, y: 0 }),
+  size: sizeSchema.nullable().default(null),
 });
 export type Zone = z.infer<typeof zoneSchema>;
 
@@ -170,6 +180,12 @@ export const networkSchema = z.object({
   vlanId: z.number().int().min(1).max(4094).nullable().default(null),
   cidr: z.string().default(''),
   description: z.string().default(''),
+  /** Operator-pinned canvas tint (M6, #63); null = hash-stable palette. */
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
   lifecycleState: lifecycleStateSchema,
   tags: tagsSchema,
   layoutHints: layoutHintsSchema,
@@ -261,6 +277,145 @@ export const flowSchema = z.object({
   lifecycleState: lifecycleStateSchema,
 });
 export type Flow = z.infer<typeof flowSchema>;
+
+/**
+ * Host security artifact (improvements M7, #64): one evidence-derived
+ * detection input on a Device — a running process, persistence entry,
+ * installed application or file-inventory record. The Flow precedent
+ * applied to §3.8's inputs: a typed per-device collection with direct
+ * confidence, written only through the import pipeline, never hand-edited.
+ * Analysis input, not topology — it never renders on the canvas.
+ */
+export const hostArtifactKindSchema = z.enum(['process', 'persistence', 'software', 'file']);
+export type HostArtifactKind = z.infer<typeof hostArtifactKindSchema>;
+
+/** How a persistence artifact launches (mirrors findings/inputs.ts kinds). */
+export const hostPersistenceKindSchema = z.enum(['startup', 'scheduledTask', 'service', 'other']);
+
+export const hostArtifactSchema = z.object({
+  id: hostArtifactIdSchema,
+  projectId: projectIdSchema,
+  deviceId: deviceIdSchema,
+  kind: hostArtifactKindSchema,
+  /** Process/entry/application name, or the file path for `kind: 'file'`. */
+  name: z.string().min(1),
+  /** On-disk path (executable, entry binary, file), when reported. */
+  path: z.string().nullable().default(null),
+  /** The command a persistence entry launches. */
+  command: z.string().default(''),
+  /** Set only for `kind: 'persistence'`. */
+  persistenceKind: hostPersistenceKindSchema.nullable().default(null),
+  /** Set only for `kind: 'file'`, when the collector hashed it. */
+  sha256: z.string().nullable().default(null),
+  publisher: z.string().default(''),
+  version: z.string().default(''),
+  /** True when the collector tagged software as remote-access/remote-admin. */
+  remoteAccess: z.boolean().default(false),
+  confidence: confidenceSchema,
+  lifecycleState: lifecycleStateSchema,
+});
+export type HostArtifact = z.infer<typeof hostArtifactSchema>;
+
+/**
+ * A detected secret (design §3.13; improvements M13, #70): a credential the
+ * masking pass found in ingested evidence. Stored masked-by-default — the raw
+ * value never persists; only its mask, kind and provenance do. Revealing the
+ * original is a separate, audited action against the source evidence.
+ */
+export const secretMatchSchema = z.object({
+  id: secretMatchIdSchema,
+  projectId: projectIdSchema,
+  kind: z.enum([
+    'privateKey',
+    'passwordAssignment',
+    'connectionString',
+    'highEntropyToken',
+    'custom',
+  ]),
+  label: z.string(),
+  /** The masked stand-in shown everywhere by default. */
+  masked: z.string(),
+  /**
+   * Evidence this was found in, for the audited reveal. A bare uuid, not the
+   * branded EvidenceId — that brand lives in imports.ts, which imports this
+   * module, so referencing it here would be a cycle.
+   */
+  evidenceId: z.uuidv7(),
+  /** Character offset in the evidence text — where reveal re-reads the original. */
+  offset: z.number().int().min(0),
+  /** Length of the original value, so reveal can slice it back out. */
+  length: z.number().int().min(1),
+  /** Flipped only by an audited reveal; default false keeps it masked. */
+  revealed: z.boolean().default(false),
+});
+export type SecretMatch = z.infer<typeof secretMatchSchema>;
+
+/**
+ * Import profile (design §3.6; improvements M12, #69): an operator-defined
+ * line-format template for text evidence the tool does not natively parse
+ * (Netcat logs and kin). The regex's named capture groups ARE the field map:
+ * `host` (required), `port`, `status`, `banner`. Model config, edited through
+ * Operations like every persisted object.
+ */
+export const importProfileSchema = z.object({
+  id: importProfileIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().min(1),
+  /** The adapter this profile drives. */
+  adapter: z.string().default('netcat-text'),
+  /** Per-line regex with named groups host/port/status/banner. */
+  pattern: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => {
+        try {
+          new RegExp(value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'pattern must be a valid regular expression' },
+    ),
+  description: z.string().default(''),
+});
+export type ImportProfile = z.infer<typeof importProfileSchema>;
+
+/**
+ * Report record (design §3.4; improvements M11, #68): the minimal persisted
+ * audit trail of a generated deliverable — what was produced, when, under
+ * which redaction profile, and the output's hash. Written through the
+ * Operation log on every export/report, so client deliverables are
+ * reconstructable and auditable (§3.13's audit hook, M13).
+ */
+export const reportTypeSchema = z.enum([
+  'bundle',
+  'designReport',
+  'findingsReport',
+  'changeReport',
+  'csv',
+  'topologyImage',
+  // §3.13 audit events (improvements M13, #70) — the Report table is the audit hook
+  'evidencePurge',
+  'secretReveal',
+  'retentionSweep',
+]);
+export type ReportType = z.infer<typeof reportTypeSchema>;
+
+export const reportRecordSchema = z.object({
+  id: reportIdSchema,
+  projectId: projectIdSchema,
+  type: reportTypeSchema,
+  createdAt: z.iso.datetime(),
+  /** The redaction profile in force; empty = unredacted. */
+  redactionProfile: z.string().default(''),
+  /** Free-form generation parameters (entity type for CSVs, format, …). */
+  parameters: z.record(z.string(), z.string()).default({}),
+  /** SHA-256 of the produced output; empty when the output never passed through the server. */
+  outputSha256: z.string().default(''),
+});
+export type ReportRecord = z.infer<typeof reportRecordSchema>;
 
 /**
  * A modelled principal in the mapped environment (ADR-0022) — never a

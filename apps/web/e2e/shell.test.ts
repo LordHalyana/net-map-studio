@@ -85,3 +85,86 @@ test.describe('workspace shell (M4 DoD)', () => {
     await expect(page.locator('.react-flow__node')).toHaveCount(countBefore + 1);
   });
 });
+
+test.describe('nav destinations I (improvements M10, #67)', () => {
+  test('Overview shows counts and recent activity', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-overview').click();
+    await expect(page.getByTestId('overview-panel')).toBeVisible();
+    await expect(page.getByTestId('overview-devices')).toContainText('Devices');
+    await expect(page.getByTestId('overview-networks')).toContainText('Networks');
+    await expect(page.getByTestId('overview-activity')).toBeVisible();
+    // the findings tile links into the Findings view
+    await page.getByTestId('overview-findings').click();
+    await expect(page.getByTestId('findings-panel')).toBeVisible();
+  });
+
+  test('Networks & VLANs lists networks; a row opens the inspector', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-networks').click();
+    await expect(page.getByTestId('networks-panel')).toBeVisible();
+
+    // create from the page, row selects, inspector opens with edit surface
+    await page.getByTestId('networks-add').click();
+    await expect(page.getByTestId('sync-status')).toHaveText('Saved');
+    await expect(page.getByTestId('inspector-network')).toBeVisible();
+    const row = page.locator('[data-testid^="network-row-"]').first();
+    await row.click();
+    await expect(page.getByTestId('inspector-network')).toBeVisible();
+    await expect(page.getByTestId('network-name-input')).toBeVisible();
+  });
+
+  test('the Rules page shows the full table with endpoint/action filters', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-rules').click();
+    await expect(page.getByTestId('rules-page')).toBeVisible();
+    await expect(page.getByTestId('rules-filters')).toBeVisible();
+    // an empty project renders the (empty) table shell
+    await expect(page.getByTestId('rule-list')).toBeAttached();
+
+    // action filter narrows the visible set
+    await page.getByTestId('rules-filter-action').selectOption('reject');
+    await expect(page.getByTestId('rules-filter-count')).toContainText('0 of');
+    await page.getByTestId('rules-filter-action').selectOption('');
+  });
+});
+
+test.describe('nav destinations II (improvements M11, #68)', () => {
+  test('Reports generates a bundle and lists the Report record', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-reports').click();
+    await expect(page.getByTestId('reports-panel')).toBeVisible();
+
+    const download = page.waitForEvent('download');
+    await page.getByTestId('reports-generate-bundle').click();
+    expect((await download).suggestedFilename()).toMatch(/\.netplan$/);
+
+    // the server wrote a Report record; the panel refreshes its mirror
+    await expect
+      .poll(async () => page.locator('[data-testid^="report-record-"]').count(), {
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
+    await expect(page.getByTestId('reports-table')).toContainText('bundle');
+  });
+
+  test('identities and flows CSVs download from the Reports page', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-reports').click();
+    for (const entity of ['identities', 'flows'] as const) {
+      const download = page.waitForEvent('download');
+      await page.getByTestId(`reports-csv-${entity}`).click();
+      expect((await download).suggestedFilename()).toBe(`${entity}.csv`);
+    }
+  });
+
+  test('Settings surfaces existing config and links to egress', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-settings').click();
+    await expect(page.getByTestId('settings-panel')).toBeVisible();
+    await expect(page.getByTestId('settings-rule-config')).toContainText('Config version');
+    await expect(page.getByTestId('settings-indicator-lists')).toBeVisible();
+    await page.getByTestId('settings-open-egress').click();
+    await expect(page.getByTestId('egress-panel')).toBeVisible();
+  });
+});

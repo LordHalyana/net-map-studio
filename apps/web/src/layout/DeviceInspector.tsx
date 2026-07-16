@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { Box } from 'lucide-react';
 import {
   addressKindSchema,
@@ -261,6 +261,7 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           testId="device-os-input"
           onCommit={(v) => setField('os', v, device.os)}
         />
+        <OsConfidenceHint deviceId={device.id} />
         <TextField
           label="Serial"
           value={device.serialNumber}
@@ -302,15 +303,17 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
           options={enumOptions(['unknown', 'active', 'inactive'])}
           onCommit={(v) => setField('status', v, device.status)}
         />
-        <label className="field">
+        <label className="field" title="Pinned devices are never moved by auto-arrange (§3.2C)">
           <span className="field__label">Pinned</span>
-          <input
-            type="checkbox"
-            checked={device.pinned}
-            data-testid="device-pinned-toggle"
-            title="Pinned devices are never moved by auto-arrange (§3.2C)"
-            onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
-          />
+          <span className="switch">
+            <input
+              type="checkbox"
+              checked={device.pinned}
+              data-testid="device-pinned-toggle"
+              onChange={(e) => setField('pinned', e.target.checked, device.pinned)}
+            />
+            <span className="switch__track" />
+          </span>
         </label>
       </FieldSection>
 
@@ -324,6 +327,12 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
       </FieldSection>
 
       <ConnectionsSection device={device} graph={graph} />
+
+      <DeviceServicesSection device={device} graph={graph} />
+
+      <DeviceFindingsSection device={device} />
+
+      <DeviceUsersRolesSection device={device} graph={graph} />
 
       <DeviceRulesSection device={device} graph={graph} />
 
@@ -369,6 +378,150 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
  * plus its observed-Flow count. Rendered as an inspector section rather than
  * the concept's Connections tab — three short sections don't earn tab chrome.
  */
+/** §3.2D "operating system and confidence level" (M9, #66). */
+function OsConfidenceHint({ deviceId }: { deviceId: string }) {
+  const provenance = useAppStore((s) => s.provenance);
+  const rows = provenance.filter(
+    (r) =>
+      r.entityType === 'device' &&
+      r.entityId === deviceId &&
+      r.field === 'os' &&
+      r.status === 'accepted',
+  );
+  if (rows.length === 0) return null;
+  const confidence = Math.max(...rows.map((r) => r.confidence));
+  return (
+    <div className="field field--meta">
+      <span className="field__label" />
+      <span className="field__hint" data-testid="device-os-confidence">
+        confidence {Math.round(confidence * 100)}% · {rows[0]?.sourceType}
+      </span>
+    </div>
+  );
+}
+
+/** The device's listening Services with provenance chips (§3.2D, M9 #66). */
+function DeviceServicesSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const provenance = useAppStore((s) => s.provenance);
+  const services = graph.services.filter((s) => s.deviceId === device.id);
+  if (services.length === 0) return null;
+  return (
+    <FieldSection title={`Services (${services.length})`} testId="inspector-device-services">
+      <ul className="inspector-list">
+        {services.map((service) => {
+          const rows = provenance.filter(
+            (r) =>
+              r.entityType === 'service' && r.entityId === service.id && r.status === 'accepted',
+          );
+          const confidence = rows.length > 0 ? Math.max(...rows.map((r) => r.confidence)) : null;
+          const port =
+            service.portStart != null
+              ? service.portEnd != null && service.portEnd !== service.portStart
+                ? `${service.portStart}–${service.portEnd}`
+                : `${service.portStart}`
+              : '';
+          return (
+            <li key={service.id} className="inspector-list__row">
+              <span className="inspector-list__primary">{service.name}</span>
+              <span className="inspector-list__meta">
+                {service.protocol}
+                {port ? `/${port}` : ''}
+              </span>
+              {service.process && <span className="inspector-list__meta">{service.process}</span>}
+              {confidence !== null && (
+                <span
+                  className="inspector-list__chip"
+                  title={`Winning provenance confidence: ${Math.round(confidence * 100)}%`}
+                >
+                  {Math.round(confidence * 100)}%
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </FieldSection>
+  );
+}
+
+/** Open findings affecting this device, linking into the Findings view (M9, #66). */
+function DeviceFindingsSection({ device }: { device: Device }) {
+  const project = useAppStore((s) => s.project);
+  const findings = useAppStore((s) => s.findings);
+  const refreshFindings = useAppStore((s) => s.refreshFindings);
+  const focusFinding = useAppStore((s) => s.focusFinding);
+  useEffect(() => {
+    if (project && !findings) void refreshFindings();
+  }, [project, findings, refreshFindings]);
+
+  const mine = (findings?.findings ?? []).filter(
+    (f) =>
+      f.status === 'new' &&
+      !f.stale &&
+      f.detection?.affected?.kind === 'device' &&
+      f.detection.affected.id === device.id,
+  );
+  if (mine.length === 0) return null;
+  return (
+    <FieldSection title={`Findings (${mine.length})`} testId="inspector-device-findings">
+      <ul className="inspector-list">
+        {mine.map((finding) => (
+          <li key={finding.fingerprint} className="inspector-list__row">
+            <button
+              type="button"
+              className="inspector-list__link"
+              data-testid={`device-finding-${finding.fingerprint}`}
+              title="Open in the Findings view"
+              onClick={() => focusFinding(finding.fingerprint)}
+            >
+              <span className={`finding-badge severity--${finding.detection?.severity ?? 'info'}`}>
+                {finding.detection?.severity ?? '—'}
+              </span>
+              <span className="inspector-list__primary">{finding.detection?.title}</span>
+              <span className={`finding-status status--${finding.status}`}>{finding.status}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </FieldSection>
+  );
+}
+
+/** Identities and RoleAssignments scoped to this device (§3.2D, M9 #66). */
+function DeviceUsersRolesSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const identities = graph.identities.filter((i) => i.deviceId === device.id);
+  const assignments = graph.roleAssignments.filter((r) => r.deviceId === device.id);
+  if (identities.length === 0 && assignments.length === 0) return null;
+  const identityName = (identityId: string) => {
+    const identity = graph.identities.find((i) => i.id === identityId);
+    if (!identity) return '(deleted)';
+    return identity.scope === 'domain' ? `${identity.domain}\\${identity.name}` : identity.name;
+  };
+  return (
+    <FieldSection title="Users & Roles" testId="inspector-device-identities">
+      <ul className="inspector-list">
+        {identities.map((identity) => (
+          <li key={identity.id} className="inspector-list__row">
+            <span className="inspector-list__primary">{identity.name}</span>
+            <span className="inspector-list__meta">
+              {identity.scope} · {identity.kind}
+            </span>
+          </li>
+        ))}
+        {assignments.map((assignment) => (
+          <li key={assignment.id} className="inspector-list__row">
+            <span className="inspector-list__primary">{identityName(assignment.identityId)}</span>
+            <span className="inspector-list__meta">
+              {assignment.privilege}
+              {assignment.detail ? ` · ${assignment.detail}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </FieldSection>
+  );
+}
+
 function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectState }) {
   const interfaceIds = new Set(
     graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),

@@ -1,15 +1,71 @@
 import type { Endpoint } from './endpoints.js';
-import type { Network, PolicyRule, Service } from './entities.js';
+import type { Flow, Network, PolicyRule, Service } from './entities.js';
 import type { ProjectState } from './state.js';
+import { endpointCoversDevice, flowEndpointDevice } from './findings/rules/helpers.js';
 
 /**
- * Starter rule-validation set (design §3.11, Phase 1). These are inline
- * warnings, not Findings — the Finding entity belongs to Phase 3 (ADR-0014).
+ * Rule-validation set (design §3.11). These are inline warnings, not Findings
+ * — the Finding entity belongs to Phase 3 (ADR-0014). Includes the two
+ * intent-vs-observation checks (improvements M8, #65): observed-without-rule
+ * and planned-never-observed.
  */
 export interface RuleWarning {
-  ruleId: PolicyRule['id'];
-  category: 'anyToAny' | 'orphaned' | 'contradictory' | 'overlapping' | 'shadowedByBroader';
+  /** Null for flow-side warnings (observed traffic with no governing rule). */
+  ruleId: PolicyRule['id'] | null;
+  /** Set on observed-without-rule warnings — the unmatched aggregated Flow. */
+  flowId?: Flow['id'];
+  category:
+    | 'anyToAny'
+    | 'orphaned'
+    | 'contradictory'
+    | 'overlapping'
+    | 'shadowedByBroader'
+    | 'observedWithoutRule'
+    | 'plannedNeverObserved';
   message: string;
+}
+
+/**
+ * Does a rule's service scope cover this flow's protocol/port? A rule without
+ * a Service governs any traffic on its pair; a specific range never matches a
+ * flow whose port is unknown (we cannot prove coverage).
+ */
+function ruleServiceMatchesFlow(state: ProjectState, rule: PolicyRule, flow: Flow): boolean {
+  if (!rule.serviceId) return true;
+  const service = state.services.find((s) => s.id === rule.serviceId);
+  if (!service) return false;
+  if (
+    service.protocol !== 'any' &&
+    flow.protocol !== 'other' &&
+    service.protocol !== flow.protocol
+  ) {
+    return false;
+  }
+  if (service.portStart == null) return true;
+  if (flow.port == null) return false;
+  return service.portStart <= flow.port && flow.port <= (service.portEnd ?? service.portStart);
+}
+
+/**
+ * The shared intent↔observation matcher (M8, #65): does this PolicyRule
+ * address this aggregated Flow? Polymorphic rule endpoints (Device / Network /
+ * Zone / Interface, ADR-0012) resolve through `endpointCoversDevice`; flow
+ * endpoints resolve to known Devices only — external peers never match, so
+ * they neither satisfy a rule nor silently pass one.
+ */
+export function ruleMatchesFlow(state: ProjectState, rule: PolicyRule, flow: Flow): boolean {
+  const src = flowEndpointDevice(state, flow.source);
+  const dst = flowEndpointDevice(state, flow.destination);
+  if (!src || !dst) return false;
+  if (!ruleServiceMatchesFlow(state, rule, flow)) return false;
+  const forward =
+    endpointCoversDevice(state, rule.source, src) &&
+    endpointCoversDevice(state, rule.destination, dst);
+  const reverse =
+    rule.direction === 'bidirectional' &&
+    endpointCoversDevice(state, rule.source, dst) &&
+    endpointCoversDevice(state, rule.destination, src);
+  return forward || reverse;
 }
 
 /** A Network reading as "anything": 0.0.0.0/0, ::/0 or literally named any. */
@@ -179,6 +235,41 @@ export function validatePolicyRules(state: ProjectState): RuleWarning[] {
           });
         }
       }
+    }
+  }
+
+  // --- intent vs observation (§3.11; improvements M8, #65) ---
+
+  // observed-without-rule: aggregated traffic between known devices that no
+  // PolicyRule addresses. The cross-zone Finding remains the security-severity
+  // slice; this is the general visibility warning.
+  const deviceName = (flow: Flow, side: 'source' | 'destination') =>
+    flowEndpointDevice(state, flow[side])?.name ?? '?';
+  for (const flow of state.flows) {
+    const src = flowEndpointDevice(state, flow.source);
+    const dst = flowEndpointDevice(state, flow.destination);
+    if (!src || !dst) continue; // external peers are the external-connection rule's turf
+    if (rules.some((rule) => ruleMatchesFlow(state, rule, flow))) continue;
+    warnings.push({
+      ruleId: null,
+      flowId: flow.id,
+      category: 'observedWithoutRule',
+      message: `Observed ${flow.protocol}${flow.port != null ? `/${flow.port}` : ''} traffic ${deviceName(flow, 'source')} → ${deviceName(flow, 'destination')} matches no PolicyRule`,
+    });
+  }
+
+  // planned-never-observed: a rule matched by zero observed Flows. Worded per
+  // §3.11 "without assuming they are unnecessary" — and only once observed
+  // traffic exists at all, so a pure planning project stays quiet.
+  if (state.flows.length > 0) {
+    for (const rule of rules) {
+      if (state.flows.some((flow) => ruleMatchesFlow(state, rule, flow))) continue;
+      warnings.push({
+        ruleId: rule.id,
+        category: 'plannedNeverObserved',
+        message:
+          'No observed traffic matches this rule yet — it may cover future or unmeasured traffic, not necessarily unnecessary',
+      });
     }
   }
 

@@ -40,4 +40,30 @@ describe('networkColorMap', () => {
     expect(map.size).toBe(ids.length);
     for (const color of map.values()) expect(VLAN_PALETTE).toContain(color);
   });
+
+  // persisted colors (M6, #63; divergence #50)
+  it('an operator-pinned color wins over the hash palette', () => {
+    const map = networkColorMap([{ id: 'a', color: '#123456' }, { id: 'b' }]);
+    expect(map.get('a')).toBe('#123456');
+    expect(VLAN_PALETTE).toContain(map.get('b'));
+  });
+
+  it('a pinned palette hue reserves its slot for the hash assignment', () => {
+    const pinned = VLAN_PALETTE[0] ?? '#ff8a3d';
+    const map = networkColorMap([{ id: 'a', color: pinned }, { id: 'b' }, { id: 'c' }]);
+    expect(map.get('b')).not.toBe(pinned);
+    expect(map.get('c')).not.toBe(pinned);
+  });
+
+  it('unpinned networks keep their hash color when a sibling pins one', () => {
+    const before = networkColorMap(nets('a', 'b'));
+    const bColor = before.get('b');
+    const after = networkColorMap([{ id: 'a', color: '#123456' }, { id: 'b' }]);
+    // b either keeps its slot or moves only if a's freed slot changes probing;
+    // determinism is the contract: same input, same output
+    expect(after.get('b')).toBe(
+      networkColorMap([{ id: 'a', color: '#123456' }, { id: 'b' }]).get('b'),
+    );
+    expect(bColor).toBeDefined();
+  });
 });

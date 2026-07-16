@@ -1,4 +1,4 @@
-import type { Endpoint, ProjectState } from '@netplan/domain';
+import type { Endpoint, FindingView, ProjectState, Severity } from '@netplan/domain';
 
 function esc(value: string): string {
   return value
@@ -28,8 +28,18 @@ function interfaceLabel(state: ProjectState, interfaceId: string): string {
   return `${device?.name ?? '?'} · ${iface?.name ?? '?'}`;
 }
 
-/** A basic HTML design report (design §3.12). */
-export function buildHtmlReport(state: ProjectState, generatedAt: string): string {
+export interface HtmlReportExtras {
+  /** Findings (already redaction-filtered by the caller) for the summary section. */
+  findings?: readonly FindingView[];
+  redactionProfile?: string;
+}
+
+/** The HTML design report (design §3.12; depth per improvements M11, #68). */
+export function buildHtmlReport(
+  state: ProjectState,
+  generatedAt: string,
+  extras: HtmlReportExtras = {},
+): string {
   const deviceRows = state.devices
     .map((d) => {
       const zone = state.zones.find((z) => z.id === d.zoneId);
@@ -57,6 +67,48 @@ export function buildHtmlReport(state: ProjectState, generatedAt: string): strin
         `<tr><td>${esc(l.label || '—')}</td><td>${esc(l.kind)}</td><td>${esc(
           interfaceLabel(state, l.source.id),
         )}</td><td>${esc(interfaceLabel(state, l.target.id))}</td></tr>`,
+    )
+    .join('\n');
+
+  const serviceRows = state.services
+    .map((s) => {
+      const device = s.deviceId ? state.devices.find((d) => d.id === s.deviceId) : undefined;
+      const port =
+        s.portStart != null
+          ? s.portEnd != null && s.portEnd !== s.portStart
+            ? `${s.portStart}–${s.portEnd}`
+            : `${s.portStart}`
+          : '—';
+      return `<tr><td>${esc(s.name)}</td><td>${esc(s.protocol)}</td><td>${esc(port)}</td><td>${esc(
+        s.process || '—',
+      )}</td><td>${esc(device?.name ?? '—')}</td></tr>`;
+    })
+    .join('\n');
+
+  const identityRows = state.identities
+    .map((i) => {
+      const host = i.deviceId ? state.devices.find((d) => d.id === i.deviceId) : undefined;
+      const assignments = state.roleAssignments.filter((r) => r.identityId === i.id).length;
+      return `<tr><td>${esc(i.scope === 'domain' ? `${i.domain}\\${i.name}` : i.name)}</td><td>${esc(
+        i.scope,
+      )}</td><td>${esc(i.kind)}</td><td>${esc(host?.name ?? '—')}</td><td>${assignments}</td></tr>`;
+    })
+    .join('\n');
+
+  const findings = extras.findings ?? [];
+  const findingsBySeverity = new Map<Severity, number>();
+  for (const finding of findings) {
+    if (finding.status !== 'new' || finding.stale) continue;
+    const severity = finding.detection?.severity ?? 'info';
+    findingsBySeverity.set(severity, (findingsBySeverity.get(severity) ?? 0) + 1);
+  }
+  const findingRows = findings
+    .filter((f) => f.status === 'new' && !f.stale && f.detection)
+    .map(
+      (f) =>
+        `<tr><td>${esc(f.detection?.severity ?? 'info')}</td><td>${esc(
+          f.detection?.title ?? '',
+        )}</td><td>${esc(f.detection?.category ?? '')}</td></tr>`,
     )
     .join('\n');
 
@@ -105,9 +157,24 @@ export function buildHtmlReport(state: ProjectState, generatedAt: string): strin
 <table><thead><tr><th>Label</th><th>Kind</th><th>Source</th><th>Target</th></tr></thead>
 <tbody>${linkRows}</tbody></table>
 
+<h2>Services (${state.services.length})</h2>
+<table><thead><tr><th>Name</th><th>Protocol</th><th>Port</th><th>Process</th><th>Device</th></tr></thead>
+<tbody>${serviceRows}</tbody></table>
+
 <h2>Policy rules (${state.policyRules.length})</h2>
 <table><thead><tr><th>Action</th><th>Source</th><th>Destination</th><th>Service</th><th>Direction</th><th>Logging</th><th>Justification</th></tr></thead>
 <tbody>${ruleRows}</tbody></table>
+
+<h2>Identities (${state.identities.length})</h2>
+<table><thead><tr><th>Name</th><th>Scope</th><th>Kind</th><th>Host</th><th>Role assignments</th></tr></thead>
+<tbody>${identityRows}</tbody></table>
+
+<h2>Open findings (${findingRows ? findings.filter((f) => f.status === 'new' && !f.stale).length : 0})${
+    extras.redactionProfile ? ` — redacted (${esc(extras.redactionProfile)})` : ''
+  }</h2>
+<p class="meta">${[...findingsBySeverity.entries()].map(([sev, n]) => `${esc(sev)}: ${n}`).join(' · ') || 'none'}</p>
+<table><thead><tr><th>Severity</th><th>Title</th><th>Category</th></tr></thead>
+<tbody>${findingRows}</tbody></table>
 </body>
 </html>`;
 }

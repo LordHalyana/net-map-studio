@@ -111,7 +111,16 @@ describe('.netplan export/import round-trip (M10 DoD, acceptance #10)', () => {
     const targetGraph = (
       await target.inject({ method: 'GET', url: `/projects/${project.id}/graph` })
     ).json();
-    expect(targetGraph).toEqual(sourceGraph);
+    // The export itself writes a Report record (M11, #68) *after* the bundle
+    // snapshot — an audit row cannot contain its own output hash — so the
+    // source gains exactly that one record the bundle can never carry.
+    const { reports: sourceReports, ...sourceRest } = sourceGraph;
+    const { reports: targetReports, ...targetRest } = targetGraph;
+    expect(targetRest).toEqual(sourceRest);
+    expect(sourceReports.filter((r: { type: string }) => r.type === 'bundle')).toHaveLength(1);
+    expect(targetReports).toEqual(
+      sourceReports.filter((r: { type: string }) => r.type !== 'bundle'),
+    );
   });
 
   it('rejects importing a bundle whose project already exists', async () => {

@@ -1,4 +1,5 @@
 import { gunzipSync } from 'node:zlib';
+import { z } from 'zod';
 
 /**
  * Worker resource limits (ADR-0019, design §3.13): a malformed or hostile
@@ -18,6 +19,17 @@ export interface ParseLimits {
   /** Backpressure: queued + running jobs beyond this are rejected at ingest (P4-M5). */
   maxQueuedParses: number;
 }
+
+/** Validates ParseLimits crossing the worker process boundary (M12, #69). */
+export const parseLimitsSchema = z.object({
+  maxFileBytes: z.number(),
+  maxParseMillis: z.number(),
+  maxDepth: z.number(),
+  maxDecompressionRatio: z.number(),
+  maxObservations: z.number(),
+  maxConcurrentParses: z.number(),
+  maxQueuedParses: z.number(),
+});
 
 export const DEFAULT_PARSE_LIMITS: ParseLimits = {
   maxFileBytes: 64 * 1024 * 1024,

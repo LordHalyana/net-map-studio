@@ -3,9 +3,12 @@ import {
   Cable,
   Grid3x3,
   Link2,
+  Magnet,
   Maximize,
   Redo2,
+  Scan,
   ShieldCheck,
+  TriangleAlert,
   Undo2,
   Users,
   Waypoints,
@@ -33,8 +36,11 @@ export function CanvasToolbar() {
   const toggleObservedLayer = useAppStore((s) => s.toggleObservedLayer);
   const toggleIdentityOverlay = useAppStore((s) => s.toggleIdentityOverlay);
   const toggleRulesLayer = useAppStore((s) => s.toggleRulesLayer);
+  const toggleFindingsLayer = useAppStore((s) => s.toggleFindingsLayer);
   const canvasMode = useAppStore((s) => s.canvasMode);
   const setCanvasMode = useAppStore((s) => s.setCanvasMode);
+  const gridEnabled = useAppStore((s) => s.gridEnabled);
+  const toggleGrid = useAppStore((s) => s.toggleGrid);
   const graph = useAppStore((s) => s.graph);
   const dispatch = useAppStore((s) => s.dispatch);
 
@@ -76,6 +82,13 @@ export function CanvasToolbar() {
       onClick: toggleRulesLayer,
       title: 'Planned-rule callout cards (design §3.2C)',
       icon: ShieldCheck,
+    },
+    {
+      testid: 'toggle-findings-layer',
+      on: layers.findings,
+      onClick: toggleFindingsLayer,
+      title: 'Findings layer: severity tint on affected devices (§3.2C)',
+      icon: TriangleAlert,
     },
   ] as const;
 
@@ -160,8 +173,27 @@ export function CanvasToolbar() {
       >
         <Grid3x3 size={15} aria-hidden />
       </button>
+      <button
+        type="button"
+        className={`canvas-toolbar__btn${gridEnabled ? ' canvas-toolbar__btn--on' : ''}`}
+        data-testid="toggle-grid"
+        aria-pressed={gridEnabled}
+        onClick={toggleGrid}
+        title="Grid & snap-to-grid (§3.2A)"
+      >
+        <Magnet size={15} aria-hidden />
+      </button>
       <span className="canvas-toolbar__sep" />
       <span className="canvas-toolbar__zoom">
+        <button
+          type="button"
+          className="canvas-toolbar__btn"
+          data-testid="fit-view"
+          onClick={() => window.dispatchEvent(new CustomEvent('netplan:fit'))}
+          title="Fit to screen"
+        >
+          <Scan size={15} aria-hidden />
+        </button>
         <button
           type="button"
           className="canvas-toolbar__btn"

@@ -28,6 +28,7 @@ import type {
   ProvenanceStatus,
   RolePrivilege,
   SettableEntityType,
+  Size,
 } from '@netplan/domain';
 
 /**
@@ -42,6 +43,8 @@ import type {
 const lifecycleState = () => text('lifecycle_state').$type<LifecycleState>().notNull();
 const tags = () => text('tags', { mode: 'json' }).$type<string[]>().notNull();
 const position = () => text('position', { mode: 'json' }).$type<Position>().notNull();
+/** Operator-set container size (M1, #58); null = renderer default. */
+const size = () => text('size', { mode: 'json' }).$type<Size | null>();
 
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
@@ -62,6 +65,7 @@ export const sites = sqliteTable('sites', {
   tags: tags(),
   notes: text('notes').notNull(),
   position: position(),
+  size: size(),
 });
 
 export const zones = sqliteTable('zones', {
@@ -79,6 +83,7 @@ export const zones = sqliteTable('zones', {
   tags: tags(),
   notes: text('notes').notNull(),
   position: position(),
+  size: size(),
 });
 
 export const devices = sqliteTable('devices', {
@@ -116,6 +121,8 @@ export const networks = sqliteTable('networks', {
   vlanId: integer('vlan_id'),
   cidr: text('cidr').notNull(),
   description: text('description').notNull(),
+  /** Operator-pinned canvas tint (M6, #63); null = hash-stable palette. */
+  color: text('color'),
   lifecycleState: lifecycleState(),
   tags: tags(),
   layoutHints: text('layout_hints', { mode: 'json' }).$type<Record<string, Position>>().notNull(),
@@ -211,6 +218,68 @@ export const flows = sqliteTable('flows', {
   observationCount: integer('observation_count').notNull(),
   confidence: real('confidence').notNull(),
   lifecycleState: lifecycleState(),
+});
+
+/** Detection inputs per Device (improvements M7, #64) — the Flow precedent applied to §3.8. */
+export const hostArtifacts = sqliteTable('host_artifacts', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  deviceId: text('device_id')
+    .notNull()
+    .references(() => devices.id),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  path: text('path'),
+  command: text('command').notNull(),
+  persistenceKind: text('persistence_kind'),
+  sha256: text('sha256'),
+  publisher: text('publisher').notNull(),
+  version: text('version').notNull(),
+  remoteAccess: integer('remote_access', { mode: 'boolean' }).notNull(),
+  confidence: real('confidence').notNull(),
+  lifecycleState: lifecycleState(),
+});
+
+/** Masked secrets found in evidence (design §3.13; improvements M13, #70). */
+export const secretMatches = sqliteTable('secret_matches', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  kind: text('kind').notNull(),
+  label: text('label').notNull(),
+  masked: text('masked').notNull(),
+  evidenceId: text('evidence_id').notNull(),
+  offset: integer('offset').notNull(),
+  length: integer('length').notNull(),
+  revealed: integer('revealed', { mode: 'boolean' }).notNull(),
+});
+
+/** Operator line-format templates (design §3.6; improvements M12, #69). */
+export const importProfilesTable = sqliteTable('import_profiles', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  name: text('name').notNull(),
+  adapter: text('adapter').notNull(),
+  pattern: text('pattern').notNull(),
+  description: text('description').notNull(),
+});
+
+/** Generated-deliverable audit trail (design §3.4; improvements M11, #68). */
+export const reports = sqliteTable('reports', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  type: text('type').notNull(),
+  createdAt: text('created_at').notNull(),
+  redactionProfile: text('redaction_profile').notNull(),
+  parameters: text('parameters', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+  outputSha256: text('output_sha256').notNull(),
 });
 
 export const identities = sqliteTable('identities', {
@@ -486,6 +555,10 @@ export const entityTables = {
   service: services,
   policyRule: policyRules,
   flow: flows,
+  hostArtifact: hostArtifacts,
+  report: reports,
+  importProfile: importProfilesTable,
+  secretMatch: secretMatches,
   identity: identities,
   roleAssignment: roleAssignments,
   baseline: baselines,

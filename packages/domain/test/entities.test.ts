@@ -94,3 +94,28 @@ describe('lifecycleState defaults', () => {
     expect(rule.lifecycleState).toBe('planned');
   });
 });
+
+describe('container size (M1, #58)', () => {
+  it('defaults to null so pre-size bundles still parse', () => {
+    const omitSize = (entity: object) =>
+      Object.fromEntries(Object.entries(entity).filter(([key]) => key !== 'size'));
+    expect(siteSchema.parse(omitSize(site)).size).toBeNull();
+    expect(zoneSchema.parse(omitSize(zone)).size).toBeNull();
+  });
+
+  it('accepts operator-set dimensions on sites and zones', () => {
+    expect(siteSchema.parse({ ...site, size: { width: 600, height: 420 } }).size).toEqual({
+      width: 600,
+      height: 420,
+    });
+    expect(zoneSchema.parse({ ...zone, size: { width: 260, height: 180 } }).size).toEqual({
+      width: 260,
+      height: 180,
+    });
+  });
+
+  it('rejects non-positive dimensions', () => {
+    expect(siteSchema.safeParse({ ...site, size: { width: 0, height: 300 } }).success).toBe(false);
+    expect(zoneSchema.safeParse({ ...zone, size: { width: 200, height: -1 } }).success).toBe(false);
+  });
+});

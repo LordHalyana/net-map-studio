@@ -41,16 +41,29 @@ export function FindingsPanel() {
   const graph = useAppStore((s) => s.graph);
   const report = useAppStore((s) => s.findings);
   const loading = useAppStore((s) => s.findingsLoading);
-  const error = useAppStore((s) => s.findingsError);
   const refreshFindings = useAppStore((s) => s.refreshFindings);
   const disposeFinding = useAppStore((s) => s.disposeFinding);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const focusedFingerprint = useAppStore((s) => s.focusedFindingFingerprint);
+  const deviceFilter = useAppStore((s) => s.findingsDeviceFilter);
+  const focusFindingsForDevice = useAppStore((s) => s.focusFindingsForDevice);
+  const filteredDevice = deviceFilter
+    ? (graph?.devices.find((d) => d.id === deviceFilter) ?? null)
+    : null;
 
   useEffect(() => {
     if (project && !report) void refreshFindings();
   }, [project, report, refreshFindings]);
+
+  // a search hit lands here scrolled to its card (M3, #60)
+  useEffect(() => {
+    if (!focusedFingerprint || !report) return;
+    document
+      .querySelector(`[data-testid="finding-${focusedFingerprint}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusedFingerprint, report]);
 
   if (!project) return null;
 
@@ -63,6 +76,12 @@ export function FindingsPanel() {
     if (statusFilter === 'open' && f.status !== 'new') return false;
     if (statusFilter === 'dispositioned' && f.status === 'new') return false;
     if (categoryFilter !== 'all' && f.detection?.category !== categoryFilter) return false;
+    if (
+      deviceFilter &&
+      !(f.detection?.affected?.kind === 'device' && f.detection.affected.id === deviceFilter)
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -93,8 +112,6 @@ export function FindingsPanel() {
         </div>
       </div>
 
-      {error && <p className="panel-empty findings-error">⚠ {error}</p>}
-
       <div className="findings-filters" data-testid="findings-filters">
         <label>
           Status
@@ -123,6 +140,19 @@ export function FindingsPanel() {
             ))}
           </select>
         </label>
+        {deviceFilter && (
+          <span className="findings-device-filter" data-testid="findings-device-filter">
+            Device: {filteredDevice?.name ?? deviceFilter.slice(0, 8)}
+            <button
+              type="button"
+              data-testid="findings-device-filter-clear"
+              title="Show findings for all devices"
+              onClick={() => focusFindingsForDevice(null)}
+            >
+              ✕
+            </button>
+          </span>
+        )}
         <span className="findings-count" data-testid="findings-count">
           {visible.length} of {findings.length} findings
         </span>
@@ -150,7 +180,9 @@ export function FindingsPanel() {
               {group.map((f) => (
                 <article
                   key={f.fingerprint}
-                  className={`finding-card${f.stale ? ' finding-card--stale' : ''}`}
+                  className={`finding-card${f.stale ? ' finding-card--stale' : ''}${
+                    f.fingerprint === focusedFingerprint ? ' finding-card--focused' : ''
+                  }`}
                   data-testid={`finding-${f.fingerprint}`}
                 >
                   <header className="finding-card__head">

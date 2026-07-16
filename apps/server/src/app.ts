@@ -1,18 +1,25 @@
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
 import {
   applyRedaction,
   changeSetSchema,
-  makeBundle,
   netplanBundleSchema,
   newId,
+  operationIdSchema,
   operationSchema,
   projectIdSchema,
   projectSchema,
+  reportIdSchema,
+  reportRecordSchema,
   settableEntityTypeSchema,
+  type ReportType,
 } from '@netplan/domain';
+import { buildChangeReport } from './export/change-report.js';
 import { toCsv } from './export/csv.js';
+import { maskSecrets } from '@netplan/domain';
 import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
@@ -97,13 +104,7 @@ export async function buildApp(options: AppOptions = {}) {
     providers: [stubProvider, createLocalFeedProvider(localFeedStore)],
   });
   const enrichmentService = createEnrichmentService(db, egressDoor);
-  const findingsService = createFindingsService(
-    db,
-    engine,
-    importStore,
-    provenanceStore,
-    enrichmentService,
-  );
+  const findingsService = createFindingsService(db, engine, provenanceStore, enrichmentService);
   app.decorate('importStore', importStore);
   app.decorate('egressDoor', egressDoor);
 
@@ -178,8 +179,17 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.post('/projects/:id/operations', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
+    // Slim responses (ADR-0019, M14 #71): `?slim=1` returns the op result +
+    // version watermark instead of the full ProjectState, so a mutation
+    // round-trip doesn't re-serialize 500 devices / 5k flows. The client
+    // reconciles optimistically and refetches only on a watermark mismatch.
+    const query = z.object({ slim: z.coerce.boolean().default(false) }).parse(request.query ?? {});
     const body = request.body;
     const isChangeSet = typeof body === 'object' && body !== null && 'operations' in body;
+    const respond = (result: { appliedOperations: unknown; availability: unknown }) =>
+      query.slim
+        ? { ...result, watermark: engine.getWatermark(id) }
+        : { ...result, state: engine.getState(id), watermark: engine.getWatermark(id) };
 
     if (isChangeSet) {
       const parsed = changeSetSchema.safeParse(body);
@@ -189,8 +199,7 @@ export async function buildApp(options: AppOptions = {}) {
       if (parsed.data.projectId !== id) {
         throw new OperationError('INVALID', 'ChangeSet projectId does not match URL');
       }
-      const result = engine.applyChangeSet(parsed.data);
-      return { ...result, state: engine.getState(id) };
+      return respond(engine.applyChangeSet(parsed.data));
     }
 
     const parsed = operationSchema.safeParse(body);
@@ -200,8 +209,7 @@ export async function buildApp(options: AppOptions = {}) {
     if (parsed.data.projectId !== id) {
       throw new OperationError('INVALID', 'Operation projectId does not match URL');
     }
-    const result = engine.applyOperation(parsed.data);
-    return { ...result, state: engine.getState(id) };
+    return respond(engine.applyOperation(parsed.data));
   });
 
   // ---------- Proposal ChangeSets & the sign-off seam (P4-M6, ADR-0026) ----------
@@ -236,7 +244,7 @@ export async function buildApp(options: AppOptions = {}) {
 
   // ---------- Export / import (ADR-0016, design §3.12) ----------
 
-  app.get('/projects/:id/export', async (request) => {
+  app.get('/projects/:id/export', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
     const query = z.object({ redact: z.string().default('') }).parse(request.query);
     let state = engine.getState(id);
@@ -247,7 +255,22 @@ export async function buildApp(options: AppOptions = {}) {
     if (fields.length > 0) {
       state = applyRedaction(state, { name: 'query', fields });
     }
-    return makeBundle(state, new Date().toISOString(), importStore.exportAttachments(id));
+    // Stream assembly (ADR-0019, M14 #71): the bundle JSON is emitted in
+    // chunks, reading each evidence blob one at a time, so a large project's
+    // captures never sit fully in memory as one array + one giant string. The
+    // audit hash (M11) is computed over the same bytes as they stream, then
+    // the Report record is written on completion.
+    const hash = createHash('sha256');
+    const hashed = (function* () {
+      for (const chunk of importStore.streamBundle(id, state, new Date().toISOString())) {
+        hash.update(chunk);
+        yield chunk;
+      }
+      recordReport(id, 'bundle', query.redact, {}, '', hash.digest('hex'));
+    })();
+    return reply
+      .header('content-type', 'application/json; charset=utf-8')
+      .send(Readable.from(hashed));
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -307,7 +330,36 @@ export async function buildApp(options: AppOptions = {}) {
   app.post('/projects/:id/imports/:jobId/commit', async (request) => {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);
+    // secrets masking (§3.13, M13 #70): scan the newly committed evidence
+    importStore.scanEvidenceSecrets(params.id);
     return { ...detail, state: engine.getState(params.id) };
+  });
+
+  // ---------- Privacy & audit (§3.13; improvements M13, #70) ----------
+
+  /** Reveal one masked secret — explicit, audited, returns the raw value once. */
+  app.post('/projects/:id/secrets/:secretId/reveal', async (request) => {
+    const params = z.object({ id: z.uuidv7(), secretId: z.uuidv7() }).parse(request.params);
+    return { value: importStore.revealSecret(params.id, params.secretId) };
+  });
+
+  /** Secure deletion: purge an evidence blob, keep its hash + manifest entry, audit it. */
+  app.post('/projects/:id/evidence/:evidenceId/purge', async (request) => {
+    const params = z.object({ id: z.uuidv7(), evidenceId: z.uuidv7() }).parse(request.params);
+    const body = z.object({ confirm: z.literal(true) }).safeParse(request.body ?? {});
+    if (!body.success) {
+      throw new OperationError('INVALID', 'Purge is non-undoable — confirm: true is required');
+    }
+    importStore.purgeEvidence(params.id, params.evidenceId);
+    return { state: engine.getState(params.id) };
+  });
+
+  /** Retention sweep: downgrade raw evidence older than maxAgeDays to hashOnly. */
+  app.post('/projects/:id/retention/sweep', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = z.object({ maxAgeDays: z.number().nonnegative() }).parse(request.body ?? {});
+    const purged = importStore.sweepRetention(id, body.maxAgeDays);
+    return { purged, state: engine.getState(id) };
   });
 
   app.post('/projects/:id/imports/:jobId/rollback', async (request) => {
@@ -341,6 +393,39 @@ export async function buildApp(options: AppOptions = {}) {
   // always current, so there is no server-side run to trigger; disposition
   // changes go through POST /projects/:id/operations (SetFindingStatus/Note).
   /** Findings, optionally through the client-safe redaction profile (M12, Q15). */
+  /**
+   * Persist the §3.4 Report record through the Operation log (M11, #68):
+   * every generated deliverable leaves an auditable, undoable trace with the
+   * output's SHA-256 — also the audit hook M13 builds on.
+   */
+  function recordReport(
+    projectId: string,
+    type: ReportType,
+    redactionProfile: string,
+    parameters: Record<string, string>,
+    output: string,
+    /** Precomputed digest for streamed output whose bytes we don't hold as a string. */
+    outputSha256?: string,
+  ): void {
+    engine.applyOperation({
+      id: newId(operationIdSchema),
+      projectId: projectIdSchema.parse(projectId),
+      kind: 'CreateEntity',
+      payload: {
+        entityType: 'report',
+        entity: reportRecordSchema.parse({
+          id: newId(reportIdSchema),
+          projectId,
+          type,
+          createdAt: new Date().toISOString(),
+          redactionProfile,
+          parameters,
+          outputSha256: outputSha256 ?? createHash('sha256').update(output).digest('hex'),
+        }),
+      },
+    });
+  }
+
   function analyzeWithRedaction(id: string, redactParam: unknown): FindingView[] {
     const findings = findingsService.analyze(id).findings;
     const profile =
@@ -367,10 +452,13 @@ export async function buildApp(options: AppOptions = {}) {
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
     const report = findingsService.analyze(id);
     const findings = query.redact ? analyzeWithRedaction(id, query.redact) : report.findings;
-    const html = buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
-      opSeq: report.opSeq,
-      configHash: report.configHash,
-    });
+    const html = maskSecrets(
+      buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
+        opSeq: report.opSeq,
+        configHash: report.configHash,
+      }),
+    );
+    recordReport(id, 'findingsReport', query.redact ?? '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 
@@ -447,31 +535,59 @@ export async function buildApp(options: AppOptions = {}) {
     'services',
     'links',
     'policyRules',
+    'identities',
+    'flows',
     'findings',
   ]);
 
   app.get('/projects/:id/export/csv/:entityType', async (request, reply) => {
-    const { id } = projectParamsSchema.parse(request.params);
-    const params = z.object({ entityType: csvEntityTypes }).safeParse(request.params);
+    // one parse for both segments (M11, #68 — retires the double-parse)
+    const params = z
+      .object({ id: z.string(), entityType: csvEntityTypes })
+      .safeParse(request.params);
     if (!params.success) {
       throw new OperationError('INVALID', 'Unknown entity type for CSV export');
     }
+    const { id, entityType } = params.data;
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
     // Findings are derived — not a ProjectState collection — and flow through
     // the same redaction pipeline as every other export (M12).
     const rows =
-      params.data.entityType === 'findings'
+      entityType === 'findings'
         ? findingsToCsvRows(engine.getState(id), analyzeWithRedaction(id, query.redact))
-        : engine.getState(id)[params.data.entityType];
+        : engine.getState(id)[entityType];
+    // secrets never leave in a default export (§3.13, M13 #70)
+    const csv = maskSecrets(toCsv(rows));
+    recordReport(id, 'csv', query.redact ?? '', { entityType }, csv);
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="${params.data.entityType}.csv"`)
-      .send(toCsv(rows));
+      .header('content-disposition', `attachment; filename="${entityType}.csv"`)
+      .send(csv);
   });
 
   app.get('/projects/:id/report', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
-    const html = buildHtmlReport(engine.getState(id), new Date().toISOString());
+    const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
+    const html = maskSecrets(
+      buildHtmlReport(engine.getState(id), new Date().toISOString(), {
+        findings: analyzeWithRedaction(id, query.redact),
+        redactionProfile: query.redact ?? '',
+      }),
+    );
+    recordReport(id, 'designReport', query.redact ?? '', {}, html);
+    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+  });
+
+  // AS-IS → TO-BE change report (design §3.12; improvements M11, #68)
+  app.get('/projects/:id/report/change', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const html = buildChangeReport(
+      engine.getState(id),
+      engine.listChangeSets(id),
+      engine.getLog(id),
+      new Date().toISOString(),
+    );
+    recordReport(id, 'changeReport', '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
 
@@ -479,7 +595,49 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.get('/projects/:id/graph', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
-    return engine.getState(id);
+    // ADR-0019 scale (M14, #71): ~5k aggregated flows must not ride on every
+    // graph read. `?flows=omit` drops them; `?flows=<n>` caps them; the client
+    // fetches the visible layer's flows from /flows.
+    const query = z.object({ flows: z.string().optional() }).parse(request.query ?? {});
+    const state = engine.getState(id);
+    if (query.flows === 'omit') return { ...state, flows: [] };
+    const cap = query.flows ? Number.parseInt(query.flows, 10) : null;
+    if (cap !== null && Number.isInteger(cap) && cap >= 0 && state.flows.length > cap) {
+      return { ...state, flows: state.flows.slice(0, cap) };
+    }
+    return state;
+  });
+
+  // Dedicated flows endpoint (ADR-0019, M14 #71): limit/offset + filters so
+  // the client pulls only the flows a layer needs, never all 5k.
+  app.get('/projects/:id/flows', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(5000).default(500),
+        offset: z.coerce.number().int().min(0).default(0),
+        endpoint: z.string().optional(),
+        service: z.coerce.number().int().optional(),
+        since: z.string().optional(),
+        until: z.string().optional(),
+      })
+      .parse(request.query ?? {});
+    let flows = engine.getState(id).flows;
+    if (query.endpoint) {
+      const needle = query.endpoint;
+      flows = flows.filter(
+        (f) =>
+          (f.source.kind !== 'external' && f.source.id === needle) ||
+          (f.destination.kind !== 'external' && f.destination.id === needle) ||
+          (f.source.kind === 'external' && f.source.value === needle) ||
+          (f.destination.kind === 'external' && f.destination.value === needle),
+      );
+    }
+    if (query.service !== undefined) flows = flows.filter((f) => f.port === query.service);
+    if (query.since) flows = flows.filter((f) => f.lastSeen >= query.since!);
+    if (query.until) flows = flows.filter((f) => f.firstSeen <= query.until!);
+    const total = flows.length;
+    return { flows: flows.slice(query.offset, query.offset + query.limit), total };
   });
 
   app.get('/projects/:id/log', async (request) => {
