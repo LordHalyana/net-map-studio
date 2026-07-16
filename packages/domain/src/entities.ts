@@ -7,6 +7,7 @@ import {
   hostArtifactIdSchema,
   importProfileIdSchema,
   reportIdSchema,
+  secretMatchIdSchema,
   identityIdSchema,
   interfaceIdSchema,
   linkIdSchema,
@@ -316,6 +317,36 @@ export const hostArtifactSchema = z.object({
 export type HostArtifact = z.infer<typeof hostArtifactSchema>;
 
 /**
+ * A detected secret (design §3.13; improvements M13, #70): a credential the
+ * masking pass found in ingested evidence. Stored masked-by-default — the raw
+ * value never persists; only its mask, kind and provenance do. Revealing the
+ * original is a separate, audited action against the source evidence.
+ */
+export const secretMatchSchema = z.object({
+  id: secretMatchIdSchema,
+  projectId: projectIdSchema,
+  kind: z.enum([
+    'privateKey',
+    'passwordAssignment',
+    'connectionString',
+    'highEntropyToken',
+    'custom',
+  ]),
+  label: z.string(),
+  /** The masked stand-in shown everywhere by default. */
+  masked: z.string(),
+  /** Evidence this was found in, for the audited reveal. */
+  evidenceId: z.string(),
+  /** Character offset in the evidence text — where reveal re-reads the original. */
+  offset: z.number().int().min(0),
+  /** Length of the original value, so reveal can slice it back out. */
+  length: z.number().int().min(1),
+  /** Flipped only by an audited reveal; default false keeps it masked. */
+  revealed: z.boolean().default(false),
+});
+export type SecretMatch = z.infer<typeof secretMatchSchema>;
+
+/**
  * Import profile (design §3.6; improvements M12, #69): an operator-defined
  * line-format template for text evidence the tool does not natively parse
  * (Netcat logs and kin). The regex's named capture groups ARE the field map:
@@ -361,6 +392,10 @@ export const reportTypeSchema = z.enum([
   'changeReport',
   'csv',
   'topologyImage',
+  // §3.13 audit events (improvements M13, #70) — the Report table is the audit hook
+  'evidencePurge',
+  'secretReveal',
+  'retentionSweep',
 ]);
 export type ReportType = z.infer<typeof reportTypeSchema>;
 

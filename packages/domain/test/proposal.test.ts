@@ -43,6 +43,7 @@ function emptyState(): ProjectState {
     hostArtifacts: [],
     reports: [],
     importProfiles: [],
+    secretMatches: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
@@ -137,7 +138,8 @@ describe('buildProposal against an empty graph', () => {
       if (
         operation.kind === 'CreateEntity' &&
         operation.payload.entityType !== 'report' &&
-        operation.payload.entityType !== 'importProfile'
+        operation.payload.entityType !== 'importProfile' &&
+        operation.payload.entityType !== 'secretMatch'
       ) {
         expect(operation.payload.entity.lifecycleState).toBe('observed');
         expect(operation.payload.entity.projectId).toBe(project.id);

@@ -7,6 +7,7 @@ import {
   hostArtifactSchema,
   importProfileSchema,
   reportRecordSchema,
+  secretMatchSchema,
   identitySchema,
   interfaceSchema,
   linkSchema,
@@ -45,6 +46,8 @@ export const projectStateSchema = z.object({
   reports: z.array(reportRecordSchema).default([]),
   /** Operator line-format templates (§3.6; improvements M12, #69). */
   importProfiles: z.array(importProfileSchema).default([]),
+  /** Masked secrets found in evidence (§3.13; improvements M13, #70). */
+  secretMatches: z.array(secretMatchSchema).default([]),
   identities: z.array(identitySchema).default([]),
   roleAssignments: z.array(roleAssignmentSchema).default([]),
   /** Phase-3 finding dispositions (ADR-0023) — the persisted analyst decisions. */

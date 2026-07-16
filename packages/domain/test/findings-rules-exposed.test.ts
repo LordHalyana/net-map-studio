@@ -38,6 +38,7 @@ function state(services: Service[], baselines: Baseline[]): ProjectState {
     hostArtifacts: [],
     reports: [],
     importProfiles: [],
+    secretMatches: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

@@ -19,6 +19,7 @@ function stateWith(overrides: Partial<ProjectState>): ProjectState {
     hostArtifacts: [],
     reports: [],
     importProfiles: [],
+    secretMatches: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

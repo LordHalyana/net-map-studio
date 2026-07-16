@@ -57,6 +57,7 @@ function emptyState(project = makeProject()): ProjectState {
     hostArtifacts: [],
     reports: [],
     importProfiles: [],
+    secretMatches: [],
     identities: [],
     roleAssignments: [],
     baselines: [],

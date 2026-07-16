@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { DEFAULT_ENGINE_CONFIG } from '@netplan/domain';
 import { useAppStore } from '../state/store';
 
@@ -9,8 +10,13 @@ import { useAppStore } from '../state/store';
  */
 export function SettingsPanel() {
   const project = useAppStore((s) => s.project);
+  const graph = useAppStore((s) => s.graph);
   const setView = useAppStore((s) => s.setView);
-  if (!project) return null;
+  const revealSecret = useAppStore((s) => s.revealSecret);
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  if (!project || !graph) return null;
+
+  const secrets = graph.secretMatches;
 
   return (
     <section className="settings-panel" data-testid="settings-panel">
@@ -53,10 +59,50 @@ export function SettingsPanel() {
         </tbody>
       </table>
 
+      <h3 className="field-section__title">Detected secrets (§3.13)</h3>
+      {secrets.length === 0 ? (
+        <p className="panel-empty" data-testid="settings-secrets-empty">
+          No secrets detected in imported evidence.
+        </p>
+      ) : (
+        <table className="settings-table" data-testid="settings-secrets">
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>Value</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {secrets.map((secret) => (
+              <tr key={secret.id} data-testid={`secret-${secret.id}`}>
+                <td>{secret.label}</td>
+                <td className="settings-table__params">{revealed[secret.id] ?? secret.masked}</td>
+                <td>
+                  <button
+                    type="button"
+                    data-testid={`secret-reveal-${secret.id}`}
+                    title="Reveal the original value — this is audited"
+                    onClick={() => {
+                      void revealSecret(secret.id).then((value) =>
+                        setRevealed((prev) => ({ ...prev, [secret.id]: value })),
+                      );
+                    }}
+                  >
+                    Reveal (audited)
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
       <h3 className="field-section__title">Evidence retention</h3>
       <p className="panel-empty" data-testid="settings-retention">
-        Structured evidence is retained inline; oversized raw captures downgrade to hash-only.
-        Retention policy controls arrive with the privacy &amp; audit milestone (M13, #70).
+        Structured evidence is retained inline; oversized raw captures downgrade to hash-only. Raw
+        evidence can be purged from the Imports view (kept as hash-only, audited); a secret whose
+        source is purged can no longer be revealed.
       </p>
     </section>
   );

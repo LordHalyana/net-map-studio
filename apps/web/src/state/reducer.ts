@@ -69,6 +69,8 @@ function addEntity(state: ProjectState, payload: EntityPayload): ProjectState {
       return { ...state, reports: [...state.reports, payload.entity] };
     case 'importProfile':
       return { ...state, importProfiles: [...state.importProfiles, payload.entity] };
+    case 'secretMatch':
+      return { ...state, secretMatches: [...state.secretMatches, payload.entity] };
     case 'identity':
       return { ...state, identities: [...state.identities, payload.entity] };
     case 'roleAssignment':
@@ -103,6 +105,8 @@ function removeEntity(state: ProjectState, payload: EntityPayload): ProjectState
       return { ...state, reports: state.reports.filter((e) => e.id !== id) };
     case 'importProfile':
       return { ...state, importProfiles: state.importProfiles.filter((e) => e.id !== id) };
+    case 'secretMatch':
+      return { ...state, secretMatches: state.secretMatches.filter((e) => e.id !== id) };
     case 'identity':
       return { ...state, identities: state.identities.filter((e) => e.id !== id) };
     case 'roleAssignment':
@@ -153,6 +157,8 @@ function setField(
       return { ...state, reports: patch(state.reports) };
     case 'importProfile':
       return { ...state, importProfiles: patch(state.importProfiles) };
+    case 'secretMatch':
+      return { ...state, secretMatches: patch(state.secretMatches) };
     case 'identity':
       return { ...state, identities: patch(state.identities) };
     case 'roleAssignment':

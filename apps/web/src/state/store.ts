@@ -147,6 +147,8 @@ interface AppState {
   ) => Promise<void>;
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
+  /** Reveal a masked secret's original value — audited server-side (M13, #70). */
+  revealSecret: (secretId: string) => Promise<string>;
   dispatch: (payload: Operation | ChangeSet) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -275,6 +277,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       listProjectProvenance(project.id),
     ]);
     set({ graph, provenance });
+  },
+
+  revealSecret: async (secretId) => {
+    const project = get().project;
+    if (!project) throw new Error('no project');
+    const response = await fetch(`/api/projects/${project.id}/secrets/${secretId}/reveal`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      const message =
+        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+          ? body.error
+          : `Reveal failed: ${response.status}`;
+      get().pushToast(message);
+      throw new Error(message);
+    }
+    const body: unknown = await response.json();
+    const value =
+      body && typeof body === 'object' && 'value' in body && typeof body.value === 'string'
+        ? body.value
+        : '';
+    // the reveal flag moved server-side; refresh so the audit + state reflect it
+    await get().reload();
+    return value;
   },
 
   dispatch: (payload) => {

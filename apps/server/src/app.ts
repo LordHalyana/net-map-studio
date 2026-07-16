@@ -19,6 +19,7 @@ import {
 } from '@netplan/domain';
 import { buildChangeReport } from './export/change-report.js';
 import { toCsv } from './export/csv.js';
+import { maskSecrets } from '@netplan/domain';
 import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
@@ -309,7 +310,36 @@ export async function buildApp(options: AppOptions = {}) {
   app.post('/projects/:id/imports/:jobId/commit', async (request) => {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);
+    // secrets masking (§3.13, M13 #70): scan the newly committed evidence
+    importStore.scanEvidenceSecrets(params.id);
     return { ...detail, state: engine.getState(params.id) };
+  });
+
+  // ---------- Privacy & audit (§3.13; improvements M13, #70) ----------
+
+  /** Reveal one masked secret — explicit, audited, returns the raw value once. */
+  app.post('/projects/:id/secrets/:secretId/reveal', async (request) => {
+    const params = z.object({ id: z.uuidv7(), secretId: z.uuidv7() }).parse(request.params);
+    return { value: importStore.revealSecret(params.id, params.secretId) };
+  });
+
+  /** Secure deletion: purge an evidence blob, keep its hash + manifest entry, audit it. */
+  app.post('/projects/:id/evidence/:evidenceId/purge', async (request) => {
+    const params = z.object({ id: z.uuidv7(), evidenceId: z.uuidv7() }).parse(request.params);
+    const body = z.object({ confirm: z.literal(true) }).safeParse(request.body ?? {});
+    if (!body.success) {
+      throw new OperationError('INVALID', 'Purge is non-undoable — confirm: true is required');
+    }
+    importStore.purgeEvidence(params.id, params.evidenceId);
+    return { state: engine.getState(params.id) };
+  });
+
+  /** Retention sweep: downgrade raw evidence older than maxAgeDays to hashOnly. */
+  app.post('/projects/:id/retention/sweep', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = z.object({ maxAgeDays: z.number().nonnegative() }).parse(request.body ?? {});
+    const purged = importStore.sweepRetention(id, body.maxAgeDays);
+    return { purged, state: engine.getState(id) };
   });
 
   app.post('/projects/:id/imports/:jobId/rollback', async (request) => {
@@ -400,10 +430,12 @@ export async function buildApp(options: AppOptions = {}) {
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
     const report = findingsService.analyze(id);
     const findings = query.redact ? analyzeWithRedaction(id, query.redact) : report.findings;
-    const html = buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
-      opSeq: report.opSeq,
-      configHash: report.configHash,
-    });
+    const html = maskSecrets(
+      buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
+        opSeq: report.opSeq,
+        configHash: report.configHash,
+      }),
+    );
     recordReport(id, 'findingsReport', query.redact ?? '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });
@@ -502,7 +534,8 @@ export async function buildApp(options: AppOptions = {}) {
       entityType === 'findings'
         ? findingsToCsvRows(engine.getState(id), analyzeWithRedaction(id, query.redact))
         : engine.getState(id)[entityType];
-    const csv = toCsv(rows);
+    // secrets never leave in a default export (§3.13, M13 #70)
+    const csv = maskSecrets(toCsv(rows));
     recordReport(id, 'csv', query.redact ?? '', { entityType }, csv);
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
@@ -513,10 +546,12 @@ export async function buildApp(options: AppOptions = {}) {
   app.get('/projects/:id/report', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
-    const html = buildHtmlReport(engine.getState(id), new Date().toISOString(), {
-      findings: analyzeWithRedaction(id, query.redact),
-      redactionProfile: query.redact ?? '',
-    });
+    const html = maskSecrets(
+      buildHtmlReport(engine.getState(id), new Date().toISOString(), {
+        findings: analyzeWithRedaction(id, query.redact),
+        redactionProfile: query.redact ?? '',
+      }),
+    );
     recordReport(id, 'designReport', query.redact ?? '', {}, html);
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
   });

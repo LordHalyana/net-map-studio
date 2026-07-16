@@ -6,6 +6,7 @@ import {
   buildCandidates,
   buildProposal,
   changeSetIdSchema,
+  detectSecrets,
   evidenceIdSchema,
   evidenceSchema,
   generateProvenanceRows,
@@ -14,6 +15,7 @@ import {
   importProposalSchema,
   importResolutionActionSchema,
   invertOperation,
+  maskValue,
   newId,
   observationDraftSchema,
   observationIdSchema,
@@ -21,7 +23,12 @@ import {
   operationIdSchema,
   operationSchema,
   projectIdSchema,
+  reportIdSchema,
+  reportRecordSchema,
+  secretMatchIdSchema,
+  secretMatchSchema,
   evidenceManifestPath,
+  DEFAULT_SECRETS_CONFIG,
   type BundleEvidenceFile,
   type Evidence,
   type ImportJob,
@@ -30,6 +37,7 @@ import {
   type ImportResolutionAction,
   type NetplanBundle,
   type Observation,
+  type ReportType,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
 import {
@@ -736,6 +744,173 @@ export function createImportStore(
     });
   }
 
+  // ---------- privacy & audit (§3.13; improvements M13, #70) ----------
+
+  /** Append a §3.13 audit event to the Report table (the audit hook, M11). */
+  function writeAudit(
+    projectId: string,
+    type: ReportType,
+    parameters: Record<string, string>,
+  ): void {
+    engine.applyOperation({
+      id: newId(operationIdSchema),
+      projectId: projectIdSchema.parse(projectId),
+      kind: 'CreateEntity',
+      payload: {
+        entityType: 'report',
+        entity: reportRecordSchema.parse({
+          id: newId(reportIdSchema),
+          projectId,
+          type,
+          createdAt: new Date().toISOString(),
+          redactionProfile: '',
+          parameters,
+          outputSha256: '',
+        }),
+      },
+    });
+  }
+
+  /**
+   * Detect secrets across a project's retained evidence and persist them
+   * masked-by-default (§3.13). The raw value never lands — only its mask,
+   * kind and (evidenceId, offset, length) so an audited reveal can re-read
+   * the original from the source blob. Idempotent per (evidence, offset).
+   */
+  function scanEvidenceSecrets(projectId: string): number {
+    const existing = new Set(
+      engine.getState(projectId).secretMatches.map((s) => `${s.evidenceId}:${s.offset}`),
+    );
+    let created = 0;
+    for (const record of listEvidence(projectId)) {
+      const blob = getEvidenceBlob(projectId, record.id);
+      if (!blob) continue; // hashOnly — nothing to scan
+      const text =
+        blob.encoding === 'base64'
+          ? Buffer.from(blob.content, 'base64').toString('utf8')
+          : blob.content;
+      for (const found of detectSecrets(text, DEFAULT_SECRETS_CONFIG)) {
+        const key = `${record.id}:${found.index}`;
+        if (existing.has(key)) continue;
+        existing.add(key);
+        engine.applyOperation({
+          id: newId(operationIdSchema),
+          projectId: projectIdSchema.parse(projectId),
+          kind: 'CreateEntity',
+          payload: {
+            entityType: 'secretMatch',
+            entity: secretMatchSchema.parse({
+              id: newId(secretMatchIdSchema),
+              projectId,
+              kind: found.kind,
+              label: found.label,
+              masked: maskValue(found.value),
+              evidenceId: record.id,
+              offset: found.index,
+              length: found.value.length,
+              revealed: false,
+            }),
+          },
+        });
+        created += 1;
+      }
+    }
+    return created;
+  }
+
+  /**
+   * Reveal one masked secret — an explicit, audited action (§3.13). Re-reads
+   * the original from its source evidence, flips `revealed`, writes an audit
+   * record, and returns the raw value once. Fails if the evidence was purged.
+   */
+  function revealSecret(projectId: string, secretId: string): string {
+    const match = engine.getState(projectId).secretMatches.find((s) => s.id === secretId);
+    if (!match) throw new OperationError('NOT_FOUND', `Secret ${secretId} not found`);
+    const blob = getEvidenceBlob(projectId, match.evidenceId);
+    if (!blob) {
+      throw new OperationError(
+        'CONFLICT',
+        'The source evidence was purged — the original value no longer exists',
+      );
+    }
+    const text =
+      blob.encoding === 'base64'
+        ? Buffer.from(blob.content, 'base64').toString('utf8')
+        : blob.content;
+    const value = text.slice(match.offset, match.offset + match.length);
+    if (!match.revealed) {
+      engine.applyOperation({
+        id: newId(operationIdSchema),
+        projectId: projectIdSchema.parse(projectId),
+        kind: 'SetField',
+        entityType: 'secretMatch',
+        entityId: secretId,
+        field: 'revealed',
+        value: true,
+        previousValue: match.revealed,
+      });
+    }
+    writeAudit(projectId, 'secretReveal', { secretId, kind: match.kind });
+    return value;
+  }
+
+  /**
+   * Secure deletion (§3.13): drop an evidence blob while preserving the
+   * evidence record and its manifest hash — evidence *identity* survives, the
+   * raw bytes do not. Non-undoable by design; the audit record is its only
+   * trace. Also masks any revealed secrets that traced to it (their source is
+   * gone).
+   */
+  function purgeEvidence(projectId: string, evidenceId: string): void {
+    const record = db
+      .select()
+      .from(evidenceTable)
+      .where(and(eq(evidenceTable.id, evidenceId), eq(evidenceTable.projectId, projectId)))
+      .get();
+    if (!record) throw new OperationError('NOT_FOUND', `Evidence ${evidenceId} not found`);
+    db.transaction((tx) => {
+      tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, evidenceId)).run();
+      tx.update(evidenceTable)
+        .set({ retention: 'hashOnly' })
+        .where(eq(evidenceTable.id, evidenceId))
+        .run();
+    });
+    writeAudit(projectId, 'evidencePurge', {
+      evidenceId,
+      sha256: record.sha256,
+      filename: record.filename,
+    });
+  }
+
+  /**
+   * Retention sweep (§3.13): downgrade retained raw evidence older than
+   * `maxAgeDays` to hashOnly, keeping the record and hash. Returns the count
+   * downgraded and writes one audit record when it did anything.
+   */
+  function sweepRetention(projectId: string, maxAgeDays: number): number {
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    let purged = 0;
+    for (const record of listEvidence(projectId)) {
+      if (record.retention !== 'inline') continue;
+      if (new Date(record.importedAt).getTime() >= cutoff) continue;
+      db.transaction((tx) => {
+        tx.delete(evidenceBlobs).where(eq(evidenceBlobs.evidenceId, record.id)).run();
+        tx.update(evidenceTable)
+          .set({ retention: 'hashOnly' })
+          .where(eq(evidenceTable.id, record.id))
+          .run();
+      });
+      purged += 1;
+    }
+    if (purged > 0) {
+      writeAudit(projectId, 'retentionSweep', {
+        maxAgeDays: String(maxAgeDays),
+        purged: String(purged),
+      });
+    }
+    return purged;
+  }
+
   return {
     limits,
     createJob,
@@ -744,6 +919,10 @@ export function createImportStore(
     whenIdle,
     getJob,
     listJobs,
+    scanEvidenceSecrets,
+    revealSecret,
+    purgeEvidence,
+    sweepRetention,
     listEvidence,
     listObservations,
     getJobDetail,

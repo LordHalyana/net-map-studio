@@ -242,6 +242,21 @@ export const hostArtifacts = sqliteTable('host_artifacts', {
   lifecycleState: lifecycleState(),
 });
 
+/** Masked secrets found in evidence (design §3.13; improvements M13, #70). */
+export const secretMatches = sqliteTable('secret_matches', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  kind: text('kind').notNull(),
+  label: text('label').notNull(),
+  masked: text('masked').notNull(),
+  evidenceId: text('evidence_id').notNull(),
+  offset: integer('offset').notNull(),
+  length: integer('length').notNull(),
+  revealed: integer('revealed', { mode: 'boolean' }).notNull(),
+});
+
 /** Operator line-format templates (design §3.6; improvements M12, #69). */
 export const importProfilesTable = sqliteTable('import_profiles', {
   id: text('id').primaryKey(),
