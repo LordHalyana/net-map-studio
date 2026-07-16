@@ -56,6 +56,7 @@ function emptyState(project = makeProject()): ProjectState {
     flows: [],
     hostArtifacts: [],
     reports: [],
+    importProfiles: [],
     identities: [],
     roleAssignments: [],
     baselines: [],

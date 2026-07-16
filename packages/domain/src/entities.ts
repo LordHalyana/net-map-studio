@@ -5,6 +5,7 @@ import {
   deviceIdSchema,
   flowIdSchema,
   hostArtifactIdSchema,
+  importProfileIdSchema,
   reportIdSchema,
   identityIdSchema,
   interfaceIdSchema,
@@ -313,6 +314,38 @@ export const hostArtifactSchema = z.object({
   lifecycleState: lifecycleStateSchema,
 });
 export type HostArtifact = z.infer<typeof hostArtifactSchema>;
+
+/**
+ * Import profile (design §3.6; improvements M12, #69): an operator-defined
+ * line-format template for text evidence the tool does not natively parse
+ * (Netcat logs and kin). The regex's named capture groups ARE the field map:
+ * `host` (required), `port`, `status`, `banner`. Model config, edited through
+ * Operations like every persisted object.
+ */
+export const importProfileSchema = z.object({
+  id: importProfileIdSchema,
+  projectId: projectIdSchema,
+  name: z.string().min(1),
+  /** The adapter this profile drives. */
+  adapter: z.string().default('netcat-text'),
+  /** Per-line regex with named groups host/port/status/banner. */
+  pattern: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => {
+        try {
+          new RegExp(value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'pattern must be a valid regular expression' },
+    ),
+  description: z.string().default(''),
+});
+export type ImportProfile = z.infer<typeof importProfileSchema>;
 
 /**
  * Report record (design §3.4; improvements M11, #68): the minimal persisted

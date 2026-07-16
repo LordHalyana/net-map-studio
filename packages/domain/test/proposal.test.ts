@@ -42,6 +42,7 @@ function emptyState(): ProjectState {
     flows: [],
     hostArtifacts: [],
     reports: [],
+    importProfiles: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],
@@ -131,8 +132,13 @@ describe('buildProposal against an empty graph', () => {
     ]);
     for (const operation of proposal.operations) {
       expect(operation.kind).toBe('CreateEntity');
-      // report records (M11) carry no lifecycle and never appear in proposals
-      if (operation.kind === 'CreateEntity' && operation.payload.entityType !== 'report') {
+      // report records (M11) and import profiles (M12) carry no lifecycle and
+      // never appear in proposals
+      if (
+        operation.kind === 'CreateEntity' &&
+        operation.payload.entityType !== 'report' &&
+        operation.payload.entityType !== 'importProfile'
+      ) {
         expect(operation.payload.entity.lifecycleState).toBe('observed');
         expect(operation.payload.entity.projectId).toBe(project.id);
       }

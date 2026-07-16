@@ -21,6 +21,8 @@ export const changeSetIdSchema = z.uuidv7().brand<'ChangeSetId'>();
 export const flowIdSchema = z.uuidv7().brand<'FlowId'>();
 export const identityIdSchema = z.uuidv7().brand<'IdentityId'>();
 export const roleAssignmentIdSchema = z.uuidv7().brand<'RoleAssignmentId'>();
+/** Import profiles (§3.6; improvements M12, #69): operator line-format templates. */
+export const importProfileIdSchema = z.uuidv7().brand<'ImportProfileId'>();
 /** Report records (improvements M11, #68): the §3.4 deliverable audit trail. */
 export const reportIdSchema = z.uuidv7().brand<'ReportId'>();
 /** Host security artifacts (improvements M7, #64): detection inputs per Device. */
@@ -45,6 +47,7 @@ export type ChangeSetId = z.infer<typeof changeSetIdSchema>;
 export type FlowId = z.infer<typeof flowIdSchema>;
 export type HostArtifactId = z.infer<typeof hostArtifactIdSchema>;
 export type ReportId = z.infer<typeof reportIdSchema>;
+export type ImportProfileId = z.infer<typeof importProfileIdSchema>;
 export type IdentityId = z.infer<typeof identityIdSchema>;
 export type RoleAssignmentId = z.infer<typeof roleAssignmentIdSchema>;
 export type FindingId = z.infer<typeof findingIdSchema>;

@@ -242,6 +242,18 @@ export const hostArtifacts = sqliteTable('host_artifacts', {
   lifecycleState: lifecycleState(),
 });
 
+/** Operator line-format templates (design §3.6; improvements M12, #69). */
+export const importProfilesTable = sqliteTable('import_profiles', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  name: text('name').notNull(),
+  adapter: text('adapter').notNull(),
+  pattern: text('pattern').notNull(),
+  description: text('description').notNull(),
+});
+
 /** Generated-deliverable audit trail (design §3.4; improvements M11, #68). */
 export const reports = sqliteTable('reports', {
   id: text('id').primaryKey(),

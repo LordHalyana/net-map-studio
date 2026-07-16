@@ -53,13 +53,13 @@ import {
   startBudget,
   type ParseLimits,
 } from './guards.js';
-import { fixtureAdapter } from './adapters/fixture.js';
-import { deviceStateAdapter } from './adapters/device-state.js';
-import { ldifAdapter } from './adapters/ldif.js';
-import { nmapXmlAdapter } from './adapters/nmap-xml.js';
-import { tsharkFlowsAdapter } from './adapters/tshark-flows.js';
-import { zeekConnAdapter } from './adapters/zeek-conn.js';
+import { builtInAdapters } from './adapters/registry.js';
 import type { Adapter } from './adapters/types.js';
+import {
+  createInlineAdapterRunner,
+  createWorkerAdapterRunner,
+  type AdapterRunner,
+} from './worker-runner.js';
 
 /** Wire input of POST /projects/:id/imports. */
 export const createImportBodySchema = z.object({
@@ -69,6 +69,8 @@ export const createImportBodySchema = z.object({
   content: z.string(),
   encoding: z.enum(['utf8', 'base64', 'gzip+base64']).default('utf8'),
   collectedAt: z.iso.datetime().nullable().default(null),
+  /** ImportProfile for profile-driven adapters like netcat-text (M12, #69). */
+  profileId: z.uuidv7().optional(),
   /** ADR-0019 opt-in: embed a binary capture's raw blob instead of hash-only. */
   retainRaw: z.boolean().default(false),
 });
@@ -93,21 +95,18 @@ function isBinaryCapture(filename: string): boolean {
 export function createImportStore(
   db: Db,
   engine: Engine,
-  options: { limits?: Partial<ParseLimits>; adapters?: Adapter[] } = {},
+  options: { limits?: Partial<ParseLimits>; adapters?: Adapter[]; runner?: AdapterRunner } = {},
 ) {
   const limits: ParseLimits = { ...DEFAULT_PARSE_LIMITS, ...options.limits };
-  const adapters = new Map<string, Adapter>(
-    (
-      options.adapters ?? [
-        fixtureAdapter,
-        deviceStateAdapter,
-        nmapXmlAdapter,
-        tsharkFlowsAdapter,
-        ldifAdapter,
-        zeekConnAdapter,
-      ]
-    ).map((a) => [a.name, a]),
-  );
+  const adapters: ReadonlyMap<string, Adapter> = options.adapters
+    ? new Map(options.adapters.map((a) => [a.name, a]))
+    : builtInAdapters;
+  // Adapter execution (M12, #69): built-in adapters run isolated in a worker
+  // process; injected test adapters cannot cross a process boundary, so they
+  // fall back to the in-process runner (which is also the injectable seam).
+  const runner: AdapterRunner =
+    options.runner ??
+    (options.adapters ? createInlineAdapterRunner(adapters) : createWorkerAdapterRunner());
   /** In-flight parse jobs, so tests and shutdown can await quiescence. */
   const inFlight = new Set<Promise<void>>();
 
@@ -145,7 +144,12 @@ export function createImportStore(
   }
 
   /** Enqueue a parse with backpressure; the API response leaves before it runs. */
-  function enqueueParse(job: ImportJob, evidenceRecord: Evidence, content: string): void {
+  function enqueueParse(
+    job: ImportJob,
+    evidenceRecord: Evidence,
+    content: string,
+    profile?: unknown,
+  ): void {
     ensureQueueCapacity();
     active.add(job.id);
     let release: () => void = () => undefined;
@@ -160,7 +164,7 @@ export function createImportStore(
           if (cancelRequested.has(job.id)) {
             finishCancel(job.id);
           } else {
-            await runParse(job, evidenceRecord, content);
+            await runParse(job, evidenceRecord, content, profile);
           }
         } finally {
           active.delete(job.id);
@@ -240,15 +244,23 @@ export function createImportStore(
     job: ImportJob,
     evidenceRecord: Evidence,
     content: string,
+    profile?: unknown,
   ): Promise<void> {
     setStatus(job.id, 'parsing', { progressStage: 'parsing' });
-    const adapter = getAdapter(job.parserName);
+    getAdapter(job.parserName); // fail fast on an unknown parser
     try {
+      // parent-side budget: the cancellation window between parse and persist
       const budget = startBudget(limits, Date.now, {
         jobId: job.id,
         isCancelled: () => cancelRequested.has(job.id),
       });
-      const drafts = await adapter.parse(content, { budget, limits });
+      const drafts = await runner({
+        adapterName: job.parserName,
+        content,
+        profile,
+        limits,
+        isCancelled: () => cancelRequested.has(job.id),
+      });
       if (drafts.length > limits.maxObservations) {
         throw new ParseLimitError(
           `Parse produced ${drafts.length} observations, over the ${limits.maxObservations} bound — aggregate harder or split the capture`,
@@ -313,6 +325,19 @@ export function createImportStore(
     const bytes = decodeContent(body);
     checkFileSize(bytes.length, limits);
 
+    // profile-driven adapters (§3.6, M12 #69): resolve the ImportProfile now
+    // so an unknown id fails the request, not the background job
+    let profile: unknown;
+    if (body.profileId) {
+      const found = engine
+        .getState(projectId)
+        .importProfiles.find((candidate) => candidate.id === body.profileId);
+      if (!found) {
+        throw new OperationError('NOT_FOUND', `ImportProfile ${body.profileId} not found`);
+      }
+      profile = found;
+    }
+
     const now = new Date().toISOString();
     const contentClass = isBinaryCapture(body.filename) ? 'binaryCapture' : 'structured';
     const retention =
@@ -361,7 +386,7 @@ export function createImportStore(
       }
     });
 
-    enqueueParse(job, record, bytes.toString(encoding));
+    enqueueParse(job, record, bytes.toString(encoding), profile);
     return job;
   }
 

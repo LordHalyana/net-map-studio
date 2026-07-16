@@ -43,6 +43,7 @@ function stateWith(deviceCount: number): { state: ProjectState; ids: string[] } 
     flows,
     hostArtifacts: [],
     reports: [],
+    importProfiles: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

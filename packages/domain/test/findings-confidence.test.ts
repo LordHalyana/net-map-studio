@@ -102,6 +102,7 @@ describe('M3 severity is rule-declared and independent of confidence', () => {
     flows: [],
     hostArtifacts: [],
     reports: [],
+    importProfiles: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

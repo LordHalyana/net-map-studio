@@ -44,6 +44,7 @@ function buildContext(overrides: Partial<AnalysisContext> = {}): AnalysisContext
     flows: [],
     hostArtifacts: [],
     reports: [],
+    importProfiles: [],
     identities: [],
     roleAssignments: [],
     findingDispositions: [],

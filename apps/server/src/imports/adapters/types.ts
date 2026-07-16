@@ -13,6 +13,12 @@ import type { ParseBudget, ParseLimits } from '../guards.js';
 export interface AdapterContext {
   budget: ParseBudget;
   limits: ParseLimits;
+  /**
+   * The serialized ImportProfile for profile-driven adapters (§3.6, M12 #69)
+   * — line-format templates the netcat-text adapter applies. Undefined for
+   * adapters that own their format.
+   */
+  profile?: unknown;
 }
 
 export interface Adapter {
