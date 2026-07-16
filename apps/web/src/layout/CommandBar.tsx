@@ -1,160 +1,34 @@
 import { useRef, useState } from 'react';
 import { useAppStore } from '../state/store';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
-import { autoArrangeChangeSet } from '../canvas/autoArrange';
 import { GlobalSearch } from './GlobalSearch';
 
+/**
+ * Project bar (visual-parity M5, gap G6): the concept's top strip — project
+ * identity, save state, search and export. Canvas controls live in the
+ * CanvasToolbar; the brand block lives in the library panel.
+ */
 export function CommandBar() {
   const project = useAppStore((s) => s.project);
-  const availability = useAppStore((s) => s.availability);
-  const undo = useAppStore((s) => s.undo);
-  const redo = useAppStore((s) => s.redo);
   const syncError = useAppStore((s) => s.syncError);
   const pendingOps = useAppStore((s) => s.pendingOps);
-  const layers = useAppStore((s) => s.layers);
-  const toggleLogicalLayer = useAppStore((s) => s.toggleLogicalLayer);
-  const connectMode = useAppStore((s) => s.connectMode);
-  const toggleConnectMode = useAppStore((s) => s.toggleConnectMode);
-  const togglePhysicalLayer = useAppStore((s) => s.togglePhysicalLayer);
-  const toggleObservedLayer = useAppStore((s) => s.toggleObservedLayer);
-  const toggleIdentityOverlay = useAppStore((s) => s.toggleIdentityOverlay);
-  const toggleRulesLayer = useAppStore((s) => s.toggleRulesLayer);
-  const canvasMode = useAppStore((s) => s.canvasMode);
-  const setCanvasMode = useAppStore((s) => s.setCanvasMode);
-  const graph = useAppStore((s) => s.graph);
-  const dispatch = useAppStore((s) => s.dispatch);
-
-  function arrange() {
-    if (!graph) return;
-    const cs = autoArrangeChangeSet(graph);
-    if (cs) dispatch(cs);
-  }
 
   return (
     <header className="command-bar" data-testid="command-bar">
-      <span className="command-bar__brand">NetPlan Studio</span>
+      <span className="command-bar__label">Project:</span>
       <span className="command-bar__project" data-testid="project-name">
         {project?.name ?? 'Loading…'}
       </span>
-      <div className="command-bar__actions">
-        <button
-          type="button"
-          data-testid="undo-button"
-          disabled={!availability.canUndo}
-          onClick={() => void undo()}
-          title="Undo"
-        >
-          ⤺ Undo
-        </button>
-        <button
-          type="button"
-          data-testid="redo-button"
-          disabled={!availability.canRedo}
-          onClick={() => void redo()}
-          title="Redo"
-        >
-          ⤻ Redo
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-connect-mode"
-          className={connectMode ? 'toggle--on' : ''}
-          onClick={toggleConnectMode}
-          title="Connect mode: pick a source interface, then a destination (§3.3)"
-        >
-          ↯ Connect {connectMode ? 'on' : 'off'}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-logical-layer"
-          className={layers.logical ? 'toggle--on' : ''}
-          onClick={toggleLogicalLayer}
-          title="Show or hide networks, membership edges and tints"
-        >
-          ◫ Logical {layers.logical ? 'on' : 'off'}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-physical-layer"
-          className={layers.physical ? 'toggle--on' : ''}
-          onClick={togglePhysicalLayer}
-          title="Show or hide Link edges (physical topology)"
-        >
-          ─ Physical {layers.physical ? 'on' : 'off'}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-observed-layer"
-          className={layers.observed ? 'toggle--on' : ''}
-          onClick={toggleObservedLayer}
-          title="Show or hide observed traffic (aggregated Flow bundles)"
-        >
-          ≈ Observed {layers.observed ? 'on' : 'off'}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-rules-layer"
-          className={layers.rules ? 'toggle--on' : ''}
-          onClick={toggleRulesLayer}
-          title="Show or hide planned-rule callout cards (design §3.2C)"
-        >
-          ⛨ Rules {layers.rules ? 'on' : 'off'}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-identity-overlay"
-          className={layers.identities ? 'toggle--on' : ''}
-          onClick={toggleIdentityOverlay}
-          title="Identity overlay (§3.9): show modelled principals on their hosts"
-        >
-          👤 Identities {layers.identities ? 'on' : 'off'}
-        </button>
-        <span className="command-bar__modes" title="AS-IS / TO-BE / Diff (ADR-0009)">
-          {(
-            [
-              ['asIs', 'AS-IS'],
-              ['toBe', 'TO-BE'],
-              ['diff', 'Diff'],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              data-testid={`mode-${mode}`}
-              className={canvasMode === mode ? 'toggle--on' : ''}
-              onClick={() => setCanvasMode(mode)}
-            >
-              {label}
-            </button>
-          ))}
-        </span>
-        <button
-          type="button"
-          data-testid="auto-arrange"
-          onClick={arrange}
-          title="Auto-arrange unpinned devices (pinned nodes stay put, §3.2C)"
-        >
-          ⌗ Arrange
-        </button>
-        <span className="command-bar__zoom" title="Zoom presets">
-          {[0.5, 1, 2].map((level) => (
-            <button
-              key={level}
-              type="button"
-              data-testid={`zoom-${level * 100}`}
-              onClick={() =>
-                window.dispatchEvent(new CustomEvent('netplan:zoom', { detail: { level } }))
-              }
-            >
-              {level * 100}%
-            </button>
-          ))}
-        </span>
+      <div
+        className={`command-bar__status${!syncError && pendingOps === 0 ? ' command-bar__status--saved' : ''}`}
+        data-testid="sync-status"
+      >
+        {syncError ? `⚠ ${syncError}` : pendingOps > 0 ? 'Saving…' : 'Saved'}
       </div>
       <GlobalSearch />
       <ExportMenu />
-      <div className="command-bar__status" data-testid="sync-status">
-        {syncError ? `⚠ ${syncError}` : pendingOps > 0 ? 'Saving…' : 'Saved'}
+      <div className="command-bar__avatar" title="Operator (single-operator, ADR-0001)">
+        OP
       </div>
     </header>
   );

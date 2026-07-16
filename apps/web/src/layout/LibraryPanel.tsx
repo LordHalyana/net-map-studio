@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import {
   Building2,
   Cloud,
   DoorOpen,
+  ImagePlus,
   LayoutGrid,
   Map,
+  Search,
   TriangleAlert,
   Upload,
   Users,
+  Waypoints,
 } from 'lucide-react';
 import { libraryCatalog } from '../library/catalog';
 import { useAppStore } from '../state/store';
@@ -75,9 +79,22 @@ export function LibraryPanel() {
 
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
+  const [filter, setFilter] = useState('');
+
+  const matches = (label: string) =>
+    filter.trim() === '' || label.toLowerCase().includes(filter.trim().toLowerCase());
 
   return (
     <nav className="library-panel" data-testid="library-panel">
+      <div className="library-brand">
+        <span className="library-brand__tile">
+          <Waypoints size={18} aria-hidden />
+        </span>
+        <div className="library-brand__text">
+          <span className="library-brand__name">NetPlan Studio</span>
+          <span className="library-brand__tagline">Network planning, simplified.</span>
+        </div>
+      </div>
       <section className="library-category primary-nav" data-testid="primary-nav">
         <ul>
           {(
@@ -105,7 +122,17 @@ export function LibraryPanel() {
           ))}
         </ul>
       </section>
-      <h2 className="panel-title">Components</h2>
+      <h2 className="panel-title">Library</h2>
+      <label className="library-search">
+        <Search size={13} aria-hidden />
+        <input
+          type="search"
+          placeholder="Search components…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          data-testid="library-search"
+        />
+      </label>
       <section className="library-category">
         <h3>Structure</h3>
         <ul>
@@ -147,16 +174,20 @@ export function LibraryPanel() {
           </li>
         </ul>
       </section>
-      {libraryCatalog.map((category) => (
-        <section key={category.key} className="library-category">
-          <h3>{category.label}</h3>
-          <ul>
-            {category.items.map((item) => (
-              <li key={item.deviceType}>
+      {libraryCatalog.map((category) => {
+        const visible = category.items.filter((item) => matches(item.label));
+        if (visible.length === 0) return null;
+        return (
+          <section key={category.key} className="library-category">
+            <h3>{category.label}</h3>
+            <div className="library-grid">
+              {visible.map((item) => (
                 <button
+                  key={item.deviceType}
                   type="button"
-                  className="library-item"
+                  className="library-tile"
                   data-testid={`library-item-${item.deviceType}`}
+                  title={item.label}
                   draggable
                   onDragStart={(event) => {
                     event.dataTransfer.setData(DND_MIME, item.deviceType);
@@ -164,16 +195,24 @@ export function LibraryPanel() {
                   }}
                   onClick={() => addDevice(item.deviceType)}
                 >
-                  <span className="library-item__glyph">
-                    <item.icon size={15} aria-hidden />
-                  </span>
-                  {item.label}
+                  <item.icon size={17} aria-hidden />
+                  <span className="library-tile__label">{item.label}</span>
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      <button
+        type="button"
+        className="library-dropzone"
+        data-testid="library-dropzone"
+        onClick={() => addDevice('custom')}
+        title="Add a custom component; upload its icon in the inspector"
+      >
+        <ImagePlus size={16} aria-hidden />
+        Drag custom icon here or click to upload
+      </button>
     </nav>
   );
 }

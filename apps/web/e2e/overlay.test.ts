@@ -150,7 +150,8 @@ test.describe('M10: identity overlay & Users and Roles (ADR-0022)', () => {
       'localAdministrator',
     );
 
-    // cleanup
+    // cleanup — the overlay toggle lives in the canvas toolbar (M5)
+    await page.getByTestId('nav-canvas').click();
     await page.getByTestId('toggle-identity-overlay').click();
     await rollbackSample(page);
   });

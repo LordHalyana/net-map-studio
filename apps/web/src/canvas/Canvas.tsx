@@ -23,8 +23,20 @@ import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { RuleCalloutNode } from './RuleCalloutNode';
-import { graphToFlow } from './graphToFlow';
+import { graphToFlow, type DeviceNodeData, type NetworkNodeData } from './graphToFlow';
+import { nodeAccentColor } from './roleColors';
+import { CanvasToolbar } from '../layout/CanvasToolbar';
 import { DND_MIME } from '../layout/LibraryPanel';
+
+/** Minimap tinting (M5, gap G7): mirror each node's role/network color. */
+function minimapNodeColor(node: Node): string {
+  if (node.type === 'device') {
+    const data = node.data as DeviceNodeData;
+    return nodeAccentColor(data.device, data.memberships);
+  }
+  if (node.type === 'network') return (node.data as NetworkNodeData).color;
+  return '#2c3547';
+}
 
 const nodeTypes = {
   device: DeviceNode,
@@ -329,34 +341,44 @@ function CanvasInner() {
 
   return (
     <main className="canvas-region" data-testid="canvas-region">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStop={onNodeDragStop}
-        onNodeClick={onNodeClick}
-        onSelectionChange={onSelectionChange}
-        onNodesDelete={onNodesDelete}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        deleteKeyCode={['Delete', 'Backspace']}
-        multiSelectionKeyCode={['Shift', 'Control']}
-        colorMode="dark"
-        snapToGrid
-        snapGrid={[16, 16]}
-        fitView
-        // viewport culling once the canvas is big enough to care (design acceptance #1)
-        onlyRenderVisibleElements={nodes.length > 60}
-        minZoom={0.05}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={16} />
-        <MiniMap pannable zoomable />
-        <Controls />
-        <EdgeMarkerDefs />
-      </ReactFlow>
+      <CanvasToolbar />
+      <div className="canvas-region__flow">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onSelectionChange={onSelectionChange}
+          onNodesDelete={onNodesDelete}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          deleteKeyCode={['Delete', 'Backspace']}
+          multiSelectionKeyCode={['Shift', 'Control']}
+          colorMode="dark"
+          snapToGrid
+          snapGrid={[16, 16]}
+          fitView
+          // viewport culling once the canvas is big enough to care (design acceptance #1)
+          onlyRenderVisibleElements={nodes.length > 60}
+          minZoom={0.05}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Lines} gap={22} color="#131926" />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-left"
+            nodeColor={minimapNodeColor}
+            maskColor="rgb(11 14 19 / 65%)"
+            style={{ marginLeft: 52 }}
+          />
+          <Controls position="bottom-left" />
+          <EdgeMarkerDefs />
+        </ReactFlow>
+      </div>
     </main>
   );
 }

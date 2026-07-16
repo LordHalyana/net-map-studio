@@ -15,6 +15,13 @@ async function graphSnapshot(page: Page): Promise<string> {
   return JSON.stringify(graph);
 }
 
+/** Select a device via global search — immune to culling and canvas overlays. */
+async function selectDevice(page: Page, name: string) {
+  await page.getByTestId('global-search-input').fill(name);
+  await page.getByTestId(`search-result-${name}`).click();
+  await expect(page.getByTestId('inspector-device')).toBeVisible();
+}
+
 async function addDeviceViaLibrary(page: Page, deviceType: string): Promise<string> {
   const nodes = page.locator('.react-flow__node');
   const before = await nodes.count();
@@ -45,8 +52,7 @@ test.describe('undo/redo, ChangeSets & activity log (M9 DoD, ADR-0010)', () => {
     const name = await addDeviceViaLibrary(page, 'router'); // 1: create device
     snapshots.push(await graphSnapshot(page));
 
-    await page.locator('.react-flow__controls-fitview').click();
-    await page.getByTestId(`device-node-${name}`).click();
+    await selectDevice(page, name);
     await page.getByTestId('device-vendor-input').fill('Juniper'); // 2: set vendor
     await page.getByTestId('device-vendor-input').press('Enter');
     await waitSaved(page);
@@ -82,8 +88,7 @@ test.describe('undo/redo, ChangeSets & activity log (M9 DoD, ADR-0010)', () => {
     await openApp(page);
     const name = await addDeviceViaLibrary(page, 'server');
 
-    await page.locator('.react-flow__controls-fitview').click();
-    await page.getByTestId(`device-node-${name}`).click();
+    await selectDevice(page, name);
     await page.getByTestId('add-interface').click();
     await waitSaved(page);
 
