@@ -167,7 +167,7 @@ A per-Device flag meaning the operator has placed this Device deliberately: Auto
 _Avoid_: Locked, frozen, anchored.
 
 **Footprint**:
-The rectangle a node paints on the canvas. Answered only by the footprint resolver (`footprints(state)` in the canvas projection layer), which the projection, Auto-arrange and the Site/Zone shrink clamps all consume — never by per-module size constants.
+The rectangle a node paints on the canvas. Owned by the footprint resolver (`footprints(state)` in the canvas projection layer); the projection, Auto-arrange and the Site/Zone shrink clamps consume the resolver instead of keeping size copies of their own.
 _Avoid_: Node size, bounding box (for the rendered rect).
 
 ### Output

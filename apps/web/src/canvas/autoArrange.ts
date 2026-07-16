@@ -1,14 +1,12 @@
 import dagre from '@dagrejs/dagre';
 import type { ChangeSet, Operation, ProjectState } from '@netplan/domain';
 import { changeSet, opSetField } from '../state/ops';
-import { footprints } from './footprints';
+import { footprints, type Rect } from './footprints';
 
 const NODE_SEP = 56;
 const RANK_SEP = 96;
 /** Clearance between the arranged block and the obstacle it shifts below (#75). */
 const OBSTACLE_GAP = 40;
-
-type Rect = { x: number; y: number; width: number; height: number };
 
 const intersects = (a: Rect, b: Rect) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;

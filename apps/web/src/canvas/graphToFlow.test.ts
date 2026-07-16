@@ -8,12 +8,7 @@ import {
   makeSite,
   makeZone,
 } from '@netplan/domain/fixtures';
-import {
-  footprints,
-  SITE_COLLAPSED_SIZE,
-  ZONE_COLLAPSED_SIZE,
-  type Footprints,
-} from './footprints';
+import { footprints, type Footprints } from './footprints';
 import { graphToFlow, type FlowOptions } from './graphToFlow';
 import type { Node } from '@xyflow/react';
 
@@ -129,13 +124,20 @@ describe('graphToFlow footprint agreement (#78)', () => {
 
   it('sizes collapsed Sites and Zones with the collapsed footprints', () => {
     const { state, sizedSite, defaultSite, sizedZone } = makeScene();
-    const { nodes } = graphToFlow(
-      state,
-      makeOptions({ collapsedSites: [defaultSite.id], collapsedZones: [sizedZone.id] }),
-    );
+    const view = { collapsedSites: [defaultSite.id], collapsedZones: [sizedZone.id] };
+    const fp = footprints(state, view);
+    const { nodes } = graphToFlow(state, makeOptions(view));
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    expect(emittedSize(byId.get(defaultSite.id) as Node)).toEqual({ ...SITE_COLLAPSED_SIZE });
-    expect(emittedSize(byId.get(sizedZone.id) as Node)).toEqual({ ...ZONE_COLLAPSED_SIZE });
+    // the resolver answers collapsed rects too, and they stay pinned to the
+    // rendered collapsed cards
+    expect(emittedSize(byId.get(defaultSite.id) as Node)).toEqual({ width: 200, height: 48 });
+    expect(emittedSize(byId.get(sizedZone.id) as Node)).toEqual({ width: 170, height: 34 });
+    const collapsedRect = fp.siteRect(defaultSite);
+    expect(emittedSize(byId.get(defaultSite.id) as Node)).toEqual({
+      width: collapsedRect.width,
+      height: collapsedRect.height,
+    });
+    expect(emittedSize(byId.get(sizedZone.id) as Node)).toEqual(fp.zoneSize(sizedZone));
     // the expanded site is untouched by its sibling collapsing
     expect(emittedSize(byId.get(sizedSite.id) as Node)).toEqual({ width: 700, height: 500 });
   });

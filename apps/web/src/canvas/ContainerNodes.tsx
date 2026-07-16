@@ -64,17 +64,19 @@ export const SiteNode = memo(function SiteNode({
   // shrink clamp (#78): the footprint resolver keeps every contained zone's
   // rendered rect inside — a Site can never shrink over a Zone
   const fp = graph ? footprints(graph, { collapsedZones }) : null;
+  const min = fp?.siteMinSize(site.id);
+  const rect = fp?.siteRect(site);
 
   return (
     <div
       className={`site-node${collapsed ? ' site-node--collapsed' : ''}`}
       data-testid={`site-node-${site.name}`}
     >
-      {selected && !collapsed && project && fp && (
+      {selected && !collapsed && project && min && rect && (
         <ContainerResizer
-          minWidth={fp.siteMinSize(site.id).width}
-          minHeight={fp.siteMinSize(site.id).height}
-          current={{ width: fp.siteRect(site).width, height: fp.siteRect(site).height }}
+          minWidth={min.width}
+          minHeight={min.height}
+          current={{ width: rect.width, height: rect.height }}
           onCommit={(size) =>
             dispatch(opSetField(project.id, 'site', site.id, 'size', size, site.size))
           }
@@ -119,16 +121,17 @@ export const ZoneNode = memo(function ZoneNode({
   // shrink clamp (#78): the footprint resolver keeps every contained device's
   // full card inside — a Zone can never shrink over a Device
   const fp = graph ? footprints(graph) : null;
+  const min = fp?.zoneMinSize(zone.id);
 
   return (
     <div
       className={`zone-node${collapsed ? ' zone-node--collapsed' : ''}`}
       data-testid={`zone-node-${zone.name}`}
     >
-      {selected && !collapsed && project && fp && (
+      {selected && !collapsed && project && fp && min && (
         <ContainerResizer
-          minWidth={fp.zoneMinSize(zone.id).width}
-          minHeight={fp.zoneMinSize(zone.id).height}
+          minWidth={min.width}
+          minHeight={min.height}
           current={fp.zoneSize(zone)}
           onCommit={(size) =>
             dispatch(opSetField(project.id, 'zone', zone.id, 'size', size, zone.size))

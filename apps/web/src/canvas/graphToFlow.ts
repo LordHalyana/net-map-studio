@@ -15,7 +15,7 @@ import type {
   Zone,
 } from '@netplan/domain';
 
-import { footprints, SITE_COLLAPSED_SIZE, ZONE_COLLAPSED_SIZE } from './footprints';
+import { footprints } from './footprints';
 import { networkColor, networkColorMap } from './networkColor';
 import { primaryIpByDevice } from './primaryIp';
 
@@ -132,9 +132,12 @@ export function graphToFlow(
   const nodes: Node[] = [];
   const edges: CanvasEdge[] = [];
   const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
-  // one home for rendered node sizes (#78): the resolver answers every
-  // footprint question below — card sizes, Site rects, collision rects
-  const fp = footprints(state);
+  // the footprint resolver (#78) answers every "what rectangle does this
+  // node paint" question below — cards, container rects, collision rects
+  const fp = footprints(state, {
+    collapsedSites: options.collapsedSites,
+    collapsedZones: options.collapsedZones,
+  });
   // Orthogonal routing with port dots (M3 prototype verdict, issue #45):
   // smoothstep reads like the concept's right-angle lines at canvas zoom and
   // stays soft on dense fans. React Flow wraps the marker id in url(#...).
@@ -188,14 +191,13 @@ export function graphToFlow(
   }
 
   for (const site of state.sites) {
-    const isCollapsed = collapsed.has(site.id);
     const { width, height } = fp.siteRect(site);
     nodes.push({
       id: site.id,
       type: 'site',
       position: site.position,
-      data: { site, collapsed: isCollapsed },
-      style: isCollapsed ? { ...SITE_COLLAPSED_SIZE } : { width, height },
+      data: { site, collapsed: collapsed.has(site.id) },
+      style: { width, height },
       zIndex: -20,
     });
   }
@@ -210,13 +212,14 @@ export function graphToFlow(
       extent: 'parent',
       position: zone.position,
       data: { zone, collapsed: zoneCollapsed },
-      style: zoneCollapsed ? { ...ZONE_COLLAPSED_SIZE } : { ...fp.zoneSize(zone) },
+      style: { ...fp.zoneSize(zone) },
       hidden: siteCollapsed,
       zIndex: -10,
     });
   }
 
   for (const device of state.devices) {
+    const card = fp.device(device.id);
     const zone = device.zoneId ? zoneById.get(device.zoneId) : undefined;
     const modeHidden = !modeVisible(device.lifecycleState, options.mode);
     const hidden =
@@ -238,8 +241,8 @@ export function graphToFlow(
       position: device.position,
       // initial* advertise the footprint without fixing the CSS-driven size;
       // the agreement test (#78) reads them back against the resolver
-      initialWidth: fp.device(device.id).width,
-      initialHeight: fp.device(device.id).height,
+      initialWidth: card.width,
+      initialHeight: card.height,
       data: {
         device,
         memberships,

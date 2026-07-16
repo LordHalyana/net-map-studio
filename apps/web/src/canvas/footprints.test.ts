@@ -112,6 +112,17 @@ describe('footprints: Site rect', () => {
     const state = parseState({ project, sites: [site] });
     expect(footprints(state).siteRect(site)).toEqual({ x: 40, y: 60, width: 460, height: 300 });
   });
+
+  it('answers the collapsed header rect when the view collapses the Site', () => {
+    const project = makeProject();
+    const site = makeSite(project.id, {
+      position: { x: 40, y: 60 },
+      size: { width: 700, height: 500 },
+    });
+    const state = parseState({ project, sites: [site] });
+    const fp = footprints(state, { collapsedSites: [site.id] });
+    expect(fp.siteRect(site)).toEqual({ x: 40, y: 60, width: 200, height: 48 });
+  });
 });
 
 describe('footprints: Zone size', () => {
@@ -124,6 +135,9 @@ describe('footprints: Zone size', () => {
     const fp = footprints(state);
     expect(fp.zoneSize(sized)).toEqual({ width: 320, height: 240 });
     expect(fp.zoneSize(bare)).toEqual({ width: 200, height: 150 });
+    // the view wins over the declared size while the Zone is collapsed
+    const collapsed = footprints(state, { collapsedZones: [sized.id] });
+    expect(collapsed.zoneSize(sized)).toEqual({ width: 170, height: 34 });
   });
 });
 
