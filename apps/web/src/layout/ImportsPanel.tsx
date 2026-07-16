@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildCandidates, type Evidence, type ImportJob, type Observation } from '@netplan/domain';
-import { getEvidenceBlob } from '../api/imports';
+import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { useAppStore } from '../state/store';
 import { ConflictList } from './ConflictList';
 
@@ -8,12 +8,16 @@ const ADAPTERS = [
   { name: 'device-state', label: 'Device-state report (JSON)' },
   { name: 'nmap-xml', label: 'Nmap scan (XML)' },
   { name: 'tshark-flows', label: 'tshark flow summary (JSON/CSV)' },
+  { name: 'ldif', label: 'Directory export (LDIF)' },
+  { name: 'zeek-conn', label: 'Zeek conn.log (TSV/JSON)' },
 ];
 
 function guessAdapter(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.xml')) return 'nmap-xml';
   if (lower.endsWith('.csv')) return 'tshark-flows';
+  if (lower.endsWith('.ldif')) return 'ldif';
+  if (lower.endsWith('conn.log') || lower.endsWith('.zeek')) return 'zeek-conn';
   return 'device-state';
 }
 
@@ -29,10 +33,17 @@ export function ImportsPanel() {
   const refreshImports = useAppStore((s) => s.refreshImports);
   const uploadImport = useAppStore((s) => s.uploadImport);
   const selectImport = useAppStore((s) => s.selectImport);
+  const project = useAppStore((s) => s.project);
 
   useEffect(() => {
     void refreshImports();
   }, [refreshImports]);
+
+  async function controlImport(action: 'cancel' | 'resume', jobId: string) {
+    if (!project) return;
+    await (action === 'cancel' ? cancelImport(project.id, jobId) : resumeImport(project.id, jobId));
+    await refreshImports();
+  }
 
   return (
     <section className="imports-panel" data-testid="imports-panel">
@@ -57,8 +68,28 @@ export function ImportsPanel() {
                 <span className="import-job__parser">{job.parserName}</span>
                 <span className={`import-job__status import-job__status--${job.status}`}>
                   {job.status}
+                  {job.progressStage ? ` · ${job.progressStage}` : ''}
                 </span>
               </button>
+              {job.status === 'pending' || job.status === 'parsing' ? (
+                <button
+                  type="button"
+                  className="import-job__control"
+                  data-testid="import-cancel-button"
+                  onClick={() => void controlImport('cancel', job.id)}
+                >
+                  cancel
+                </button>
+              ) : job.status === 'cancelled' ? (
+                <button
+                  type="button"
+                  className="import-job__control"
+                  data-testid="import-resume-button"
+                  onClick={() => void controlImport('resume', job.id)}
+                >
+                  resume
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { OperationLogEntry, ProjectState } from '@netplan/domain';
 import { getLog } from '../api/client';
+import { ProposalSignOff } from './ProposalSignOff';
 import { useAppStore } from '../state/store';
 
 /**
@@ -102,6 +103,7 @@ export function DiffPanel() {
           )}
         </ul>
       </section>
+      <ProposalSignOff />
     </div>
   );
 }

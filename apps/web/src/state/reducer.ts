@@ -38,6 +38,10 @@ export function applyOperationOptimistic(state: ProjectState, op: Operation): Pr
       // Finding disposition is not canvas state (ADR-0023): the findings view
       // refetches after the authoritative response, so nothing to mirror here.
       return state;
+    case 'SetChangeSetReviewStatus':
+      // Proposal review status (P4-M6) is not canvas state either — the
+      // proposal views read it from the server after the response lands.
+      return state;
   }
 }
 

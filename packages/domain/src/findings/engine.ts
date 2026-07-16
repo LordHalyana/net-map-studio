@@ -2,6 +2,7 @@ import { combineConfidence, confidenceSchema, type Confidence } from '../confide
 import type { Evidence, FieldProvenance } from '../imports.js';
 import type { ProjectState } from '../state.js';
 import { hashConfig, resolveRuleSettings, type EngineConfig, type RuleSettings } from './config.js';
+import type { EnrichmentInput } from './enrichment.js';
 import type { HostSecurityInventory } from './inputs.js';
 import { computeFingerprint } from './fingerprint.js';
 import {
@@ -22,6 +23,8 @@ export interface AnalysisContext {
   evidence: readonly Evidence[];
   /** Per-Device security telemetry (M5/M6); empty when none was collected. */
   hostInventories?: readonly HostSecurityInventory[];
+  /** Stored threat-intel enrichments (P4-M2, ADR-0028); empty when none fetched. */
+  enrichments?: readonly EnrichmentInput[];
   config: EngineConfig;
   /** The current Operation-log `seq` — stamped on the run as its watermark. */
   opSeq: number;
@@ -95,6 +98,7 @@ export function runAnalysis(
     provenance: ctx.provenance,
     evidence: ctx.evidence,
     hostInventories: ctx.hostInventories ?? [],
+    enrichments: ctx.enrichments ?? [],
     settings,
     lists: ctx.config.lists,
   });

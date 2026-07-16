@@ -9,6 +9,8 @@ export * from './disposition.js';
 export * from './reconcile.js';
 export * from './coverage.js';
 export * from './inputs.js';
+export * from './enrichment.js';
+export * from './rules/enrichment.js';
 export * from './rules/filename-path.js';
 export * from './rules/process-persistence.js';
 export * from './rules/exposed-service.js';

@@ -11,6 +11,12 @@ export interface ParseLimits {
   maxParseMillis: number;
   maxDepth: number;
   maxDecompressionRatio: number;
+  /** Bound on observations one job may emit — a pathological capture fails, not the app (P4-M5). */
+  maxObservations: number;
+  /** How many parse jobs run at once; the rest queue (P4-M5). */
+  maxConcurrentParses: number;
+  /** Backpressure: queued + running jobs beyond this are rejected at ingest (P4-M5). */
+  maxQueuedParses: number;
 }
 
 export const DEFAULT_PARSE_LIMITS: ParseLimits = {
@@ -18,6 +24,9 @@ export const DEFAULT_PARSE_LIMITS: ParseLimits = {
   maxParseMillis: 30_000,
   maxDepth: 64,
   maxDecompressionRatio: 100,
+  maxObservations: 50_000,
+  maxConcurrentParses: 2,
+  maxQueuedParses: 16,
 };
 
 export class ParseLimitError extends Error {
@@ -27,19 +36,35 @@ export class ParseLimitError extends Error {
   }
 }
 
+/** Thrown from inside a parse when the operator cancelled the job (P4-M5). */
+export class JobCancelledError extends Error {
+  constructor(jobId: string) {
+    super(`ImportJob ${jobId} was cancelled`);
+    this.name = 'JobCancelledError';
+  }
+}
+
 /**
  * Cooperative execution budget: adapters call `check()` between units of work
  * (per host, per row, per chunk), so a runaway parse fails by policy instead
- * of holding the process.
+ * of holding the process. The same checkpoints are where a cancellation
+ * lands — `isCancelled` makes every budgeted adapter cancellable for free.
  */
 export interface ParseBudget {
   check(): void;
 }
 
-export function startBudget(limits: ParseLimits, now: () => number = Date.now): ParseBudget {
+export function startBudget(
+  limits: ParseLimits,
+  now: () => number = Date.now,
+  cancellation?: { jobId: string; isCancelled: () => boolean },
+): ParseBudget {
   const startedAt = now();
   return {
     check() {
+      if (cancellation?.isCancelled()) {
+        throw new JobCancelledError(cancellation.jobId);
+      }
       const elapsed = now() - startedAt;
       if (elapsed > limits.maxParseMillis) {
         throw new ParseLimitError(

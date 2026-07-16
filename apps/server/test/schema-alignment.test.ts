@@ -15,6 +15,10 @@ import {
   zoneSchema,
 } from '@netplan/domain';
 import {
+  changeSetRecordSchema,
+  egressAuditRecordSchema,
+  egressSettingsSchema,
+  threatIntelLocalFeedSchema,
   evidenceSchema,
   fieldProvenanceSchema,
   findingDispositionSchema,
@@ -29,6 +33,8 @@ import {
   makeAddress,
   makeBaseline,
   makeDevice,
+  makeEgressAuditRecord,
+  makeEgressSettings,
   makeEvidence,
   makeFieldProvenance,
   makeFindingDisposition,
@@ -47,6 +53,10 @@ import {
   makeZone,
 } from '@netplan/domain/fixtures';
 import {
+  changeSets as changeSetsTable,
+  egressAuditRecords as egressAuditRecordsTable,
+  egressSettings as egressSettingsTable,
+  threatIntelLocalFeeds as threatIntelLocalFeedsTable,
   entityTables,
   evidence as evidenceTable,
   fieldProvenance as fieldProvenanceTable,
@@ -184,6 +194,81 @@ describe('findings tables align with domain Zod schemas (ADR-0023, plan M2)', ()
     expect(
       findingDispositionSchema.parse(db.select().from(findingDispositionsTable).get()),
     ).toEqual(disposition);
+  });
+});
+
+describe('egress tables align with domain Zod schemas (ADR-0027, plan P4-M1)', () => {
+  const settings = makeEgressSettings(project.id);
+  const auditRecord = makeEgressAuditRecord(project.id, { outcome: 'blocked', detail: 'shut' });
+
+  const feed = threatIntelLocalFeedSchema.parse({
+    projectId: project.id,
+    entries: [
+      { indicatorType: 'fileHash', indicator: 'a'.repeat(64), verdict: 'malicious', score: 0.9 },
+    ],
+    updatedAt: '2026-07-15T00:00:00.000Z',
+  });
+
+  const egressCases = [
+    ['egressSettings', egressSettingsTable, egressSettingsSchema, settings],
+    ['egressAuditRecord', egressAuditRecordsTable, egressAuditRecordSchema, auditRecord],
+    ['threatIntelLocalFeed', threatIntelLocalFeedsTable, threatIntelLocalFeedSchema, feed],
+  ] as const;
+
+  it.each(egressCases)('%s table columns match the schema keys exactly', (_name, table, schema) => {
+    const columnKeys = Object.keys(getTableColumns(table)).sort();
+    const schemaKeys = Object.keys(schema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it.each(egressCases)(
+    '%s domain fixture satisfies the drizzle select schema',
+    (_name, table, _schema, fixture) => {
+      const selectSchema = createSelectSchema(table);
+      expect(selectSchema.safeParse(fixture).success).toBe(true);
+    },
+  );
+
+  it('egress fixtures round-trip through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(egressSettingsTable).values(settings).run();
+    db.insert(egressAuditRecordsTable).values(auditRecord).run();
+    db.insert(threatIntelLocalFeedsTable).values(feed).run();
+    expect(egressSettingsSchema.parse(db.select().from(egressSettingsTable).get())).toEqual(
+      settings,
+    );
+    expect(egressAuditRecordSchema.parse(db.select().from(egressAuditRecordsTable).get())).toEqual(
+      auditRecord,
+    );
+    expect(
+      threatIntelLocalFeedSchema.parse(db.select().from(threatIntelLocalFeedsTable).get()),
+    ).toEqual(feed);
+  });
+});
+
+describe('changeSet records align with the domain schema (P4-M6)', () => {
+  const record = changeSetRecordSchema.parse({
+    id: '01920000-0000-7000-8000-000000000001',
+    projectId: project.id,
+    label: 'TO-BE proposal',
+    createdAt: '2026-07-15T00:00:00.000Z',
+    reviewStatus: 'proposed',
+    reviewedAt: '2026-07-15T01:00:00.000Z',
+    reviewNote: 'awaiting sign-off',
+  });
+
+  it('change_sets table columns match the schema keys exactly', () => {
+    const columnKeys = Object.keys(getTableColumns(changeSetsTable)).sort();
+    const schemaKeys = Object.keys(changeSetRecordSchema.shape).sort();
+    expect(columnKeys).toEqual(schemaKeys);
+  });
+
+  it('a changeSet record round-trips through SQLite unchanged', () => {
+    const { db } = createDb(':memory:');
+    db.insert(entityTables.project).values(project).run();
+    db.insert(changeSetsTable).values(record).run();
+    expect(changeSetRecordSchema.parse(db.select().from(changeSetsTable).get())).toEqual(record);
   });
 });
 

@@ -23,6 +23,18 @@ import { buildFindingsReport, findingsToCsvRows } from './export/findings-report
 import { isFindingsRedactionProfile, redactFindings, type FindingView } from '@netplan/domain';
 import { ParseLimitError } from './imports/guards.js';
 import { importResolutionActionSchema } from '@netplan/domain';
+import {
+  EgressBlockedError,
+  createEgressDoor,
+  updateEgressSettingsBodySchema,
+} from './egress/door.js';
+import { stubProvider } from './egress/providers/stub.js';
+import {
+  createLocalFeedProvider,
+  createLocalFeedStore,
+  putLocalFeedBodySchema,
+} from './egress/providers/local-feed.js';
+import { createEnrichmentService, fetchEnrichmentBodySchema } from './egress/enrichment.js';
 
 export interface AppOptions {
   dbFile?: string;
@@ -62,6 +74,8 @@ declare module 'fastify' {
     registeredRoutes: string[];
     /** The import pipeline (ADR-0019); exposed so tests can await worker quiescence. */
     importStore: import('./imports/store.js').ImportStore;
+    /** The single guarded egress chokepoint (ADR-0027). */
+    egressDoor: import('./egress/door.js').EgressDoor;
   }
 }
 
@@ -78,8 +92,20 @@ export async function buildApp(options: AppOptions = {}) {
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
-  const findingsService = createFindingsService(db, engine, importStore, provenanceStore);
+  const localFeedStore = createLocalFeedStore(db);
+  const egressDoor = createEgressDoor(db, {
+    providers: [stubProvider, createLocalFeedProvider(localFeedStore)],
+  });
+  const enrichmentService = createEnrichmentService(db, egressDoor);
+  const findingsService = createFindingsService(
+    db,
+    engine,
+    importStore,
+    provenanceStore,
+    enrichmentService,
+  );
   app.decorate('importStore', importStore);
+  app.decorate('egressDoor', egressDoor);
 
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
@@ -91,6 +117,9 @@ export async function buildApp(options: AppOptions = {}) {
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ParseLimitError) {
       return reply.status(413).send({ error: error.message, code: 'LIMIT' });
+    }
+    if (error instanceof EgressBlockedError) {
+      return reply.status(403).send({ error: error.message, code: 'EGRESS_BLOCKED' });
     }
     if (error instanceof OperationError) {
       const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : 400;
@@ -175,6 +204,22 @@ export async function buildApp(options: AppOptions = {}) {
     return { ...result, state: engine.getState(id) };
   });
 
+  // ---------- Proposal ChangeSets & the sign-off seam (P4-M6, ADR-0026) ----------
+
+  // Register a proposal shell (draft). Status transitions are Operations
+  // (SetChangeSetReviewStatus via POST /operations); the engine refuses to
+  // apply a registered proposal that is not approved.
+  app.post('/projects/:id/changesets', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = z.object({ label: z.string().min(1) }).parse(request.body ?? {});
+    return reply.status(201).send(engine.registerChangeSet(id, body.label));
+  });
+
+  app.get('/projects/:id/changesets', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return engine.listChangeSets(id);
+  });
+
   app.post('/projects/:id/undo', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
     const result = engine.undo(id);
@@ -247,6 +292,18 @@ export async function buildApp(options: AppOptions = {}) {
     return importStore.resolveConflict(params.id, params.jobId, body.conflictId, body.action);
   });
 
+  // Worker control (P4-M5): cancel stops a queued/running parse before
+  // anything commits; resume re-runs it from the stored Evidence blob.
+  app.post('/projects/:id/imports/:jobId/cancel', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    return importStore.cancel(params.id, params.jobId);
+  });
+
+  app.post('/projects/:id/imports/:jobId/resume', async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+    return importStore.resume(params.id, params.jobId);
+  });
+
   app.post('/projects/:id/imports/:jobId/commit', async (request) => {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);
@@ -315,6 +372,54 @@ export async function buildApp(options: AppOptions = {}) {
       configHash: report.configHash,
     });
     return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+  });
+
+  // ---------- The egress door (ADR-0027): settings, disclosure gate, audit trail ----------
+
+  app.get('/projects/:id/egress/settings', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return egressDoor.getSettings(id);
+  });
+
+  app.put('/projects/:id/egress/settings', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = updateEgressSettingsBodySchema.parse(request.body ?? {});
+    return egressDoor.updateSettings(id, body);
+  });
+
+  app.get('/projects/:id/egress/audit', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return egressDoor.listAudit(id);
+  });
+
+  // ---------- Threat-intel enrichment (P4-M2, ADR-0028) ----------
+
+  // The operator-supplied local/offline IoC feed — the zero-egress mode that
+  // keeps enrichment fully usable with the door shut.
+  app.get('/projects/:id/threat-intel/feed', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return localFeedStore.get(id);
+  });
+
+  app.put('/projects/:id/threat-intel/feed', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = putLocalFeedBodySchema.parse(request.body ?? {});
+    return localFeedStore.put(id, body.entries);
+  });
+
+  // An enrichment fetch is a collection event through the door: gate + audit
+  // happen there; the result lands as read-only Evidence. Detection never
+  // triggers this — re-fetching is always an explicit operator action.
+  app.post('/projects/:id/enrichments', async (request, reply) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const body = fetchEnrichmentBodySchema.parse(request.body ?? {});
+    const view = await enrichmentService.fetch(id, body);
+    return reply.status(201).send(view);
+  });
+
+  app.get('/projects/:id/enrichments', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    return enrichmentService.list(id);
   });
 
   app.get('/projects/:id/evidence', async (request) => {

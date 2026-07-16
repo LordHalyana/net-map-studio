@@ -5,6 +5,7 @@ import { ContextPanel } from './ContextPanel';
 import { ImportsPanel } from './ImportsPanel';
 import { UsersRolesPanel } from './UsersRolesPanel';
 import { FindingsPanel } from './FindingsPanel';
+import { EgressPanel } from './EgressPanel';
 import { Canvas } from '../canvas/Canvas';
 import { useAppStore } from '../state/store';
 
@@ -21,6 +22,8 @@ export function AppShell() {
         <UsersRolesPanel />
       ) : view === 'findings' ? (
         <FindingsPanel />
+      ) : view === 'egress' ? (
+        <EgressPanel />
       ) : (
         <Canvas />
       )}

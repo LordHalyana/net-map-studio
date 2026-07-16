@@ -119,7 +119,8 @@ function normalizeClaim(claim: ObservationClaim): ObservationClaim {
     case 'identity':
       return {
         ...claim,
-        device: normalizeHints(claim.device),
+        // null host = directory-export claim (P4-M3); nothing to normalize
+        device: claim.device === null ? null : normalizeHints(claim.device),
         // Domain/realm names are case-insensitive — canonicalize; the
         // principal's own name keeps its casing for display (Linux names
         // are case-sensitive), dedup keys fold case instead.

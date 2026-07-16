@@ -123,6 +123,14 @@ _Avoid_: Check, detector, signature, PolicyRule.
 An operator-declared statement of _expected_ services or traffic for a scope (Zone, Network or Device) — the yardstick a Finding measures deviation against (e.g. an exposed service or cross-zone flow is only a Finding when it departs from the Baseline). A first-class model entity referencing objects by id, edited through the Operation log and cited by Findings as evidence. Distinct from opaque operator allow/deny string lists (filenames, hashes, approved-software names), which are Rule config, not model objects.
 _Avoid_: Allowlist (that is Rule config), policy, expected state.
 
+**Enrichment**:
+An externally-sourced annotation about an indicator (a file hash, IP or domain) — e.g. a threat-intelligence provider's verdict and score. Fetched through the single egress door as a _collection_ step and stored as read-only Evidence carrying provider, exact query, raw response, fetched-at timestamp and TTL. Consumed by a Rule deterministically like any other Evidence, never queried live during detection (so detection stays a pure recomputation). Past its TTL it is flagged stale until re-fetched.
+_Avoid_: Lookup, threat-intel result (as a live value), annotation.
+
+**Egress door**:
+The single guarded, audited chokepoint through which _every_ outbound network call passes. Off by default, opt-in per project, with an explicit disclosure of what leaves and to whom. Egress only ever _enriches_ — no core workflow requires it, and local/offline feeds are always a viable zero-egress mode.
+_Avoid_: API client, connector, integration (unqualified).
+
 ### Change & state
 
 **Operation**:

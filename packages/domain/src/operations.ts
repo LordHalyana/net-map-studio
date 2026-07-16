@@ -168,6 +168,48 @@ export const setFindingNoteOpSchema = z.object({
   previousNote: z.string(),
 });
 
+/**
+ * ChangeSet review status (P4-M6, ADR-0026): the solo sign-off seam. A
+ * registered proposal ChangeSet moves draft → proposed → approved / rejected
+ * before it may apply to AS-IS. "Approver" is the single operator today;
+ * who-may-approve enforcement via Access Role is deferred to multi-user.
+ */
+export const changeSetReviewStatusSchema = z.enum(['draft', 'proposed', 'approved', 'rejected']);
+export type ChangeSetReviewStatus = z.infer<typeof changeSetReviewStatusSchema>;
+
+/**
+ * The persisted ChangeSet row (contrast the wire `changeSetSchema`, which
+ * carries operations to apply). `reviewStatus` is null for ChangeSets that
+ * were applied directly without entering review (imports, ad-hoc batches).
+ */
+export const changeSetRecordSchema = z.object({
+  id: changeSetIdSchema,
+  projectId: projectIdSchema,
+  label: z.string().min(1),
+  createdAt: z.iso.datetime(),
+  reviewStatus: changeSetReviewStatusSchema.nullable().default(null),
+  reviewedAt: z.iso.datetime().nullable().default(null),
+  reviewNote: z.string().default(''),
+});
+export type ChangeSetRecord = z.infer<typeof changeSetRecordSchema>;
+
+/**
+ * The sign-off transition (P4-M6): mutated only through the Operation log —
+ * undoable and audited like every mutation (I3). The engine enriches
+ * `previousStatus`/`previousNote` on apply so inversion stays pure; undo/redo
+ * re-applies reverse transitions, so the engine never enforces a one-way
+ * transition graph — the gate (only `approved` may apply) is the invariant.
+ */
+export const setChangeSetReviewStatusOpSchema = z.object({
+  ...opBase,
+  kind: z.literal('SetChangeSetReviewStatus'),
+  changeSetId: changeSetIdSchema,
+  status: changeSetReviewStatusSchema,
+  note: z.string().default(''),
+  previousStatus: changeSetReviewStatusSchema,
+  previousNote: z.string().default(''),
+});
+
 export const operationSchema = z.discriminatedUnion('kind', [
   createEntityOpSchema,
   deleteEntityOpSchema,
@@ -180,6 +222,7 @@ export const operationSchema = z.discriminatedUnion('kind', [
   setContainmentOpSchema,
   setFindingStatusOpSchema,
   setFindingNoteOpSchema,
+  setChangeSetReviewStatusOpSchema,
 ]);
 export type Operation = z.infer<typeof operationSchema>;
 export type OperationKind = Operation['kind'];

@@ -1,7 +1,9 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   BaselineScope,
+  ChangeSetReviewStatus,
   ConfidenceContributor,
+  EgressCallOutcome,
   EvidenceContentClass,
   EvidenceRetention,
   ExpectedService,
@@ -14,7 +16,10 @@ import type {
   IdentityKind,
   IdentityScope,
   ImportJobStatus,
+  ImportProgressStage,
+  IndicatorType,
   LifecycleState,
+  LocalFeedEntry,
   LinkEndpoint,
   ObservationClaim,
   PolicyEndpoint,
@@ -279,6 +284,7 @@ export const importJobs = sqliteTable('import_jobs', {
   startedAt: text('started_at').notNull(),
   finishedAt: text('finished_at'),
   error: text('error'),
+  progressStage: text('progress_stage').$type<ImportProgressStage>(),
 });
 
 export const evidence = sqliteTable('evidence', {
@@ -366,6 +372,12 @@ export const operationLog = sqliteTable('operation_log', {
   createdAt: text('created_at').notNull(),
 });
 
+/**
+ * ChangeSet rows now carry the review-status seam (P4-M6, ADR-0026):
+ * `review_status` is null for ChangeSets applied directly without review;
+ * registered proposals start at 'draft' and must reach 'approved' before the
+ * engine will apply them.
+ */
 export const changeSets = sqliteTable('change_sets', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
@@ -373,6 +385,9 @@ export const changeSets = sqliteTable('change_sets', {
     .references(() => projects.id),
   label: text('label').notNull(),
   createdAt: text('created_at').notNull(),
+  reviewStatus: text('review_status').$type<ChangeSetReviewStatus>(),
+  reviewedAt: text('reviewed_at'),
+  reviewNote: text('review_note').notNull().default(''),
 });
 
 /**
@@ -410,6 +425,53 @@ export const findingDispositions = sqliteTable('finding_dispositions', {
   fingerprint: text('fingerprint').notNull(),
   status: text('status').$type<FindingStatus>().notNull(),
   notes: text('notes').notNull(),
+});
+
+/**
+ * The egress door's per-project state (ADR-0027): shut by default, opened only
+ * behind the acknowledged disclosure, with the graded indicator-type opt-ins.
+ */
+export const egressSettings = sqliteTable('egress_settings', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  disclosureAcknowledgedAt: text('disclosure_acknowledged_at'),
+  allowedIndicatorTypes: text('allowed_indicator_types', { mode: 'json' })
+    .$type<IndicatorType[]>()
+    .notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * One row per call through the egress door (ADR-0027), blocked attempts
+ * included — evidence-grade provenance of what was asked of whom. Append-only:
+ * no update or delete path exists.
+ */
+export const egressAuditRecords = sqliteTable('egress_audit_records', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  timestamp: text('timestamp').notNull(),
+  providerId: text('provider_id').notNull(),
+  indicatorType: text('indicator_type').$type<IndicatorType>().notNull(),
+  query: text('query').notNull(),
+  outcome: text('outcome').$type<EgressCallOutcome>().notNull(),
+  detail: text('detail').notNull(),
+});
+
+/**
+ * The operator-supplied local/offline threat-intel feed (P4-M2, ADR-0028):
+ * the zero-egress IoC set the local-feed provider consults. One row per
+ * project, replaced wholesale on PUT.
+ */
+export const threatIntelLocalFeeds = sqliteTable('threat_intel_local_feeds', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id),
+  entries: text('entries', { mode: 'json' }).$type<LocalFeedEntry[]>().notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 export const entityTables = {

@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
+  changeSetRecordSchema,
   mutationResponseSchema,
   operationLogEntrySchema,
   projectSchema,
   projectStateSchema,
   undoRedoAvailabilitySchema,
   type ChangeSet,
+  type ChangeSetRecord,
   type MutationResponse,
   type Operation,
   type OperationLogEntry,
@@ -75,3 +77,14 @@ export const postUndo = (projectId: string): Promise<MutationResponse> =>
 
 export const postRedo = (projectId: string): Promise<MutationResponse> =>
   api(`/projects/${projectId}/redo`, mutationResponseSchema, { method: 'POST', body: '{}' });
+
+// Proposal ChangeSets (P4-M6): register a draft shell, list review states.
+// Status transitions travel as SetChangeSetReviewStatus via postOperation.
+export const listChangeSets = (projectId: string): Promise<ChangeSetRecord[]> =>
+  api(`/projects/${projectId}/changesets`, z.array(changeSetRecordSchema));
+
+export const registerChangeSet = (projectId: string, label: string): Promise<ChangeSetRecord> =>
+  api(`/projects/${projectId}/changesets`, changeSetRecordSchema, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });

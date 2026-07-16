@@ -64,8 +64,14 @@ export const importJobStatusSchema = z.enum([
   'committed',
   'rolledBack',
   'failed',
+  /** P4-M5: parse stopped by the operator before anything committed; resumable. */
+  'cancelled',
 ]);
 export type ImportJobStatus = z.infer<typeof importJobStatusSchema>;
+
+/** Worker progress granularity (P4-M5): where inside a run a job currently is. */
+export const importProgressStageSchema = z.enum(['queued', 'parsing', 'building', 'persisting']);
+export type ImportProgressStage = z.infer<typeof importProgressStageSchema>;
 
 /** One run of the import pipeline, with its rollback boundary (ADR-0021). */
 export const importJobSchema = z.object({
@@ -80,6 +86,8 @@ export const importJobSchema = z.object({
   startedAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),
   error: z.string().nullable(),
+  /** Non-null only while the worker is actively on the job (P4-M5). */
+  progressStage: importProgressStageSchema.nullable().default(null),
 });
 export type ImportJob = z.infer<typeof importJobSchema>;
 
@@ -180,13 +188,22 @@ const flowClaimSchema = z.object({
   count: z.number().int().min(1).default(1),
 });
 
-const identityClaimSchema = z.object({
-  targetKind: z.literal('identity'),
-  /** Host the principal was observed on. */
-  device: deviceHintsSchema,
-  identity: identityRefSchema,
-  fields: z.object({ kind: identityKindSchema }).partial(),
-});
+const identityClaimSchema = z
+  .object({
+    targetKind: z.literal('identity'),
+    /**
+     * Host the principal was observed on. Null for a directory-export claim
+     * (P4-M3): the directory asserts the principal exists, not where — only
+     * domain-scoped principals may be host-less (a local account without a
+     * host is meaningless, ADR-0022).
+     */
+    device: deviceHintsSchema.nullable(),
+    identity: identityRefSchema,
+    fields: z.object({ kind: identityKindSchema }).partial(),
+  })
+  .refine((c) => c.device !== null || c.identity.scope === 'domain', {
+    message: 'a host-less identity claim must be domain-scoped',
+  });
 
 const roleAssignmentClaimSchema = z.object({
   targetKind: z.literal('roleAssignment'),
