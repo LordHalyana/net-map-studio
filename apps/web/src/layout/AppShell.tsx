@@ -7,6 +7,9 @@ import { ImportsPanel } from './ImportsPanel';
 import { UsersRolesPanel } from './UsersRolesPanel';
 import { FindingsPanel } from './FindingsPanel';
 import { EgressPanel } from './EgressPanel';
+import { OverviewPanel } from './OverviewPanel';
+import { NetworksPanel } from './NetworksPanel';
+import { RulesPanel } from './RulesPanel';
 import { ShortcutHelp } from './ShortcutHelp';
 import { Toasts } from './Toasts';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
@@ -30,6 +33,14 @@ export function AppShell() {
         <FindingsPanel />
       ) : view === 'egress' ? (
         <EgressPanel />
+      ) : view === 'overview' ? (
+        <OverviewPanel />
+      ) : view === 'networks' ? (
+        <NetworksPanel />
+      ) : view === 'rules' ? (
+        <section className="rules-page" data-testid="rules-page">
+          <RulesPanel page />
+        </section>
       ) : (
         <Canvas />
       )}

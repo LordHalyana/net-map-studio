@@ -371,12 +371,18 @@ function RuleRow({
   );
 }
 
-/** The bottom-panel rule editor (design §3.11, concept LINK INFO panel). */
-export function RulesPanel() {
+/**
+ * The rule editor (design §3.11, concept LINK INFO panel). Renders as the
+ * bottom context tab AND, with `page`, as the full-width RULES destination
+ * (M10, #67) — the page adds endpoint/action filters over the same table.
+ */
+export function RulesPanel({ page = false }: { page?: boolean } = {}) {
   const graph = useAppStore((s) => s.graph);
   const dispatch = useAppStore((s) => s.dispatch);
   const focusedRuleId = useAppStore((s) => s.focusedRuleId);
   const warnings = useMemo(() => (graph ? validatePolicyRules(graph) : []), [graph]);
+  const [endpointFilter, setEndpointFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
   // observed-without-rule warnings belong to no rule row (M8, #65)
   const flowWarnings = warnings.filter((w) => w.ruleId === null);
   if (!graph) return null;
@@ -385,10 +391,58 @@ export function RulesPanel() {
   const serviceInUse = (service: Service) =>
     graph.policyRules.some((r) => r.serviceId === service.id);
 
+  const visibleRules = graph.policyRules.filter((rule) => {
+    if (actionFilter && rule.action !== actionFilter) return false;
+    if (
+      endpointFilter &&
+      rule.source.id !== endpointFilter &&
+      rule.destination.id !== endpointFilter
+    ) {
+      return false;
+    }
+    return true;
+  });
+
   return (
-    <div className="rules-panel" data-testid="rules-panel">
+    <div className={`rules-panel${page ? ' rules-panel--page' : ''}`} data-testid="rules-panel">
       <div className="rules-panel__column">
         <h3 className="field-section__title">Policy rules</h3>
+        {page && (
+          <div className="rules-panel__filters" data-testid="rules-filters">
+            <select
+              value={endpointFilter}
+              data-testid="rules-filter-endpoint"
+              onChange={(e) => setEndpointFilter(e.target.value)}
+            >
+              <option value="">all endpoints</option>
+              {graph.networks.map((n) => (
+                <option key={n.id} value={n.id}>
+                  ⊞ {n.name}
+                </option>
+              ))}
+              {graph.devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  ▢ {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={actionFilter}
+              data-testid="rules-filter-action"
+              onChange={(e) => setActionFilter(e.target.value)}
+            >
+              <option value="">all actions</option>
+              {policyActionSchema.options.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+            <span className="rules-panel__filter-count" data-testid="rules-filter-count">
+              {visibleRules.length} of {graph.policyRules.length} rules
+            </span>
+          </div>
+        )}
         {flowWarnings.length > 0 && (
           <ul className="rules-panel__flow-warnings" data-testid="flow-warnings">
             {flowWarnings.map((warning, index) => (
@@ -400,7 +454,7 @@ export function RulesPanel() {
         )}
         <NewRuleForm graph={graph} />
         <ul className="rule-list" data-testid="rule-list">
-          {graph.policyRules.map((rule) => (
+          {visibleRules.map((rule) => (
             <RuleRow
               key={rule.id}
               rule={rule}

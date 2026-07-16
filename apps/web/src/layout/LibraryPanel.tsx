@@ -3,10 +3,12 @@ import {
   Building2,
   Cloud,
   DoorOpen,
+  Gauge,
   ImagePlus,
   LayoutGrid,
   Map,
   Search,
+  ShieldCheck,
   TriangleAlert,
   Upload,
   Users,
@@ -110,7 +112,10 @@ export function LibraryPanel() {
         <ul>
           {(
             [
+              ['overview', Gauge, 'Overview'],
               ['canvas', Map, 'Canvas'],
+              ['networks', Waypoints, 'Networks and VLANs'],
+              ['rules', ShieldCheck, 'Rules'],
               ['imports', Upload, 'Imports and Evidence'],
               ['identities', Users, 'Users and Roles'],
               ['findings', TriangleAlert, 'Findings'],
