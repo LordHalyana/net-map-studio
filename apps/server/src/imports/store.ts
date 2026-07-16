@@ -16,6 +16,7 @@ import {
   importResolutionActionSchema,
   invertOperation,
   maskValue,
+  NETPLAN_BUNDLE_VERSION,
   newId,
   observationDraftSchema,
   observationIdSchema,
@@ -37,6 +38,7 @@ import {
   type ImportResolutionAction,
   type NetplanBundle,
   type Observation,
+  type ProjectState,
   type ReportType,
 } from '@netplan/domain';
 import type { Db } from '../db/index.js';
@@ -688,6 +690,55 @@ export function createImportStore(
 
   // ---------- bundle attachment (ADR-0016 evidence subtree) ----------
 
+  /**
+   * Stream a `.netplan` bundle as JSON text chunks (ADR-0016; improvements
+   * M14, #71): evidence blobs are read one at a time straight from the DB, so
+   * a project with hundreds of MB of captures never materializes as one giant
+   * base64 array or serialized string. Yields byte-identical output to
+   * `makeBundle` so import round-trips are unaffected.
+   */
+  function* streamBundle(
+    projectId: string,
+    state: ProjectState,
+    exportedAt: string,
+  ): Generator<string> {
+    const jobs = listJobs(projectId);
+    const records = listEvidence(projectId);
+    const manifest = {
+      files: records
+        .filter((r) => {
+          const blob = db
+            .select({ id: evidenceBlobs.evidenceId })
+            .from(evidenceBlobs)
+            .where(eq(evidenceBlobs.evidenceId, r.id))
+            .get();
+          return blob !== undefined || true; // manifest lists every record's hash
+        })
+        .map((r) => ({ path: evidenceManifestPath(r), sha256: r.sha256 })),
+    };
+    yield '{"format":"netplan"';
+    yield `,"version":${NETPLAN_BUNDLE_VERSION}`;
+    yield `,"exportedAt":${JSON.stringify(exportedAt)}`;
+    yield `,"project":${JSON.stringify(state)}`;
+    yield `,"importJobs":${JSON.stringify(jobs)}`;
+    yield `,"manifest":${JSON.stringify(manifest)}`;
+    yield ',"evidence":[';
+    let first = true;
+    for (const record of records) {
+      const blob = db
+        .select()
+        .from(evidenceBlobs)
+        .where(eq(evidenceBlobs.evidenceId, record.id))
+        .get();
+      const file: BundleEvidenceFile = blob
+        ? { record, encoding: blob.encoding, content: blob.content }
+        : { record, encoding: 'utf8', content: null };
+      yield `${first ? '' : ','}${JSON.stringify(file)}`;
+      first = false;
+    }
+    yield ']}';
+  }
+
   function exportAttachments(projectId: string): {
     evidence: BundleEvidenceFile[];
     importJobs: ImportJob[];
@@ -932,6 +983,7 @@ export function createImportStore(
     rollback,
     getEvidenceBlob,
     exportAttachments,
+    streamBundle,
     verifyEvidenceHashes,
     restoreAttachments,
   };

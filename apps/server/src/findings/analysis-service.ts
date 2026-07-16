@@ -103,12 +103,31 @@ export function createFindingsService(
     });
   }
 
+  /**
+   * Cache keyed on the operation-log watermark + rule-config hash (improvements
+   * M14, #71). Detection is a pure recomputation, so between edits the same
+   * (watermark, config) yields the same report — the analysis (a full graph
+   * sweep) runs only when either moves. One entry per project.
+   */
+  const cache = new Map<string, { key: string; report: FindingsReport }>();
+
   function analyze(projectId: string): FindingsReport {
+    const opSeq = engine.getWatermark(projectId);
+    // Enrichment Evidence (ADR-0028) is collection, not a logged mutation, so
+    // it does not move the op-log watermark — fold a cheap signature of the
+    // stored enrichments into the key so a re-fetch invalidates the cache.
+    const enrichments = enrichmentService.loadEnrichments(projectId);
+    const enrichmentSig = `${enrichments.length}:${enrichments
+      .map((e) => `${e.evidenceId}@${e.payload.fetchedAt}`)
+      .sort()
+      .join(',')}`;
+    const cacheKey = `${opSeq}:${DEFAULT_ENGINE_CONFIG.version}:${enrichmentSig}`;
+    const cached = cache.get(projectId);
+    if (cached && cached.key === cacheKey) return cached.report;
+
     const state = engine.getState(projectId);
     const provenance = provenanceStore.listForProject(projectId);
     const inventories = buildInventories(projectId);
-    const log = engine.getLog(projectId);
-    const opSeq = log.length > 0 ? (log[log.length - 1]?.seq ?? 0) : 0;
 
     const run = runBuiltInAnalysis({
       state,
@@ -122,12 +141,14 @@ export function createFindingsService(
       opSeq,
     });
 
-    return {
+    const report: FindingsReport = {
       findings: reconcileFindings(run.detections, state.findingDispositions),
       coverage: coverageFor(projectId, inventories),
       opSeq: run.opSeq,
       configHash: run.configHash,
     };
+    cache.set(projectId, { key: cacheKey, report });
+    return report;
   }
 
   return { analyze, buildInventories };

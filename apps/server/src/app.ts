@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
 import {
   applyRedaction,
   changeSetSchema,
-  makeBundle,
   netplanBundleSchema,
   newId,
   operationIdSchema,
@@ -179,8 +179,17 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.post('/projects/:id/operations', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
+    // Slim responses (ADR-0019, M14 #71): `?slim=1` returns the op result +
+    // version watermark instead of the full ProjectState, so a mutation
+    // round-trip doesn't re-serialize 500 devices / 5k flows. The client
+    // reconciles optimistically and refetches only on a watermark mismatch.
+    const query = z.object({ slim: z.coerce.boolean().default(false) }).parse(request.query ?? {});
     const body = request.body;
     const isChangeSet = typeof body === 'object' && body !== null && 'operations' in body;
+    const respond = (result: { appliedOperations: unknown; availability: unknown }) =>
+      query.slim
+        ? { ...result, watermark: engine.getWatermark(id) }
+        : { ...result, state: engine.getState(id), watermark: engine.getWatermark(id) };
 
     if (isChangeSet) {
       const parsed = changeSetSchema.safeParse(body);
@@ -190,8 +199,7 @@ export async function buildApp(options: AppOptions = {}) {
       if (parsed.data.projectId !== id) {
         throw new OperationError('INVALID', 'ChangeSet projectId does not match URL');
       }
-      const result = engine.applyChangeSet(parsed.data);
-      return { ...result, state: engine.getState(id) };
+      return respond(engine.applyChangeSet(parsed.data));
     }
 
     const parsed = operationSchema.safeParse(body);
@@ -201,8 +209,7 @@ export async function buildApp(options: AppOptions = {}) {
     if (parsed.data.projectId !== id) {
       throw new OperationError('INVALID', 'Operation projectId does not match URL');
     }
-    const result = engine.applyOperation(parsed.data);
-    return { ...result, state: engine.getState(id) };
+    return respond(engine.applyOperation(parsed.data));
   });
 
   // ---------- Proposal ChangeSets & the sign-off seam (P4-M6, ADR-0026) ----------
@@ -237,7 +244,7 @@ export async function buildApp(options: AppOptions = {}) {
 
   // ---------- Export / import (ADR-0016, design §3.12) ----------
 
-  app.get('/projects/:id/export', async (request) => {
+  app.get('/projects/:id/export', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
     const query = z.object({ redact: z.string().default('') }).parse(request.query);
     let state = engine.getState(id);
@@ -248,9 +255,12 @@ export async function buildApp(options: AppOptions = {}) {
     if (fields.length > 0) {
       state = applyRedaction(state, { name: 'query', fields });
     }
-    const bundle = makeBundle(state, new Date().toISOString(), importStore.exportAttachments(id));
-    recordReport(id, 'bundle', query.redact, {}, JSON.stringify(bundle));
-    return bundle;
+    // Stream assembly (ADR-0019, M14 #71): the bundle JSON is emitted in
+    // chunks, reading each evidence blob one at a time, so a large project's
+    // captures never sit fully in memory as one array + one giant string.
+    recordReport(id, 'bundle', query.redact, {}, '');
+    const stream = Readable.from(importStore.streamBundle(id, state, new Date().toISOString()));
+    return reply.header('content-type', 'application/json; charset=utf-8').send(stream);
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -573,7 +583,49 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.get('/projects/:id/graph', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
-    return engine.getState(id);
+    // ADR-0019 scale (M14, #71): ~5k aggregated flows must not ride on every
+    // graph read. `?flows=omit` drops them; `?flows=<n>` caps them; the client
+    // fetches the visible layer's flows from /flows.
+    const query = z.object({ flows: z.string().optional() }).parse(request.query ?? {});
+    const state = engine.getState(id);
+    if (query.flows === 'omit') return { ...state, flows: [] };
+    const cap = query.flows ? Number.parseInt(query.flows, 10) : null;
+    if (cap !== null && Number.isInteger(cap) && cap >= 0 && state.flows.length > cap) {
+      return { ...state, flows: state.flows.slice(0, cap) };
+    }
+    return state;
+  });
+
+  // Dedicated flows endpoint (ADR-0019, M14 #71): limit/offset + filters so
+  // the client pulls only the flows a layer needs, never all 5k.
+  app.get('/projects/:id/flows', async (request) => {
+    const { id } = projectParamsSchema.parse(request.params);
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(5000).default(500),
+        offset: z.coerce.number().int().min(0).default(0),
+        endpoint: z.string().optional(),
+        service: z.coerce.number().int().optional(),
+        since: z.string().optional(),
+        until: z.string().optional(),
+      })
+      .parse(request.query ?? {});
+    let flows = engine.getState(id).flows;
+    if (query.endpoint) {
+      const needle = query.endpoint;
+      flows = flows.filter(
+        (f) =>
+          (f.source.kind !== 'external' && f.source.id === needle) ||
+          (f.destination.kind !== 'external' && f.destination.id === needle) ||
+          (f.source.kind === 'external' && f.source.value === needle) ||
+          (f.destination.kind === 'external' && f.destination.value === needle),
+      );
+    }
+    if (query.service !== undefined) flows = flows.filter((f) => f.port === query.service);
+    if (query.since) flows = flows.filter((f) => f.lastSeen >= query.since!);
+    if (query.until) flows = flows.filter((f) => f.firstSeen <= query.until!);
+    const total = flows.length;
+    return { flows: flows.slice(query.offset, query.offset + query.limit), total };
   });
 
   app.get('/projects/:id/log', async (request) => {

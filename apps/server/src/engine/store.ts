@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import {
   addressSchema,
   baselineSchema,
@@ -333,6 +333,22 @@ export function createEngine(db: Db) {
       .orderBy(asc(operationLog.seq))
       .all()
       .map((row) => operationLogEntrySchema.parse(row));
+  }
+
+  /**
+   * The project's version watermark (improvements M14, #71): the highest
+   * operation-log seq. Cheap — one MAX, no row scan — so mutation responses
+   * and the findings cache can key on it instead of the whole ProjectState.
+   */
+  function getWatermark(projectId: string): number {
+    const row = db
+      .select({ seq: operationLog.seq })
+      .from(operationLog)
+      .where(eq(operationLog.projectId, projectId))
+      .orderBy(desc(operationLog.seq))
+      .limit(1)
+      .get();
+    return row?.seq ?? 0;
   }
 
   // ---------- project CRUD (workspace bootstrap; entities go through Operations) ----------
@@ -1736,6 +1752,7 @@ export function createEngine(db: Db) {
     importState,
     getState,
     getLog,
+    getWatermark,
     applyOperation,
     applyChangeSet,
     applyChangeSetWith,
