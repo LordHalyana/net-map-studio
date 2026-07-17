@@ -405,7 +405,7 @@ export function graphToFlow(
       if (deviceId) {
         const device = deviceById.get(deviceId);
         if (!device || hiddenDeviceIds.has(device.id)) return null;
-        return { id: device.id, position: absoluteByDevice.get(device.id) ?? device.position };
+        return { id: device.id, position: toAbsolute(device, state) };
       }
       if (endpoint.kind === 'network' || endpoint.kind === 'subnet') {
         const position = networkPositions.get(endpoint.id);
