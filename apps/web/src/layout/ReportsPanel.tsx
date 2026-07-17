@@ -153,7 +153,7 @@ export function ReportsPanel() {
 
       <h3 className="field-section__title">Generated reports ({reports.length})</h3>
       {reports.length === 0 ? (
-        <p className="panel-empty">No reports generated yet.</p>
+        <p className="panel-empty">Generate a report above to see it here.</p>
       ) : (
         <table className="data-table reports-table" data-testid="reports-table">
           <thead>

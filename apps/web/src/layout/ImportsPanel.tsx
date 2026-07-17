@@ -60,7 +60,7 @@ export function ImportsPanel() {
         <ul className="imports-panel__job-list" data-testid="import-job-list">
           {importJobs.length === 0 &&
             (loaded ? (
-              <li className="panel-empty">No imports yet.</li>
+              <li className="panel-empty">Import an evidence file to see jobs here.</li>
             ) : (
               <li className="panel-loading">
                 <Spinner size="sm" label="Loading imports" /> Loading imports…
