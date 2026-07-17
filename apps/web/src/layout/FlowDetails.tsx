@@ -78,7 +78,7 @@ export function FlowDetails({ flowIds, graph }: { flowIds: string[]; graph: Proj
           );
         })}
       </ul>
-      <p className="panel-empty">Flows are derived from evidence and cannot be edited.</p>
+      <p className="panel-hint">Flows are derived from evidence and cannot be edited.</p>
     </div>
   );
 }
