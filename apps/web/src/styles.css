@@ -908,16 +908,23 @@ button:disabled {
   font-size: var(--text-sm);
 }
 
-.field input,
+/* select + textarea chrome (input chrome now comes from the input base rule) */
 .field select,
 .field textarea,
-.address-add input,
 .address-add select {
   background-color: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   padding: var(--space-1) 6px;
+}
+
+/* shared field layout for every control in these forms */
+.field input,
+.field select,
+.field textarea,
+.address-add input,
+.address-add select {
   font: inherit;
   min-width: 0;
   width: 100%;
@@ -1930,8 +1937,7 @@ button:disabled {
 }
 
 .connect-form__side select,
-.connect-form__field select,
-.connect-form__field input {
+.connect-form__field select {
   background-color: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -2045,14 +2051,18 @@ button:disabled {
 }
 
 .rule-add select,
-.rule-add input,
-.service-add select,
-.service-add input {
+.service-add select {
   background-color: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
   padding: var(--space-1) 6px;
+}
+
+.rule-add select,
+.rule-add input,
+.service-add select,
+.service-add input {
   max-width: 170px;
 }
 
@@ -2201,10 +2211,6 @@ button:disabled {
 }
 
 .global-search input {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
   padding: 5px 10px;
   width: 240px;
 }
@@ -2831,11 +2837,6 @@ button:disabled {
 .egress-form-row input {
   flex: 1;
   min-width: 160px;
-  background-color: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  padding: var(--space-1) 6px;
 }
 .egress-list {
   list-style: none;
@@ -2883,11 +2884,6 @@ button:disabled {
 }
 .proposal-register input {
   flex: 1;
-  background-color: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  padding: var(--space-1) 6px;
 }
 .proposal-status {
   font-weight: 600;
@@ -3147,6 +3143,22 @@ select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b94a7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 6px center;
+}
+
+/* native text inputs get the app look too — the sibling of the select rule
+   above (issue #100). Wrapped in :where() so it stays at zero specificity like
+   the bare `select` selector: any scoped rule (.library-search, .global-search,
+   the quiet inspector inputs) still wins without a specificity fight. Type-
+   scoped so it never captures type='checkbox' — that's the Toggle primitive,
+   styled via `.switch input`, and type='file' (visually hidden export inputs).
+   It's an allowlist: a new text-like type (email, number, tel, …) must be added
+   here or it falls back to browser-default chrome — the very bug #100 fixes. */
+:where(input[type='text'], input[type='search'], input[type='date'], input:not([type])) {
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) 6px;
 }
 
 /* rules that set their own padding shorthand keep room for the chevron */
