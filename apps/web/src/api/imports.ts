@@ -56,6 +56,8 @@ export interface UploadImportInput {
   filename: string;
   adapter: string;
   content: string;
+  /** ImportProfile for profile-driven adapters like netcat-text (#90 A4). */
+  profileId?: string;
 }
 
 export const createImport = (projectId: string, input: UploadImportInput): Promise<ImportJob> =>

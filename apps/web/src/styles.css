@@ -3501,6 +3501,127 @@ select {
   font-size: var(--text-xs);
 }
 
+/* ---------- import profile authoring (#90 A4) ---------- */
+
+.import-profiles {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  font-size: var(--text-sm);
+}
+
+.import-profiles > summary {
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.import-profiles > summary:hover {
+  color: var(--text);
+}
+
+.import-profiles[open] > summary {
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-profiles__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.import-profiles__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.import-profiles__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.import-profiles__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.import-profiles__pattern {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-profiles__editor {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-2);
+}
+
+.import-profiles__pattern-input {
+  font-family: var(--font-mono);
+}
+
+.import-profiles__sample {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+
+/* textarea chrome is per-scope (like .field textarea) — the input base rule
+   at :3153 is deliberately input-only (#100) */
+.import-profiles__sample textarea {
+  resize: vertical;
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) 6px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.import-profiles__preview {
+  font-size: var(--text-xs);
+}
+
+.import-profiles__line {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.import-profiles__groups {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.import-profiles__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 /* ---------- Spinner primitive & panel loading (#90 B2) ---------- */
 
 .spinner {
