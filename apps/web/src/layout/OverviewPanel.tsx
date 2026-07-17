@@ -93,7 +93,9 @@ export function OverviewPanel() {
                   <span className="overview-list__count">{count}</span>
                 </li>
               ))}
-            {byType.size === 0 && <li className="panel-empty">No devices yet.</li>}
+            {byType.size === 0 && (
+              <li className="panel-empty">No devices yet — add one, or import evidence.</li>
+            )}
           </ul>
           <h3 className="field-section__title">Lifecycle</h3>
           <ul className="overview-list">
@@ -134,7 +136,9 @@ export function OverviewPanel() {
                 <span className="overview-list__count">#{entry.seq}</span>
               </li>
             ))}
-            {recent.length === 0 && <li className="panel-empty">No operations yet.</li>}
+            {recent.length === 0 && (
+              <li className="panel-empty">No operations yet — your edits will appear here.</li>
+            )}
           </ul>
         </div>
       </div>

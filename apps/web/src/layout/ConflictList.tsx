@@ -24,7 +24,7 @@ export function ConflictList() {
   const conflicts = selected?.proposal?.conflicts ?? [];
 
   if (selected?.job.status !== 'review') {
-    return <p className="panel-empty">No import in review.</p>;
+    return <p className="panel-empty">Select an import job in review to see its conflicts.</p>;
   }
   if (conflicts.length === 0) {
     return (

@@ -340,7 +340,7 @@ export function EgressPanel() {
             <Spinner size="sm" label="Loading enrichments" /> Loading enrichments…
           </p>
         ) : enrichments.length === 0 ? (
-          <p className="panel-empty">No stored enrichments.</p>
+          <p className="panel-empty">Look up an indicator to store an enrichment.</p>
         ) : (
           <table className="data-table egress-table" data-testid="enrichment-list">
             <thead>

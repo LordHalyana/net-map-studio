@@ -2831,6 +2831,11 @@ button:disabled {
 .egress-form-row input {
   flex: 1;
   min-width: 160px;
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) 6px;
 }
 .egress-list {
   list-style: none;
@@ -2878,6 +2883,11 @@ button:disabled {
 }
 .proposal-register input {
   flex: 1;
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) 6px;
 }
 .proposal-status {
   font-weight: 600;
