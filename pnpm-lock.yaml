@@ -151,6 +151,9 @@ importers:
 
   packages/domain:
     dependencies:
+      '@netplan/import-contract':
+        specifier: workspace:*
+        version: link:../import-contract
       uuid:
         specifier: ^14.0.1
         version: 14.0.1

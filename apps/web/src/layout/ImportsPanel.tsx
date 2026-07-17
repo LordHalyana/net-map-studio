@@ -1,26 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, TriangleAlert } from 'lucide-react';
-import { buildCandidates, type Evidence, type ImportJob, type Observation } from '@netplan/domain';
+import {
+  buildCandidates,
+  guessImportAdapter,
+  wizardImportFormats,
+  type Evidence,
+  type ImportJob,
+  type Observation,
+} from '@netplan/domain';
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { useAppStore } from '../state/store';
 import { ConflictList } from './ConflictList';
 
-const ADAPTERS = [
-  { name: 'device-state', label: 'Device-state report (JSON)' },
-  { name: 'nmap-xml', label: 'Nmap scan (XML)' },
-  { name: 'tshark-flows', label: 'tshark flow summary (JSON/CSV)' },
-  { name: 'ldif', label: 'Directory export (LDIF)' },
-  { name: 'zeek-conn', label: 'Zeek conn.log (TSV/JSON)' },
-];
-
-function guessAdapter(filename: string): string {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith('.xml')) return 'nmap-xml';
-  if (lower.endsWith('.csv')) return 'tshark-flows';
-  if (lower.endsWith('.ldif')) return 'ldif';
-  if (lower.endsWith('conn.log') || lower.endsWith('.zeek')) return 'zeek-conn';
-  return 'device-state';
-}
+// dropdown entries and extension guessing derive from the shared, round-trip
+// tested format descriptors (#90 A0) — no adapter list lives in the UI
+const ADAPTERS = wizardImportFormats();
 
 /**
  * "Imports and Evidence" (design §3.2B/E, plan M7): the import wizard, the
@@ -109,7 +103,7 @@ function ImportWizard({
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    const effectiveAdapter = adapterChosen ? adapter : guessAdapter(file.name);
+    const effectiveAdapter = adapterChosen ? adapter : guessImportAdapter(file.name);
     setAdapter(effectiveAdapter);
     setBusy(true);
     try {
@@ -136,7 +130,7 @@ function ImportWizard({
           }}
         >
           {ADAPTERS.map((a) => (
-            <option key={a.name} value={a.name}>
+            <option key={a.adapter} value={a.adapter}>
               {a.label}
             </option>
           ))}

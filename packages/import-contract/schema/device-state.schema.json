@@ -9,7 +9,8 @@
     "generatedAt": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+      "description": "ISO 8601 UTC timestamp, e.g. 2026-07-15T12:00:00Z"
     },
     "hosts": {
       "minItems": 1,
@@ -19,7 +20,8 @@
         "properties": {
           "deviceId": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "A stable machine identifier (machine GUID, DMI UUID, /etc/machine-id)"
           },
           "hostname": {
             "type": "string",
@@ -45,7 +47,8 @@
           "collectedAt": {
             "type": "string",
             "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "description": "ISO 8601 UTC timestamp, e.g. 2026-07-15T12:00:00Z"
           },
           "interfaces": {
             "type": "array",
@@ -70,9 +73,11 @@
                     "properties": {
                       "value": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "The literal address value: MAC, IPv4, IPv6 or DNS name"
                       },
                       "kind": {
+                        "description": "Omit to let the importer infer the kind from the value's shape",
                         "type": "string",
                         "enum": ["mac", "ipv4", "ipv6", "hostname"]
                       },
@@ -199,7 +204,8 @@
                 },
                 "process": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "The owning process name — required for service reconstruction"
                 },
                 "pid": {
                   "type": "integer",
@@ -218,7 +224,8 @@
               "properties": {
                 "name": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "Plain (alice) or domain-qualified (CORP\\alice, alice@corp.example); domain-qualified principals become domain-scoped Identities"
                 },
                 "disabled": {
                   "type": "boolean"
@@ -228,7 +235,8 @@
                 }
               },
               "required": ["name"],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "Local user accounts present on the host"
             }
           },
           "localGroups": {
@@ -274,7 +282,8 @@
                 "items": {
                   "type": "string",
                   "minLength": 1
-                }
+                },
+                "description": "What the script attempted to collect, e.g. [\"interfaces\", \"users\"]"
               },
               "errors": {
                 "type": "array",
@@ -358,7 +367,8 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "e.g. \"registryRun\", \"cron\", \"launchd\", \"wmi\""
                 },
                 "name": {
                   "type": "string",
