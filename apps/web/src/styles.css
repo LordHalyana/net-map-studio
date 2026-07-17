@@ -3241,3 +3241,198 @@ select {
 .settings-row .switch {
   margin-left: auto;
 }
+
+/* ---------- import format helper (#90 A1) ---------- */
+
+.imports-panel {
+  /* was 280px — the "Expected format" field table needs the room */
+  grid-template-columns: 340px 1fr;
+}
+
+.format-help {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  font-size: var(--text-sm);
+}
+
+.format-help > summary {
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.format-help > summary:hover {
+  color: var(--text);
+}
+
+.format-help[open] > summary {
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.format-help__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.format-help__summary {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.format-help__chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+}
+
+.format-help__chip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 1px var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.format-help__scroll {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+}
+
+.format-help__table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.format-help__table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.format-help__table th,
+.format-help__table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.format-help__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.format-help__field-name {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.format-help__required {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
+.format-help__example-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.format-help__example-bar > span {
+  margin-right: auto;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+
+.format-example {
+  margin: 0;
+  padding: var(--space-2);
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  tab-size: 10;
+}
+
+.format-help__notes {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+
+/* ---------- device-state pre-upload validation (#90 A2) ---------- */
+
+.import-wizard__upload {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.import-wizard__upload > button {
+  flex: 1;
+}
+
+.import-wizard__valid {
+  color: var(--ok);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.import-validation {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.import-validation p {
+  margin: 0;
+}
+
+.import-validation__issues {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0);
+  font-size: var(--text-xs);
+  max-height: 180px;
+  overflow: auto;
+}
+
+.import-validation__issues code {
+  font-family: var(--font-mono);
+  color: var(--severity-critical);
+}
+
+.import-validation__more {
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}

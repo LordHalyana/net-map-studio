@@ -20,13 +20,16 @@ export const DEVICE_STATE_SCHEMA_VERSION = '1.0.0';
 const nonEmpty = z.string().min(1);
 
 /** ISO 8601 with timezone, e.g. 2026-07-15T12:00:00Z. */
-const timestamp = z.iso.datetime();
+const timestamp = z.iso.datetime().describe('ISO 8601 UTC timestamp, e.g. 2026-07-15T12:00:00Z');
 
 export const addressEntrySchema = z.strictObject({
   /** The literal address value: MAC, IPv4, IPv6 or DNS name. */
-  value: nonEmpty,
+  value: nonEmpty.describe('The literal address value: MAC, IPv4, IPv6 or DNS name'),
   /** Omit to let the importer infer the kind from the value's shape. */
-  kind: z.enum(['mac', 'ipv4', 'ipv6', 'hostname']).optional(),
+  kind: z
+    .enum(['mac', 'ipv4', 'ipv6', 'hostname'])
+    .optional()
+    .describe("Omit to let the importer infer the kind from the value's shape"),
   prefixLength: z.number().int().min(0).max(128).optional(),
 });
 
@@ -68,7 +71,7 @@ export const listeningPortEntrySchema = z.strictObject({
   address: z.string().optional(),
   port: z.number().int().min(0).max(65535),
   /** The owning process name — required for service reconstruction. */
-  process: nonEmpty,
+  process: nonEmpty.describe('The owning process name — required for service reconstruction'),
   pid: z.number().int().optional(),
 });
 
@@ -77,11 +80,15 @@ export const listeningPortEntrySchema = z.strictObject({
  * (`CORP\alice`, `alice@corp.example`). Domain-qualified principals become
  * domain-scoped Identities (ADR-0022).
  */
-export const localUserEntrySchema = z.strictObject({
-  name: nonEmpty,
-  disabled: z.boolean().optional(),
-  serviceAccount: z.boolean().optional(),
-});
+export const localUserEntrySchema = z
+  .strictObject({
+    name: nonEmpty.describe(
+      'Plain (alice) or domain-qualified (CORP\\alice, alice@corp.example); domain-qualified principals become domain-scoped Identities',
+    ),
+    disabled: z.boolean().optional(),
+    serviceAccount: z.boolean().optional(),
+  })
+  .describe('Local user accounts present on the host');
 
 export const localGroupEntrySchema = z.strictObject({
   name: nonEmpty,
@@ -126,7 +133,7 @@ export const serviceEntrySchema = z.object({
 
 export const persistenceEntrySchema = z.object({
   /** e.g. "registryRun", "cron", "launchd", "wmi". */
-  type: nonEmpty,
+  type: nonEmpty.describe('e.g. "registryRun", "cron", "launchd", "wmi"'),
   name: nonEmpty,
   command: z.string().optional(),
   path: z.string().optional(),
@@ -152,7 +159,9 @@ export const fileInventoryEntrySchema = z.object({
 
 export const collectionSchema = z.strictObject({
   /** What the script attempted to collect, e.g. ["interfaces", "users"]. */
-  scope: z.array(nonEmpty),
+  scope: z
+    .array(nonEmpty)
+    .describe('What the script attempted to collect, e.g. ["interfaces", "users"]'),
   errors: z.array(
     z.strictObject({
       context: nonEmpty,
@@ -164,7 +173,9 @@ export const collectionSchema = z.strictObject({
 export const deviceStateHostSchema = z.strictObject({
   // --- Phase-2 required, strict ---
   /** A stable machine identifier (machine GUID, DMI UUID, /etc/machine-id). */
-  deviceId: nonEmpty,
+  deviceId: nonEmpty.describe(
+    'A stable machine identifier (machine GUID, DMI UUID, /etc/machine-id)',
+  ),
   hostname: nonEmpty,
   os: z.strictObject({
     name: nonEmpty,

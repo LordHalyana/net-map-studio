@@ -1,26 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, TriangleAlert } from 'lucide-react';
-import { buildCandidates, type Evidence, type ImportJob, type Observation } from '@netplan/domain';
+import { Check, Copy, Download, TriangleAlert } from 'lucide-react';
+import {
+  buildCandidates,
+  guessImportAdapter,
+  IMPORT_FORMAT_SPECS,
+  importSizeBlocker,
+  preflightImport,
+  wizardImportFormats,
+  type Evidence,
+  type ImportFormatSpec,
+  type ImportJob,
+  type Observation,
+} from '@netplan/domain';
+import {
+  deviceStateJsonSchema,
+  validateDeviceStateReport,
+  type ValidationIssue,
+} from '@netplan/import-contract';
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
+import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
+import { Button, IconButton } from '../ui';
 import { ConflictList } from './ConflictList';
 
-const ADAPTERS = [
-  { name: 'device-state', label: 'Device-state report (JSON)' },
-  { name: 'nmap-xml', label: 'Nmap scan (XML)' },
-  { name: 'tshark-flows', label: 'tshark flow summary (JSON/CSV)' },
-  { name: 'ldif', label: 'Directory export (LDIF)' },
-  { name: 'zeek-conn', label: 'Zeek conn.log (TSV/JSON)' },
-];
-
-function guessAdapter(filename: string): string {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith('.xml')) return 'nmap-xml';
-  if (lower.endsWith('.csv')) return 'tshark-flows';
-  if (lower.endsWith('.ldif')) return 'ldif';
-  if (lower.endsWith('conn.log') || lower.endsWith('.zeek')) return 'zeek-conn';
-  return 'device-state';
-}
+// dropdown entries and extension guessing derive from the shared, round-trip
+// tested format descriptors (#90 A0) — no adapter list lives in the UI
+const ADAPTERS = wizardImportFormats();
 
 /**
  * "Imports and Evidence" (design §3.2B/E, plan M7): the import wizard, the
@@ -105,19 +110,72 @@ function ImportWizard({
   // a filename-based guess only applies while the operator hasn't chosen
   const [adapterChosen, setAdapterChosen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // "Expected format" expansion is remembered per adapter (#90 A1)
+  const [helpOpen, setHelpOpen] = useState<Record<string, boolean>>({});
+  // device-state pre-upload validation result (#90 A2): issues block the
+  // upload; a valid report shows its host count next to the upload button
+  const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
+  const [validNote, setValidNote] = useState<string | null>(null);
+  // advisory pre-flight blocker for the text formats (#90 A3)
+  const [preflight, setPreflight] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const spec = IMPORT_FORMAT_SPECS[adapter];
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    const effectiveAdapter = adapterChosen ? adapter : guessAdapter(file.name);
+    const effectiveAdapter = adapterChosen ? adapter : guessImportAdapter(file.name);
     setAdapter(effectiveAdapter);
+    setIssues(null);
+    setValidNote(null);
+    setPreflight(null);
+
+    // size gate on the file's TRUE byte count, before reading 64 MB into memory
+    const oversize = importSizeBlocker(file.name, file.size);
+    if (oversize) {
+      setPreflight(oversize);
+      return;
+    }
+    const content = await file.text();
+
+    const effectiveSpec = IMPORT_FORMAT_SPECS[effectiveAdapter];
+    if (effectiveSpec) {
+      // cheap string gates shared with the server (#90 A3) — catches the
+      // common failure modes instantly instead of via a failed job
+      const blocker = preflightImport(effectiveSpec, file.name, content, file.size);
+      if (blocker) {
+        setPreflight(blocker);
+        return;
+      }
+    }
+
+    if (effectiveAdapter === 'device-state') {
+      // full contract validation in-browser — the same diagnosis the CLI
+      // prints, with zero server round-trip (#90 A2)
+      let document: unknown;
+      try {
+        document = JSON.parse(content);
+      } catch (error) {
+        setIssues([
+          {
+            path: '(root)',
+            message: `not valid JSON — ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ]);
+        return;
+      }
+      const result = validateDeviceStateReport(document);
+      if (!result.ok) {
+        setIssues(result.issues);
+        return;
+      }
+      setValidNote(
+        `${result.hostCount} host${result.hostCount === 1 ? '' : 's'}, schema ${result.schemaVersion}`,
+      );
+    }
+
     setBusy(true);
     try {
-      await onUpload({
-        filename: file.name,
-        adapter: effectiveAdapter,
-        content: await file.text(),
-      });
+      await onUpload({ filename: file.name, adapter: effectiveAdapter, content });
     } finally {
       setBusy(false);
     }
@@ -136,20 +194,56 @@ function ImportWizard({
           }}
         >
           {ADAPTERS.map((a) => (
-            <option key={a.name} value={a.name}>
+            <option key={a.adapter} value={a.adapter}>
               {a.label}
             </option>
           ))}
         </select>
       </label>
-      <button
-        type="button"
-        data-testid="import-upload-button"
-        disabled={busy}
-        onClick={() => fileInput.current?.click()}
-      >
-        {busy ? 'Importing…' : '⇪ Import evidence file…'}
-      </button>
+      <div className="import-wizard__upload">
+        <button
+          type="button"
+          data-testid="import-upload-button"
+          disabled={busy}
+          onClick={() => fileInput.current?.click()}
+        >
+          {busy ? 'Importing…' : '⇪ Import evidence file…'}
+        </button>
+        {validNote && (
+          <span className="import-wizard__valid" data-testid="import-validation-ok">
+            <Check size={12} className="inline-icon" aria-hidden /> {validNote}
+          </span>
+        )}
+      </div>
+      {preflight && (
+        <div className="import-validation" data-testid="import-preflight-error">
+          <p className="imports-panel__notice">
+            <TriangleAlert size={12} className="inline-icon" aria-hidden /> {preflight}
+          </p>
+        </div>
+      )}
+      {issues && (
+        <div className="import-validation" data-testid="import-validation-errors">
+          <p className="imports-panel__notice">
+            <TriangleAlert size={12} className="inline-icon" aria-hidden /> Not a valid device-state
+            report — upload blocked. Fix these first:
+          </p>
+          <ul className="import-validation__issues">
+            {issues.slice(0, MAX_SHOWN_ISSUES).map((issue) => (
+              <li key={`${issue.path}:${issue.message}`}>
+                <code>{issue.path}</code> — {issue.message}
+              </li>
+            ))}
+          </ul>
+          {issues.length > MAX_SHOWN_ISSUES && (
+            <p className="import-validation__more">
+              +{issues.length - MAX_SHOWN_ISSUES} more issue
+              {issues.length - MAX_SHOWN_ISSUES === 1 ? '' : 's'} — the validator CLI prints the
+              full list
+            </p>
+          )}
+        </div>
+      )}
       <input
         ref={fileInput}
         type="file"
@@ -160,7 +254,138 @@ function ImportWizard({
           e.target.value = '';
         }}
       />
+      {spec && (
+        <FormatHelp
+          spec={spec}
+          open={helpOpen[adapter] ?? false}
+          onToggle={(open) => setHelpOpen((prev) => ({ ...prev, [adapter]: open }))}
+        />
+      )}
     </div>
+  );
+}
+
+/** How many validation issues render inline before the "+n more" line (#90 A2). */
+const MAX_SHOWN_ISSUES = 20;
+
+/** `example.csv` for ".csv"-style suffixes; the bare suffix (`conn.log`) otherwise. */
+function exampleFilename(spec: ImportFormatSpec): string {
+  const suffix = spec.extensions[0] ?? '.txt';
+  return suffix.startsWith('.') ? `example${suffix}` : suffix;
+}
+
+/**
+ * The "Expected format" helper (#90 A1): everything it renders comes from the
+ * adapter's ImportFormatSpec — summary, accepted-file chips, the field table,
+ * a copyable/downloadable minimal example, and the sharp-edge notes.
+ */
+function FormatHelp({
+  spec,
+  open,
+  onToggle,
+}: {
+  spec: ImportFormatSpec;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+}) {
+  const pushToast = useAppStore((s) => s.pushToast);
+
+  async function copyExample() {
+    try {
+      await navigator.clipboard.writeText(spec.example);
+      pushToast('Example copied to clipboard', 'success');
+    } catch {
+      pushToast('Clipboard unavailable — use Download example instead');
+    }
+  }
+
+  return (
+    <details
+      className="format-help"
+      data-testid="import-format-help"
+      open={open}
+      onToggle={(e) => onToggle(e.currentTarget.open)}
+    >
+      <summary>Expected format</summary>
+      <div className="format-help__body">
+        <p className="format-help__summary">{spec.summary}</p>
+        <ul className="format-help__chips" aria-label="Accepted files">
+          {[...spec.fileKinds, ...spec.extensions].map((chip) => (
+            <li key={chip} className="format-help__chip">
+              {chip}
+            </li>
+          ))}
+        </ul>
+        <div className="format-help__scroll">
+          <table className="format-help__table" data-testid="import-format-fields">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spec.fields.map((field) => (
+                <tr key={field.name} data-testid="import-format-field">
+                  <td className="format-help__field-name">{field.name}</td>
+                  <td>{field.type}</td>
+                  <td>
+                    {field.required ? <span className="format-help__required">yes</span> : '—'}
+                  </td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="format-help__example-bar">
+          <span>Minimal example</span>
+          <IconButton
+            icon={Copy}
+            label="Copy example"
+            size="sm"
+            data-testid="import-format-copy"
+            onClick={() => void copyExample()}
+          />
+          <Button
+            size="sm"
+            data-testid="import-format-download"
+            onClick={() =>
+              downloadBlob(exampleFilename(spec), new Blob([spec.example], { type: 'text/plain' }))
+            }
+          >
+            <Download size={12} className="inline-icon" aria-hidden /> Download example
+          </Button>
+          {spec.adapter === 'device-state' && (
+            <Button
+              size="sm"
+              data-testid="import-format-schema-download"
+              title="The machine-readable contract — wire it into your collection pipeline's CI"
+              onClick={() =>
+                downloadBlob(
+                  'device-state.schema.json',
+                  new Blob([`${JSON.stringify(deviceStateJsonSchema(), null, 2)}\n`], {
+                    type: 'application/json',
+                  }),
+                )
+              }
+            >
+              <Download size={12} className="inline-icon" aria-hidden /> JSON Schema
+            </Button>
+          )}
+        </div>
+        <pre className="format-example" data-testid="import-format-example">
+          {spec.example}
+        </pre>
+        <ul className="format-help__notes">
+          {spec.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      </div>
+    </details>
   );
 }
 
