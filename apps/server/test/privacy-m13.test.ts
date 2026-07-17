@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { DEVICE_STATE_SCHEMA_VERSION } from '@netplan/import-contract';
-import { projectStateSchema } from '@netplan/domain';
+import {
+  deviceIdSchema,
+  deviceSchema,
+  newId,
+  operationIdSchema,
+  projectStateSchema,
+} from '@netplan/domain';
 import { buildApp } from '../src/app.js';
 
 /**
@@ -94,6 +100,30 @@ describe('M13 privacy & audit (#70)', () => {
     // the default design report is masked
     const report = await app.inject({ method: 'GET', url: `/projects/${id}/report` });
     expect(report.body).not.toContain('MIIBOgIBAAJBAKj');
+
+    // so is the change report — historically the one deliverable that
+    // skipped the mask step, closed by the report emitter (#81); the change
+    // report renders planned additions, so plant the secret in one of those
+    const planned = deviceSchema.parse({
+      id: newId(deviceIdSchema),
+      projectId: id,
+      name: `planned-vpn ${FAKE_KEY}`,
+      deviceType: 'firewall',
+      lifecycleState: 'planned',
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/projects/${id}/operations`,
+      payload: {
+        id: newId(operationIdSchema),
+        projectId: id,
+        kind: 'CreateEntity',
+        payload: { entityType: 'device', entity: planned },
+      },
+    });
+    const change = await app.inject({ method: 'GET', url: `/projects/${id}/report/change` });
+    expect(change.body).toContain('planned-vpn'); // the entity itself still renders
+    expect(change.body).not.toContain('MIIBOgIBAAJBAKj');
   });
 
   it('reveal returns the original once and is audited', async () => {
