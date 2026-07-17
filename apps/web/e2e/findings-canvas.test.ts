@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * Improvements M5 (#62): findings on the canvas — severity badge on affected
@@ -47,13 +47,6 @@ async function importAndCommit(page: Page) {
   await expect(page.getByTestId('import-review')).toContainText('committed');
 }
 
-async function rollback(page: Page) {
-  await page.getByTestId('nav-imports').click();
-  await page.getByTestId('import-job-device-state-committed').click();
-  await page.getByTestId('import-rollback-button').click();
-  await expect(page.getByTestId('import-review')).toContainText('rolledBack');
-}
-
 test.describe('Findings on the canvas (improvements M5, #62)', () => {
   test('an affected device shows the severity tint, the badge, and badge click filters findings', async ({
     page,
@@ -96,7 +89,5 @@ test.describe('Findings on the canvas (improvements M5, #62)', () => {
     // clearing the chip restores the unfiltered list
     await page.getByTestId('findings-device-filter-clear').click();
     await expect(page.getByTestId('findings-device-filter')).toHaveCount(0);
-
-    await rollback(page);
   });
 });

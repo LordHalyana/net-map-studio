@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * Improvements M13 (#70): secrets masking + audited reveal on the Settings
@@ -61,8 +61,7 @@ test.describe('Privacy & audit (improvements M13, #70)', () => {
     await expect(page.getByTestId('settings-secrets')).toContainText('[redacted]');
     await expect(page.getByTestId('settings-secrets')).not.toContainText('MIIBOgIBAAJBAKj');
 
-    // reveal (audited) the private-key row specifically — the shared DB may
-    // hold other secrets from earlier suites
+    // reveal (audited) the private-key row specifically
     const keyRow = page
       .locator('[data-testid="settings-secrets"] tbody tr')
       .filter({ hasText: 'PEM private key' })
@@ -74,11 +73,5 @@ test.describe('Privacy & audit (improvements M13, #70)', () => {
     const [project] = await (await page.request.get('/api/projects')).json();
     const report = await page.request.get(`/api/projects/${project.id}/report`);
     expect(await report.text()).not.toContain('MIIBOgIBAAJBAKj');
-
-    // clean up the shared DB: roll the import back
-    await page.getByTestId('nav-imports').click();
-    await page.getByTestId('import-job-device-state-committed').click();
-    await page.getByTestId('import-rollback-button').click();
-    await expect(page.getByTestId('import-review')).toContainText('rolledBack');
   });
 });

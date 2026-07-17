@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * M7/M8 DoD (plan §2): import wizard → review → resolve → commit → Observed
@@ -129,7 +129,7 @@ test.describe('M7: import wizard, review, commit, rollback', () => {
     await expect(page.getByTestId('device-node-web01')).toHaveCount(1);
     await expect(page.getByTestId('device-node-web01.corp.example')).toHaveCount(0);
 
-    // cleanup: roll back both imports (latest first)
+    // both imports unwind cleanly, latest first — a merged commit rolls back too
     await page.getByTestId('nav-imports').click();
     await page.getByTestId('import-job-nmap-xml-committed').click();
     await rollbackSelected(page);
@@ -166,10 +166,5 @@ test.describe('M8: provenance surfacing (acceptance #6)', () => {
     // undo restores the imported value
     await page.getByTestId('undo-button').click();
     await expect(page.getByTestId('device-os-input')).toHaveValue('Debian 12');
-
-    // cleanup
-    await page.getByTestId('nav-imports').click();
-    await page.getByTestId('import-job-device-state-committed').click();
-    await rollbackSelected(page);
   });
 });

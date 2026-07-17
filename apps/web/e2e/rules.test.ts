@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 async function openApp(page: Page) {
   await page.goto('/');
@@ -95,7 +95,10 @@ test.describe('PolicyRules, Services & the rule editor (M8 DoD, §3.11)', () => 
 
   test('the validator flags a permissive any-to-any rule inline', async ({ page }) => {
     await openApp(page);
+    await addNamedNetwork(page, 'any', '0.0.0.0/0');
 
+    // a default deny, then a permissive rule on the same traffic
+    await createRule(page, 'any', 'any', 'deny');
     await createRule(page, 'any', 'any', 'allow');
 
     const warning = page.locator('.rule-row__warnings li[data-warning="anyToAny"]');

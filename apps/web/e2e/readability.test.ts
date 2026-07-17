@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import {
   changeSetIdSchema,
   deviceIdSchema,
@@ -116,6 +116,9 @@ test.describe('Canvas layout & readability (improvements M4, #61)', () => {
 
   test('auto-arrange leaves zero overlapping device nodes at 100% zoom', async ({ page }) => {
     await openApp(page);
+    await seedEndpointFan(page);
+    await page.reload();
+    await expect(page.getByTestId('app-shell')).toBeVisible();
     await page.getByTestId('auto-arrange').click();
     await waitSaved(page);
     await page.getByTestId('zoom-100').click();
