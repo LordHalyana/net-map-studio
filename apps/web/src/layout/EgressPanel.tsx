@@ -19,6 +19,7 @@ import {
   type EnrichmentView,
 } from '../api/egress';
 import { useAppStore } from '../state/store';
+import { Button, Toggle } from '../ui';
 
 /**
  * The egress door & threat-intel workspace (P4-M7, ADR-0027/0028): per-project
@@ -189,60 +190,52 @@ export function EgressPanel() {
             {settings?.enabled ? 'open (opt-in)' : 'shut — zero packets leave this machine'}
           </strong>
         </p>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-enable"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-enable"
+            checked={enabled}
+            onChange={setEnabled}
+            label="Enable egress for this project"
+          />
           Enable egress for this project
-        </label>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-allow-ip"
-              checked={allowIp}
-              onChange={(e) => setAllowIp(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        </div>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-allow-ip"
+            checked={allowIp}
+            onChange={setAllowIp}
+            label={`Allow ${INDICATOR_LABELS.ip} to leave`}
+          />
           Allow {INDICATOR_LABELS.ip} to leave (per-type opt-in)
-        </label>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-allow-domain"
-              checked={allowDomain}
-              onChange={(e) => setAllowDomain(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        </div>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-allow-domain"
+            checked={allowDomain}
+            onChange={setAllowDomain}
+            label={`Allow ${INDICATOR_LABELS.domain} to leave`}
+          />
           Allow {INDICATOR_LABELS.domain} to leave (per-type opt-in)
-        </label>
+        </div>
         <p className="egress-disclosure" data-testid="egress-disclosure">
           {DISCLOSURE}
         </p>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-acknowledge"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-acknowledge"
+            checked={acknowledged}
+            onChange={setAcknowledged}
+            label="I have read the disclosure"
+          />
           I have read the disclosure and understand what leaves this machine.
-        </label>
-        <button type="button" data-testid="egress-save" onClick={saveSettings}>
+        </div>
+        <Button variant="primary" data-testid="egress-save" onClick={saveSettings}>
           Save egress settings
-        </button>
+        </Button>
       </section>
 
       <section className="egress-section" data-testid="local-feed">
@@ -272,9 +265,9 @@ export function EgressPanel() {
             <option value="suspicious">suspicious</option>
             <option value="benign">benign</option>
           </select>
-          <button type="button" data-testid="feed-add" onClick={addFeedEntry}>
+          <Button data-testid="feed-add" onClick={addFeedEntry}>
             Add
-          </button>
+          </Button>
         </div>
         {feedEntries.length === 0 ? (
           <p className="panel-empty">No indicators yet — the feed is operator-supplied.</p>
@@ -283,9 +276,14 @@ export function EgressPanel() {
             {feedEntries.map((entry, i) => (
               <li key={`${entry.indicatorType}:${entry.indicator}`}>
                 <code>{entry.indicator}</code> ({entry.indicatorType}) — {entry.verdict}
-                <button type="button" data-testid="feed-remove" onClick={() => removeFeedEntry(i)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="feed-remove"
+                  onClick={() => removeFeedEntry(i)}
+                >
                   remove
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -318,9 +316,9 @@ export function EgressPanel() {
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />
-          <button type="button" data-testid="lookup-run" onClick={lookup} disabled={!lookupQuery}>
+          <Button data-testid="lookup-run" onClick={lookup} disabled={!lookupQuery}>
             Look up
-          </button>
+          </Button>
         </div>
 
         {enrichments.length === 0 ? (
@@ -356,13 +354,14 @@ export function EgressPanel() {
                     )}
                   </td>
                   <td>
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       data-testid="enrichment-refetch"
                       onClick={() => refetch(view)}
                     >
                       re-fetch
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

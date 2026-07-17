@@ -2735,12 +2735,11 @@ button:disabled {
   color: var(--text-dim);
 }
 .egress-check {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   margin: 6px 0;
-}
-.egress-check input {
-  margin-right: 6px;
 }
 .egress-disclosure {
   font-size: var(--text-sm);
@@ -2775,11 +2774,12 @@ button:disabled {
   font-size: var(--text-sm);
 }
 .egress-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   padding: 4px 0;
   border-bottom: 1px solid var(--border);
-}
-.egress-list button {
-  margin-left: 8px;
 }
 .egress-table {
   width: 100%;
