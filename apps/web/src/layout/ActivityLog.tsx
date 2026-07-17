@@ -65,7 +65,8 @@ export function ActivityLog() {
         <TriangleAlert size={12} className="inline-icon" aria-hidden /> {error}
       </p>
     );
-  if (entries.length === 0) return <p className="panel-empty">No operations yet.</p>;
+  if (entries.length === 0)
+    return <p className="panel-empty">No operations yet — your edits will appear here.</p>;
 
   return (
     <ol className="activity-log" data-testid="activity-log">
