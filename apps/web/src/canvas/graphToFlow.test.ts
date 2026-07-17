@@ -4,6 +4,7 @@ import {
   makeDevice,
   makeInterface,
   makeNetwork,
+  makePolicyRule,
   makeProject,
   makeSite,
   makeZone,
@@ -92,6 +93,78 @@ function resolverSize(node: Node, state: ProjectState, fp: Footprints) {
       throw new Error(`unexpected node type ${node.type}`);
   }
 }
+
+/**
+ * Callout anchors honour Containment (#87): a zone-contained Device stores a
+ * zone-relative position (ADR-0013), so anchors, the scene centroid and the
+ * collision rects must all convert to absolute canvas coordinates.
+ */
+describe('graphToFlow policy-rule callout containment (#87)', () => {
+  /** Two Sites far apart, each holding one Zone with one contained Device. */
+  function makeContainedScene() {
+    const project = makeProject();
+    const pid = project.id;
+    const siteA = makeSite(pid, {
+      position: { x: 1000, y: 500 },
+      size: { width: 700, height: 500 },
+    });
+    const siteB = makeSite(pid, {
+      name: 'Annex',
+      position: { x: 2000, y: 500 },
+      size: { width: 700, height: 500 },
+    });
+    const zoneA = makeZone(siteA, { position: { x: 200, y: 100 } });
+    const zoneB = makeZone(siteB, { name: 'Lab', position: { x: 100, y: 100 } });
+    const vlan = makeNetwork(pid);
+    // absolute positions: a = (1250, 640), b = (2200, 640)
+    const a = makeDevice(pid, { name: 'a', zoneId: zoneA.id, position: { x: 50, y: 40 } });
+    const b = makeDevice(pid, { name: 'b', zoneId: zoneB.id, position: { x: 100, y: 40 } });
+    const base = {
+      project,
+      sites: [siteA, siteB],
+      zones: [zoneA, zoneB],
+      devices: [a, b],
+      interfaces: [],
+      addresses: [],
+      networks: [vlan],
+      links: [],
+      services: [],
+    };
+    return { base, vlan, a, b };
+  }
+
+  it('anchors a single-endpoint callout beside the absolute device position', () => {
+    const { base, vlan, a } = makeContainedScene();
+    // the network source never renders (logical off), so the callout falls
+    // back to the lone device anchor: right edge of the card, 10 up
+    const rule = makePolicyRule(vlan, vlan, { destination: { kind: 'device', id: a.id } });
+    const state = projectStateSchema.parse({ ...base, policyRules: [rule] });
+    const { nodes } = graphToFlow(
+      state,
+      makeOptions({ logical: false, rules: true, mode: 'toBe' }),
+    );
+    const callout = nodes.find((n) => n.type === 'policyRuleCallout');
+    const fp = footprints(state);
+    expect(callout?.position).toEqual({ x: 1250 + fp.device(a.id).width, y: 640 - 10 });
+  });
+
+  it('offsets a device-to-device callout from the absolute midpoint', () => {
+    const { base, vlan, a, b } = makeContainedScene();
+    const rule = makePolicyRule(vlan, vlan, {
+      source: { kind: 'device', id: a.id },
+      destination: { kind: 'device', id: b.id },
+    });
+    const state = projectStateSchema.parse({ ...base, policyRules: [rule] });
+    const { nodes } = graphToFlow(
+      state,
+      makeOptions({ logical: false, rules: true, mode: 'toBe' }),
+    );
+    const callout = nodes.find((n) => n.type === 'policyRuleCallout');
+    // midpoint of the absolute anchors (1725, 640) plus CALLOUT_OFFSET along
+    // the perpendicular; both devices sit clear of the card, so no nudge
+    expect(callout?.position).toEqual({ x: 1725, y: 640 + 110 });
+  });
+});
 
 /**
  * The agreement test (#78): every node the projection emits carries exactly
