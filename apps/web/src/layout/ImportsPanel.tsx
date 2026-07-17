@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, TriangleAlert } from 'lucide-react';
+import { Check, Copy, Download, TriangleAlert } from 'lucide-react';
 import {
   buildCandidates,
   guessImportAdapter,
+  IMPORT_FORMAT_SPECS,
   wizardImportFormats,
   type Evidence,
+  type ImportFormatSpec,
   type ImportJob,
   type Observation,
 } from '@netplan/domain';
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
+import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
+import { Button, IconButton } from '../ui';
 import { ConflictList } from './ConflictList';
 
 // dropdown entries and extension guessing derive from the shared, round-trip
@@ -99,7 +103,10 @@ function ImportWizard({
   // a filename-based guess only applies while the operator hasn't chosen
   const [adapterChosen, setAdapterChosen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // "Expected format" expansion is remembered per adapter (#90 A1)
+  const [helpOpen, setHelpOpen] = useState<Record<string, boolean>>({});
   const fileInput = useRef<HTMLInputElement>(null);
+  const spec = IMPORT_FORMAT_SPECS[adapter];
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -154,7 +161,118 @@ function ImportWizard({
           e.target.value = '';
         }}
       />
+      {spec && (
+        <FormatHelp
+          spec={spec}
+          open={helpOpen[adapter] ?? false}
+          onToggle={(open) => setHelpOpen((prev) => ({ ...prev, [adapter]: open }))}
+        />
+      )}
     </div>
+  );
+}
+
+/** `example.csv` for ".csv"-style suffixes; the bare suffix (`conn.log`) otherwise. */
+function exampleFilename(spec: ImportFormatSpec): string {
+  const suffix = spec.extensions[0] ?? '.txt';
+  return suffix.startsWith('.') ? `example${suffix}` : suffix;
+}
+
+/**
+ * The "Expected format" helper (#90 A1): everything it renders comes from the
+ * adapter's ImportFormatSpec — summary, accepted-file chips, the field table,
+ * a copyable/downloadable minimal example, and the sharp-edge notes.
+ */
+function FormatHelp({
+  spec,
+  open,
+  onToggle,
+}: {
+  spec: ImportFormatSpec;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+}) {
+  const pushToast = useAppStore((s) => s.pushToast);
+
+  async function copyExample() {
+    try {
+      await navigator.clipboard.writeText(spec.example);
+      pushToast('Example copied to clipboard', 'success');
+    } catch {
+      pushToast('Clipboard unavailable — use Download example instead');
+    }
+  }
+
+  return (
+    <details
+      className="format-help"
+      data-testid="import-format-help"
+      open={open}
+      onToggle={(e) => onToggle(e.currentTarget.open)}
+    >
+      <summary>Expected format</summary>
+      <div className="format-help__body">
+        <p className="format-help__summary">{spec.summary}</p>
+        <ul className="format-help__chips" aria-label="Accepted files">
+          {[...spec.fileKinds, ...spec.extensions].map((chip) => (
+            <li key={chip} className="format-help__chip">
+              {chip}
+            </li>
+          ))}
+        </ul>
+        <div className="format-help__scroll">
+          <table className="format-help__table" data-testid="import-format-fields">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spec.fields.map((field) => (
+                <tr key={field.name} data-testid="import-format-field">
+                  <td className="format-help__field-name">{field.name}</td>
+                  <td>{field.type}</td>
+                  <td>
+                    {field.required ? <span className="format-help__required">yes</span> : '—'}
+                  </td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="format-help__example-bar">
+          <span>Minimal example</span>
+          <IconButton
+            icon={Copy}
+            label="Copy example"
+            size="sm"
+            data-testid="import-format-copy"
+            onClick={() => void copyExample()}
+          />
+          <Button
+            size="sm"
+            data-testid="import-format-download"
+            onClick={() =>
+              downloadBlob(exampleFilename(spec), new Blob([spec.example], { type: 'text/plain' }))
+            }
+          >
+            <Download size={12} className="inline-icon" aria-hidden /> Download example
+          </Button>
+        </div>
+        <pre className="format-example" data-testid="import-format-example">
+          {spec.example}
+        </pre>
+        <ul className="format-help__notes">
+          {spec.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      </div>
+    </details>
   );
 }
 
