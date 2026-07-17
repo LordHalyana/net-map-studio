@@ -20,7 +20,7 @@ import {
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, Spinner } from '../ui';
 import { ConflictList } from './ConflictList';
 
 // dropdown entries and extension guessing derive from the shared, round-trip
@@ -39,9 +39,11 @@ export function ImportsPanel() {
   const uploadImport = useAppStore((s) => s.uploadImport);
   const selectImport = useAppStore((s) => s.selectImport);
   const project = useAppStore((s) => s.project);
+  // first fetch in flight → loading row, never a misleading "No imports yet" (#90 B2)
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void refreshImports();
+    void refreshImports().finally(() => setLoaded(true));
   }, [refreshImports]);
 
   async function controlImport(action: 'cancel' | 'resume', jobId: string) {
@@ -56,7 +58,14 @@ export function ImportsPanel() {
         <h2 className="panel-title">Imports and Evidence</h2>
         <ImportWizard onUpload={uploadImport} />
         <ul className="imports-panel__job-list" data-testid="import-job-list">
-          {importJobs.length === 0 && <li className="panel-empty">No imports yet.</li>}
+          {importJobs.length === 0 &&
+            (loaded ? (
+              <li className="panel-empty">No imports yet.</li>
+            ) : (
+              <li className="panel-loading">
+                <Spinner size="sm" label="Loading imports" /> Loading imports…
+              </li>
+            ))}
           {importJobs.map((job) => (
             <li key={job.id}>
               <button
@@ -206,7 +215,13 @@ function ImportWizard({
           disabled={busy}
           onClick={() => fileInput.current?.click()}
         >
-          {busy ? 'Importing…' : '⇪ Import evidence file…'}
+          {busy ? (
+            <>
+              <Spinner size="sm" label="Importing" /> Importing…
+            </>
+          ) : (
+            '⇪ Import evidence file…'
+          )}
         </Button>
         {validNote && (
           <span className="import-wizard__valid" data-testid="import-validation-ok">

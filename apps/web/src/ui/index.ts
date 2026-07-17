@@ -5,3 +5,4 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { Toggle } from './Toggle';
 export { Tabs } from './Tabs';
 export { Menu, type MenuItem } from './Menu';
+export { Spinner } from './Spinner';

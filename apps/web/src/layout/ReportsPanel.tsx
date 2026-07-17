@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { newId, operationIdSchema, projectIdSchema, reportIdSchema } from '@netplan/domain';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
 import { useAppStore } from '../state/store';
-import { Button } from '../ui';
+import { Button, Spinner } from '../ui';
 
 const CSV_ENTITIES = [
   'devices',
@@ -29,6 +29,8 @@ export function ReportsPanel() {
   const dispatch = useAppStore((s) => s.dispatch);
   const pushToast = useAppStore((s) => s.pushToast);
   const [profile, setProfile] = useState('');
+  // the bundle is the one generator that runs long enough to need feedback (#90 B2)
+  const [bundleBusy, setBundleBusy] = useState(false);
   if (!project || !graph) return null;
 
   /** Server-generated outputs write their own Report record — refresh the mirror. */
@@ -88,15 +90,24 @@ export function ReportsPanel() {
         <div className="reports-panel__buttons">
           <Button
             data-testid="reports-generate-bundle"
+            disabled={bundleBusy}
             onClick={() => {
+              setBundleBusy(true);
               void downloadNetplanBundle(project.id, project.name)
                 .then(refreshSoon)
                 .catch((error: unknown) =>
                   pushToast(error instanceof Error ? error.message : 'Export failed'),
-                );
+                )
+                .finally(() => setBundleBusy(false));
             }}
           >
-            Project bundle (.netplan)
+            {bundleBusy ? (
+              <>
+                <Spinner size="sm" label="Generating bundle" /> Generating…
+              </>
+            ) : (
+              'Project bundle (.netplan)'
+            )}
           </Button>
           <Button data-testid="reports-generate-design" onClick={() => openReport('/report')}>
             Design report (HTML)

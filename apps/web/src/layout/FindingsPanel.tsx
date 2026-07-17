@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { endpointResolver, type PolicyEndpoint, type Severity } from '@netplan/domain';
 import { useAppStore } from '../state/store';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, Spinner } from '../ui';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -105,7 +105,13 @@ export function FindingsPanel() {
             onClick={() => void refreshFindings()}
             disabled={loading}
           >
-            {loading ? 'Running…' : 'Re-run analysis'}
+            {loading ? (
+              <>
+                <Spinner size="sm" label="Running analysis" /> Running…
+              </>
+            ) : (
+              'Re-run analysis'
+            )}
           </Button>
         </div>
       </div>
@@ -154,6 +160,12 @@ export function FindingsPanel() {
           {visible.length} of {findings.length} findings
         </span>
       </div>
+
+      {!report && loading && (
+        <p className="panel-loading" data-testid="findings-loading">
+          <Spinner size="sm" label="Computing findings" /> Computing findings…
+        </p>
+      )}
 
       {report && findings.length === 0 && (
         <p className="panel-empty" data-testid="findings-empty">

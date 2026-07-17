@@ -7,7 +7,7 @@ import {
 } from '@netplan/domain';
 import { listChangeSets, postOperation, registerChangeSet } from '../api/client';
 import { useAppStore } from '../state/store';
-import { Button } from '../ui';
+import { Button, Spinner } from '../ui';
 
 /**
  * The solo sign-off control (P4-M6, ADR-0026): registered proposal ChangeSets
@@ -20,6 +20,7 @@ export function ProposalSignOff() {
   const [proposals, setProposals] = useState<ChangeSetRecord[]>([]);
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!project) return;
@@ -28,7 +29,9 @@ export function ProposalSignOff() {
   }, [project]);
 
   useEffect(() => {
-    refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    refresh()
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoaded(true));
   }, [refresh]);
 
   if (!project) return null;
@@ -88,6 +91,11 @@ export function ProposalSignOff() {
           Register
         </Button>
       </div>
+      {!loaded && proposals.length === 0 && (
+        <p className="panel-loading">
+          <Spinner size="sm" label="Loading proposals" /> Loading proposals…
+        </p>
+      )}
       <ul data-testid="proposal-list">
         {proposals.map((proposal) => (
           <li key={proposal.id} data-testid={`proposal-${proposal.reviewStatus}`}>

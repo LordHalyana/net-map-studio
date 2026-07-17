@@ -3397,3 +3397,43 @@ select {
   color: var(--text-dim);
   font-size: var(--text-xs);
 }
+
+/* ---------- Spinner primitive & panel loading (#90 B2) ---------- */
+
+.spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-full);
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+.spinner--sm {
+  width: 12px;
+  height: 12px;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* a panel body waiting on its first fetch — never an empty state (#90 B2) */
+.panel-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}

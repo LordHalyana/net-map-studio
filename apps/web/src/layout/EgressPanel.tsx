@@ -19,7 +19,7 @@ import {
   type EnrichmentView,
 } from '../api/egress';
 import { useAppStore } from '../state/store';
-import { Button, Toggle } from '../ui';
+import { Button, Spinner, Toggle } from '../ui';
 
 /**
  * The egress door & threat-intel workspace (P4-M7, ADR-0027/0028): per-project
@@ -49,6 +49,8 @@ export function EgressPanel() {
   const [feedEntries, setFeedEntries] = useState<LocalFeedEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // first fetch in flight → loading rows, never misleading empty states (#90 B2)
+  const [loaded, setLoaded] = useState(false);
 
   // settings form
   const [enabled, setEnabled] = useState(false);
@@ -87,7 +89,9 @@ export function EgressPanel() {
   }, [project]);
 
   useEffect(() => {
-    refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    refresh()
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoaded(true));
   }, [refresh]);
 
   if (!project) return <p className="panel-empty">Open a project first.</p>;
@@ -187,7 +191,13 @@ export function EgressPanel() {
         <p className="egress-section__hint">
           Status:{' '}
           <strong data-testid="egress-status">
-            {settings?.enabled ? 'open (opt-in)' : 'shut — zero packets leave this machine'}
+            {!loaded && !settings ? (
+              <Spinner size="sm" label="Loading egress settings" />
+            ) : settings?.enabled ? (
+              'open (opt-in)'
+            ) : (
+              'shut — zero packets leave this machine'
+            )}
           </strong>
         </p>
         <div className="egress-check">
@@ -269,7 +279,11 @@ export function EgressPanel() {
             Add
           </Button>
         </div>
-        {feedEntries.length === 0 ? (
+        {feedEntries.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading local feed" /> Loading local feed…
+          </p>
+        ) : feedEntries.length === 0 ? (
           <p className="panel-empty">No indicators yet — the feed is operator-supplied.</p>
         ) : (
           <ul className="egress-list" data-testid="feed-entries">
@@ -321,7 +335,11 @@ export function EgressPanel() {
           </Button>
         </div>
 
-        {enrichments.length === 0 ? (
+        {enrichments.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading enrichments" /> Loading enrichments…
+          </p>
+        ) : enrichments.length === 0 ? (
           <p className="panel-empty">No stored enrichments.</p>
         ) : (
           <table className="egress-table" data-testid="enrichment-list">
@@ -372,7 +390,11 @@ export function EgressPanel() {
 
       <section className="egress-section" data-testid="egress-audit">
         <h3>Egress audit trail</h3>
-        {audit.length === 0 ? (
+        {audit.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading audit trail" /> Loading audit trail…
+          </p>
+        ) : audit.length === 0 ? (
           <p className="panel-empty" data-testid="egress-audit-empty">
             No outbound calls have been made or attempted.
           </p>
