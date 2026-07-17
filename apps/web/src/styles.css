@@ -2214,9 +2214,37 @@ button:disabled {
   margin-bottom: var(--space-2);
 }
 
+/* primary-nav polish (#90 B5): the active page reads as an accent bar +
+   wash (paired with aria-current="page" in LibraryPanel), replacing the
+   heavier full-outline treatment. */
+.primary-nav .library-item {
+  position: relative;
+  color: var(--text-dim);
+  font-weight: var(--weight-medium);
+}
+
+.primary-nav .library-item:hover {
+  color: var(--text);
+}
+
 .library-item--active {
-  background: var(--bg-panel);
-  outline: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+}
+
+.library-item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  width: 2px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+.library-item--active .library-item__glyph {
+  color: var(--accent);
 }
 
 /* ---------- Phase 2: imports & reconciliation (plan M7) ---------- */
