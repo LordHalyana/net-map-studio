@@ -240,7 +240,7 @@ export function buildLink(
   });
 }
 
-/** Mint an ImportProfile for the netcat-text adapter (#90 A4). */
+/** Mint an ImportProfile (#90 A4) — `adapter` comes from the schema default (netcat-text). */
 export function buildImportProfile(
   projectId: ProjectId,
   name: string,
@@ -251,7 +251,6 @@ export function buildImportProfile(
     id: newId(importProfileIdSchema),
     projectId,
     name,
-    adapter: 'netcat-text',
     pattern,
     description,
   });

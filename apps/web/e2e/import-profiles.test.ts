@@ -74,6 +74,16 @@ test.describe('A4: import profile authoring', () => {
     await expect(page.getByTestId('profile-error')).toContainText('regular expression');
     await expect(page.getByTestId('profile-row-broken')).toHaveCount(0);
 
+    // an empty pattern is blocked (the schema would reject it server-side)
+    await page.getByTestId('profile-pattern-input').fill('');
+    await page.getByTestId('profile-save').click();
+    await expect(page.getByTestId('profile-error')).toContainText('regular expression');
+
+    // a pattern that can never emit an observation is blocked, naming the groups
+    await page.getByTestId('profile-pattern-input').fill('^Connection');
+    await page.getByTestId('profile-save').click();
+    await expect(page.getByTestId('profile-error')).toContainText('(?<host>');
+
     // fix the pattern, save, edit the name, then delete — adapter re-locks
     await page.getByTestId('profile-pattern-input').fill(NETCAT_SPEC?.exampleProfilePattern ?? '');
     await page.getByTestId('profile-save').click();

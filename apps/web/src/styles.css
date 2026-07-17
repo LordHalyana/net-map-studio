@@ -3559,6 +3559,11 @@ select {
   font-size: var(--text-xs);
 }
 
+/* the name holds its line; the pattern is the flexible, ellipsized part */
+.import-profiles__meta strong {
+  white-space: nowrap;
+}
+
 .import-profiles__pattern {
   font-family: var(--font-mono);
   color: var(--text-dim);
@@ -3602,19 +3607,21 @@ select {
   font-size: var(--text-xs);
 }
 
+/* fixed layout: the narrow jobs column must split evenly between the sample
+   line and its groups — auto layout would hand everything to one of them */
 .import-profiles__preview {
+  table-layout: fixed;
   font-size: var(--text-xs);
 }
 
-.import-profiles__line {
+.import-profiles__line,
+.import-profiles__groups {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
 
 .import-profiles__groups {
-  font-family: var(--font-mono);
   color: var(--text-dim);
-  white-space: nowrap;
 }
 
 .import-profiles__actions {

@@ -4,6 +4,7 @@ import {
   guessImportAdapter,
   IMPORT_FORMAT_SPECS,
   previewProfilePattern,
+  profilePatternBlocker,
   wizardImportFormats,
 } from '../src/import-formats.js';
 
@@ -107,5 +108,37 @@ describe('previewProfilePattern', () => {
     expect(result.error).toBeNull();
     expect(result.lines[0]?.groups).toEqual({});
     expect(result.lines[1]?.groups).toBeNull();
+  });
+});
+
+/**
+ * #90 A4: the save-time gate for profile authoring. A profile whose pattern
+ * cannot yield observations (no host/port group) would only ever produce a
+ * dead import — block it with the reason instead.
+ */
+describe('profilePatternBlocker', () => {
+  it('passes the descriptor example pattern', () => {
+    expect(
+      profilePatternBlocker(IMPORT_FORMAT_SPECS['netcat-text']?.exampleProfilePattern ?? ''),
+    ).toBeNull();
+  });
+
+  it('blocks an empty pattern and an invalid regex', () => {
+    expect(profilePatternBlocker('')).toMatch(/regular expression/i);
+    expect(profilePatternBlocker('(?<host>[')).toMatch(/regular expression/i);
+  });
+
+  it('blocks a pattern missing the load-bearing host/port groups, naming them', () => {
+    const missingBoth = profilePatternBlocker('^Connection');
+    expect(missingBoth).toContain('(?<host>');
+    expect(missingBoth).toContain('(?<port>');
+    const missingPort = profilePatternBlocker('(?<host>\\S+)');
+    expect(missingPort).toContain('(?<port>');
+    expect(missingPort).not.toContain('(?<host>…)');
+  });
+
+  it('finds groups wherever they sit in the pattern — no string matching on the source', () => {
+    // groups in reversed order, nested inside alternation
+    expect(profilePatternBlocker('(?:x|(?<port>\\d+) (?<host>\\S+))')).toBeNull();
   });
 });

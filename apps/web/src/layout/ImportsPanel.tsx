@@ -18,7 +18,12 @@ import {
   validateDeviceStateReport,
   type ValidationIssue,
 } from '@netplan/import-contract';
-import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
+import {
+  cancelImport,
+  getEvidenceBlob,
+  resumeImport,
+  type UploadImportInput,
+} from '../api/imports';
 import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
 import { Button, IconButton, Spinner } from '../ui';
@@ -111,16 +116,7 @@ export function ImportsPanel() {
   );
 }
 
-function ImportWizard({
-  onUpload,
-}: {
-  onUpload: (input: {
-    filename: string;
-    adapter: string;
-    content: string;
-    profileId?: string;
-  }) => Promise<void>;
-}) {
+function ImportWizard({ onUpload }: { onUpload: (input: UploadImportInput) => Promise<void> }) {
   const [adapter, setAdapter] = useState('device-state');
   // a filename-based guess only applies while the operator hasn't chosen
   const [adapterChosen, setAdapterChosen] = useState(false);
@@ -145,8 +141,13 @@ function ImportWizard({
   const effectiveAdapter = adapters.some((a) => a.adapter === adapter) ? adapter : 'device-state';
   const spec = IMPORT_FORMAT_SPECS[effectiveAdapter];
   const adapterProfiles = profiles.filter((p) => p.adapter === effectiveAdapter);
-  const selectedProfile =
-    adapterProfiles.find((p) => p.id === profileId) ?? adapterProfiles[0] ?? null;
+
+  /** The profile an adapter would run under: the chosen one, else the select's default (first). */
+  function profileFor(adapterName: string): ImportProfile | null {
+    const candidates = profiles.filter((p) => p.adapter === adapterName);
+    return candidates.find((p) => p.id === profileId) ?? candidates[0] ?? null;
+  }
+  const selectedProfile = profileFor(effectiveAdapter);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -178,11 +179,7 @@ function ImportWizard({
     }
 
     // a profile-driven adapter needs its profile resolved before upload (#90 A4)
-    const uploadProfile = uploadSpec?.requiresProfile
-      ? uploadAdapter === effectiveAdapter
-        ? selectedProfile
-        : (profiles.find((p) => p.adapter === uploadAdapter) ?? null)
-      : null;
+    const uploadProfile = uploadSpec?.requiresProfile ? profileFor(uploadAdapter) : null;
     if (uploadSpec?.requiresProfile && uploadProfile === null) {
       setPreflight(
         `${uploadSpec.label} needs an Import profile — create one in the section below first.`,

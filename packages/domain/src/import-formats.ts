@@ -522,6 +522,42 @@ export function previewProfilePattern(pattern: string, sample: string): ProfileP
   return { error: null, lines };
 }
 
+/**
+ * The named capture groups the netcat-text adapter maps (entities.ts,
+ * importProfileSchema) — the ONE authoring-side home for that knowledge.
+ * `required` mirrors the adapter's skip rules: a line without a host or a
+ * valid port emits nothing.
+ */
+export const PROFILE_GROUPS = {
+  required: ['host', 'port'],
+  optional: ['status', 'banner'],
+} as const;
+
+/**
+ * Save-time gate for profile authoring (#90 A4): a pattern the schema would
+ * reject (empty, invalid regex) or that can never emit an observation
+ * (missing a required group) is blocked with the reason. Group detection uses
+ * the compiled regex — `(?:pattern)|` matches empty input and exposes every
+ * named group — never string matching on the source.
+ */
+export function profilePatternBlocker(pattern: string): string | null {
+  if (pattern.length === 0) return 'Enter a per-line regular expression first.';
+  let probe: RegExpExecArray | null;
+  try {
+    probe = new RegExp(`(?:${pattern})|`).exec('');
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    return `Not a valid regular expression — ${reason}`;
+  }
+  const groups = Object.keys(probe?.groups ?? {});
+  const missing = PROFILE_GROUPS.required.filter((group) => !groups.includes(group));
+  if (missing.length > 0) {
+    const list = missing.map((group) => `(?<${group}>…)`).join(' and ');
+    return `The pattern needs the named group${missing.length === 1 ? '' : 's'} ${list} — the adapter skips lines without them.`;
+  }
+  return null;
+}
+
 /** Headers live at the top of a file — pre-flight never scans all 64 MB. */
 const PREFLIGHT_SCAN_CHARS = 65_536;
 

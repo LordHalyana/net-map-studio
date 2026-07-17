@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Pencil, TriangleAlert, X } from 'lucide-react';
-import { IMPORT_FORMAT_SPECS, previewProfilePattern, type ImportProfile } from '@netplan/domain';
+import {
+  IMPORT_FORMAT_SPECS,
+  previewProfilePattern,
+  PROFILE_GROUPS,
+  profilePatternBlocker,
+  type ImportProfile,
+} from '@netplan/domain';
 import { buildImportProfile, opCreateEntity, opDeleteEntity, opSetField } from '../state/ops';
 import { useAppStore } from '../state/store';
 import { Button, IconButton } from '../ui';
@@ -26,8 +32,9 @@ export function ImportProfiles() {
       <summary>Import profiles ({list.length})</summary>
       <div className="import-profiles__body">
         <p className="panel-hint">
-          A profile is a per-line regex whose named groups (host, port, status, banner) map
-          free-form scan text — it puts the netcat-text adapter in the wizard above.
+          A profile is a per-line regex whose named groups (
+          {[...PROFILE_GROUPS.required, ...PROFILE_GROUPS.optional].join(', ')}) map free-form scan
+          text — it puts the netcat-text adapter in the wizard above.
         </p>
         {list.length === 0 && editing === null && (
           <p className="panel-empty">No profiles yet — create one to unlock netcat-text imports.</p>
@@ -118,16 +125,19 @@ function ProfileEditor({
       setError('Name the profile first.');
       return;
     }
-    const patternError = previewProfilePattern(pattern, '').error;
+    // one gate for everything the schema rejects or the adapter cannot use:
+    // empty pattern, invalid regex, missing (?<host>)/(?<port>) groups
+    const patternError = profilePatternBlocker(pattern);
     if (patternError) {
-      setError(`Not a valid regular expression — ${patternError}`);
+      setError(patternError);
+      return;
+    }
+    // renaming onto an existing name is as much a duplicate as creating one
+    if (existingNames.has(trimmedName) && trimmedName !== profile?.name) {
+      setError(`A profile named ${trimmedName} already exists.`);
       return;
     }
     if (profile === null) {
-      if (existingNames.has(trimmedName)) {
-        setError(`A profile named ${trimmedName} already exists.`);
-        return;
-      }
       dispatch(
         opCreateEntity(project.id, {
           entityType: 'importProfile',
@@ -161,7 +171,9 @@ function ProfileEditor({
       <input
         className="import-profiles__pattern-input"
         value={pattern}
-        placeholder="Per-line regex with (?<host>…) and (?<port>…) groups"
+        placeholder={`Per-line regex with ${PROFILE_GROUPS.required
+          .map((group) => `(?<${group}>…)`)
+          .join(' and ')} groups`}
         data-testid="profile-pattern-input"
         onChange={(e) => setPattern(e.target.value)}
       />
