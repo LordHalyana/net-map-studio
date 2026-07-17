@@ -157,7 +157,7 @@ The rendered difference between AS-IS and a TO-BE proposal — additions, remova
 ### Grouping (a cross-cutting distinction)
 
 **Containment**:
-Single-parent _physical_ nesting (Site › Zone › Device). Rendered as collapsible container nodes. A Device has exactly one physical parent.
+Single-parent _physical_ nesting (Site › Zone › Device). Rendered as collapsible container nodes. A Device has exactly one physical parent. A contained Device's position is zone-relative; converting it to and from absolute canvas coordinates is owned by the containment position module (`toAbsolute`/`toZoneRelative` in `state/containment.ts`), and a moved network-node's position is written only as a per-view layout hint (`opSetNetworkLayoutHint`), never a Device position.
 
 **Membership**:
 Many-valued _logical_ belonging (a Device's Interface in a Network). Rendered as network-nodes or overlays — never as Containment, so a dual-homed Device in two VLANs is expressible.

@@ -31,6 +31,7 @@ import {
   duplicateDevicesChangeSet,
   opCreateEntity,
   opDeleteEntity,
+  opRestoreAbsolutePosition,
   opSetContainment,
   opSetField,
   opSetMembership,
@@ -67,14 +68,7 @@ export function DeviceInspector({ device, graph }: { device: Device; graph: Proj
       const slot = { x: 24 + (siblings % 4) * 40, y: 44 + Math.floor(siblings / 4) * 56 };
       ops.push(opSetField(projectId, 'device', device.id, 'position', slot, device.position));
     } else if (device.zoneId) {
-      // back to the open canvas: restore an absolute position
-      const zone = graph.zones.find((z) => z.id === device.zoneId);
-      const site = zone ? graph.sites.find((s) => s.id === zone.siteId) : undefined;
-      const absolute = {
-        x: (site?.position.x ?? 0) + (zone?.position.x ?? 0) + device.position.x,
-        y: (site?.position.y ?? 0) + (zone?.position.y ?? 0) + device.position.y,
-      };
-      ops.push(opSetField(projectId, 'device', device.id, 'position', absolute, device.position));
+      ops.push(opRestoreAbsolutePosition(projectId, device, graph));
     }
     dispatch(changeSet(projectId, `Move ${device.name} to zone`, ops));
   }

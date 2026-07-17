@@ -43,6 +43,7 @@ import {
   type Zone,
   type ZoneId,
 } from '@netplan/domain';
+import { toAbsolute } from './containment';
 
 /**
  * Operation builders — the client half of the ADR-0010 spine. The client
@@ -112,6 +113,51 @@ export function opSetContainment(
     zoneId,
     previousZoneId,
   };
+}
+
+/**
+ * Back to the open canvas: positions inside a zone are zone-relative
+ * (ADR-0013), so a device leaving its Zone keeps its spot by writing the
+ * absolute position back (#83).
+ */
+export function opRestoreAbsolutePosition(
+  projectId: ProjectId,
+  device: Device,
+  state: ProjectState,
+): Operation {
+  return opSetField(
+    projectId,
+    'device',
+    device.id,
+    'position',
+    toAbsolute(device, state),
+    device.position,
+  );
+}
+
+/**
+ * A moved network-node's position is a per-(network, view) layout hint,
+ * never a Device position (ADR-0013) — the network stays a projection of
+ * Membership, not a topological node. Returns null when the view's hint
+ * already matches, so drag-stop and Auto-arrange skip no-op writes the
+ * same way (#83).
+ */
+export function opSetNetworkLayoutHint(
+  projectId: ProjectId,
+  network: Network,
+  view: string,
+  position: Position,
+): Operation | null {
+  const previous = network.layoutHints[view];
+  if (previous && previous.x === position.x && previous.y === position.y) return null;
+  return opSetField(
+    projectId,
+    'network',
+    network.id,
+    'layoutHints',
+    { ...network.layoutHints, [view]: position },
+    network.layoutHints,
+  );
 }
 
 export function opCreateLink(projectId: ProjectId, link: Link): Operation {
@@ -406,15 +452,7 @@ function deleteZonesOps(state: ProjectState, zones: Zone[]): Operation[] {
   const ops: Operation[] = [];
   for (const device of impact.devices) {
     ops.push(opSetContainment(projectId, device.id, null, device.zoneId));
-    // back to the open canvas: positions inside a zone are zone-relative, so
-    // restore an absolute one (mirrors DeviceInspector's commitZone)
-    const zone = state.zones.find((z) => z.id === device.zoneId);
-    const site = zone ? state.sites.find((s) => s.id === zone.siteId) : undefined;
-    const absolute = {
-      x: (site?.position.x ?? 0) + (zone?.position.x ?? 0) + device.position.x,
-      y: (site?.position.y ?? 0) + (zone?.position.y ?? 0) + device.position.y,
-    };
-    ops.push(opSetField(projectId, 'device', device.id, 'position', absolute, device.position));
+    ops.push(opRestoreAbsolutePosition(projectId, device, state));
   }
   for (const rule of impact.rules) ops.push(opDeletePolicyRule(projectId, rule));
   for (const flow of impact.flows) {
