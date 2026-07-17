@@ -147,6 +147,15 @@ describe('queryFlows — paged Flow reads behind the engine (#82)', () => {
     expect(page.total).toBe(4);
   });
 
+  it('treats empty-string filters as absent, like the pre-#82 route', () => {
+    const { engine, project } = createTestEngine();
+    engine.applyOperation(createFlowOp(project, makeFlow(project.id)));
+
+    const page = engine.queryFlows(project.id, { endpoint: '', since: '', until: '', limit: 10 });
+
+    expect(page.total).toBe(1);
+  });
+
   it('rejects an unknown project', () => {
     const { engine } = createTestEngine();
     expect(() => engine.queryFlows('missing', { limit: 10 })).toThrow(OperationError);

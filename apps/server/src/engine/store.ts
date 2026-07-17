@@ -363,7 +363,8 @@ export function createEngine(db: Db) {
   function queryFlows(projectId: string, query: FlowQuery): FlowPage {
     requireProject(projectId);
     const conditions = [eq(flows.projectId, projectId)];
-    if (query.endpoint !== undefined) {
+    // Empty-string filters mean "not filtering" — the pre-#82 route contract.
+    if (query.endpoint) {
       // Entity endpoints carry `id`, external literals carry `value` — the
       // stored JSON never has both, so probing each key mirrors the kind check.
       conditions.push(
@@ -376,8 +377,8 @@ export function createEngine(db: Db) {
       );
     }
     if (query.service !== undefined) conditions.push(eq(flows.port, query.service));
-    if (query.since !== undefined) conditions.push(gte(flows.lastSeen, query.since));
-    if (query.until !== undefined) conditions.push(lte(flows.firstSeen, query.until));
+    if (query.since) conditions.push(gte(flows.lastSeen, query.since));
+    if (query.until) conditions.push(lte(flows.firstSeen, query.until));
     const where = and(...conditions);
     const total = db.select({ total: count() }).from(flows).where(where).get()?.total ?? 0;
     const page = db
