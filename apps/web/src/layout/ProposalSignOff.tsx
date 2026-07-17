@@ -17,9 +17,9 @@ import { Button, Spinner } from '../ui';
  */
 export function ProposalSignOff() {
   const project = useAppStore((s) => s.project);
+  const pushToast = useAppStore((s) => s.pushToast);
   const [proposals, setProposals] = useState<ChangeSetRecord[]>([]);
   const [label, setLabel] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -30,17 +30,17 @@ export function ProposalSignOff() {
 
   useEffect(() => {
     refresh()
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => pushToast(e instanceof Error ? e.message : 'Failed to load proposals'))
       .finally(() => setLoaded(true));
-  }, [refresh]);
+  }, [refresh, pushToast]);
 
   if (!project) return null;
 
+  // Register/transition failures are operation results → toast (#99).
   const run = (action: () => Promise<unknown>) => {
-    setError(null);
     void action()
       .then(refresh)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => pushToast(e instanceof Error ? e.message : 'Proposal update failed'));
   };
 
   const transition = (changeSet: ChangeSetRecord, status: ChangeSetReviewStatus) => {
@@ -68,11 +68,6 @@ export function ProposalSignOff() {
   return (
     <section data-testid="proposal-signoff">
       <h4>Proposals ({proposals.length})</h4>
-      {error ? (
-        <p className="diff-panel__error" data-testid="proposal-error">
-          {error}
-        </p>
-      ) : null}
       <div className="proposal-register">
         <input
           data-testid="proposal-label"

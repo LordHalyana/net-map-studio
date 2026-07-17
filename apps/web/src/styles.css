@@ -2820,10 +2820,6 @@ button:disabled {
   color: var(--danger);
   font-size: var(--text-sm);
 }
-.egress-panel__notice {
-  color: var(--ok);
-  font-size: var(--text-sm);
-}
 .egress-form-row {
   display: flex;
   gap: var(--space-2);
@@ -2900,10 +2896,6 @@ button:disabled {
 }
 .proposal-status--rejected {
   color: var(--danger);
-}
-.diff-panel__error {
-  color: var(--danger);
-  font-size: var(--text-sm);
 }
 
 /* ---------- shared UI primitives (ui-polish M2) ---------- */

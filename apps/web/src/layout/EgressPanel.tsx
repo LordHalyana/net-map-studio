@@ -43,12 +43,14 @@ const INDICATOR_LABELS: Record<IndicatorType, string> = {
 
 export function EgressPanel() {
   const project = useAppStore((s) => s.project);
+  const pushToast = useAppStore((s) => s.pushToast);
   const [settings, setSettings] = useState<EgressSettings | null>(null);
   const [audit, setAudit] = useState<EgressAuditRecord[]>([]);
   const [enrichments, setEnrichments] = useState<EnrichmentView[]>([]);
   const [feedEntries, setFeedEntries] = useState<LocalFeedEntry[]>([]);
+  // Inline error is validation-only (#99): the disclosure gate and bad feed
+  // entries. Operation results — saves, lookups, and their failures — go to toasts.
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   // first fetch in flight → loading rows, never misleading empty states (#90 B2)
   const [loaded, setLoaded] = useState(false);
 
@@ -90,25 +92,32 @@ export function EgressPanel() {
 
   useEffect(() => {
     refresh()
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) =>
+        pushToast(e instanceof Error ? e.message : 'Failed to load egress data'),
+      )
       .finally(() => setLoaded(true));
-  }, [refresh]);
+  }, [refresh, pushToast]);
 
   if (!project) return <p className="panel-empty">Open a project first.</p>;
 
   const run = (action: () => Promise<unknown>, successNotice?: string) => {
     setError(null);
-    setNotice(null);
     void action()
       .then(async () => {
-        if (successNotice) setNotice(successNotice);
+        if (successNotice) pushToast(successNotice, 'success');
         setAcknowledged(false);
         await refresh();
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => pushToast(e instanceof Error ? e.message : 'Egress request failed'));
   };
 
   const saveSettings = () => {
+    // Enabling egress requires acknowledging the disclosure. That is form
+    // validation (the server enforces it too), so it stays inline (#99).
+    if (enabled && !acknowledged) {
+      setError('Acknowledge the disclosure before enabling egress for this project.');
+      return;
+    }
     const allowedIndicatorTypes: IndicatorType[] = ['fileHash'];
     if (allowIp) allowedIndicatorTypes.push('ip');
     if (allowDomain) allowedIndicatorTypes.push('domain');
@@ -178,11 +187,6 @@ export function EgressPanel() {
       {error ? (
         <p className="egress-panel__error" data-testid="egress-error">
           {error}
-        </p>
-      ) : null}
-      {notice ? (
-        <p className="egress-panel__notice" data-testid="egress-notice">
-          {notice}
         </p>
       ) : null}
 
