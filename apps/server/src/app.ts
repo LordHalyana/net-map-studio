@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
@@ -8,18 +6,14 @@ import {
   changeSetSchema,
   netplanBundleSchema,
   newId,
-  operationIdSchema,
   operationSchema,
   projectIdSchema,
   projectSchema,
-  reportIdSchema,
-  reportRecordSchema,
   settableEntityTypeSchema,
-  type ReportType,
 } from '@netplan/domain';
 import { buildChangeReport } from './export/change-report.js';
 import { toCsv } from './export/csv.js';
-import { maskSecrets } from '@netplan/domain';
+import { createReportEmitter } from './export/report-emitter.js';
 import { buildHtmlReport } from './export/report.js';
 import { createDb } from './db/index.js';
 import { createEngine, OperationError } from './engine/store.js';
@@ -105,6 +99,8 @@ export async function buildApp(options: AppOptions = {}) {
   });
   const enrichmentService = createEnrichmentService(db, egressDoor);
   const findingsService = createFindingsService(db, engine, provenanceStore, enrichmentService);
+  // Every generated deliverable leaves through here: masked, hashed, audited (M13, #81).
+  const reportEmitter = createReportEmitter(engine);
   app.decorate('importStore', importStore);
   app.decorate('egressDoor', egressDoor);
 
@@ -258,19 +254,16 @@ export async function buildApp(options: AppOptions = {}) {
     // Stream assembly (ADR-0019, M14 #71): the bundle JSON is emitted in
     // chunks, reading each evidence blob one at a time, so a large project's
     // captures never sit fully in memory as one array + one giant string. The
-    // audit hash (M11) is computed over the same bytes as they stream, then
-    // the Report record is written on completion.
-    const hash = createHash('sha256');
-    const hashed = (function* () {
-      for (const chunk of importStore.streamBundle(id, state, new Date().toISOString())) {
-        hash.update(chunk);
-        yield chunk;
-      }
-      recordReport(id, 'bundle', query.redact, {}, '', hash.digest('hex'));
-    })();
-    return reply
-      .header('content-type', 'application/json; charset=utf-8')
-      .send(Readable.from(hashed));
+    // emitter hashes the same bytes as they stream (M11) and writes the
+    // Report record on completion. This is the ONE deliverable that is NOT
+    // secrets-masked: the bundle is the full-fidelity project file (ADR-0016)
+    // and its evidence blobs are SHA-verified on re-import.
+    return reportEmitter.emitStream(reply, id, {
+      type: 'bundle',
+      redactionProfile: query.redact,
+      contentType: 'application/json; charset=utf-8',
+      chunks: importStore.streamBundle(id, state, new Date().toISOString()),
+    });
   });
 
   app.post('/projects/import', async (request, reply) => {
@@ -393,39 +386,6 @@ export async function buildApp(options: AppOptions = {}) {
   // always current, so there is no server-side run to trigger; disposition
   // changes go through POST /projects/:id/operations (SetFindingStatus/Note).
   /** Findings, optionally through the client-safe redaction profile (M12, Q15). */
-  /**
-   * Persist the §3.4 Report record through the Operation log (M11, #68):
-   * every generated deliverable leaves an auditable, undoable trace with the
-   * output's SHA-256 — also the audit hook M13 builds on.
-   */
-  function recordReport(
-    projectId: string,
-    type: ReportType,
-    redactionProfile: string,
-    parameters: Record<string, string>,
-    output: string,
-    /** Precomputed digest for streamed output whose bytes we don't hold as a string. */
-    outputSha256?: string,
-  ): void {
-    engine.applyOperation({
-      id: newId(operationIdSchema),
-      projectId: projectIdSchema.parse(projectId),
-      kind: 'CreateEntity',
-      payload: {
-        entityType: 'report',
-        entity: reportRecordSchema.parse({
-          id: newId(reportIdSchema),
-          projectId,
-          type,
-          createdAt: new Date().toISOString(),
-          redactionProfile,
-          parameters,
-          outputSha256: outputSha256 ?? createHash('sha256').update(output).digest('hex'),
-        }),
-      },
-    });
-  }
-
   function analyzeWithRedaction(id: string, redactParam: unknown): FindingView[] {
     const findings = findingsService.analyze(id).findings;
     const profile =
@@ -452,14 +412,16 @@ export async function buildApp(options: AppOptions = {}) {
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
     const report = findingsService.analyze(id);
     const findings = query.redact ? analyzeWithRedaction(id, query.redact) : report.findings;
-    const html = maskSecrets(
-      buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
-        opSeq: report.opSeq,
-        configHash: report.configHash,
-      }),
-    );
-    recordReport(id, 'findingsReport', query.redact ?? '', {}, html);
-    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+    return reportEmitter.emit(reply, id, {
+      type: 'findingsReport',
+      redactionProfile: query.redact ?? '',
+      contentType: 'text/html; charset=utf-8',
+      build: () =>
+        buildFindingsReport(engine.getState(id), findings, new Date().toISOString(), {
+          opSeq: report.opSeq,
+          configHash: report.configHash,
+        }),
+    });
   });
 
   // ---------- The egress door (ADR-0027): settings, disclosure gate, audit trail ----------
@@ -556,39 +518,48 @@ export async function buildApp(options: AppOptions = {}) {
       entityType === 'findings'
         ? findingsToCsvRows(engine.getState(id), analyzeWithRedaction(id, query.redact))
         : engine.getState(id)[entityType];
-    // secrets never leave in a default export (§3.13, M13 #70)
-    const csv = maskSecrets(toCsv(rows));
-    recordReport(id, 'csv', query.redact ?? '', { entityType }, csv);
-    return reply
-      .header('content-type', 'text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="${entityType}.csv"`)
-      .send(csv);
+    return reportEmitter.emit(reply, id, {
+      type: 'csv',
+      redactionProfile: query.redact ?? '',
+      parameters: { entityType },
+      contentType: 'text/csv; charset=utf-8',
+      filename: `${entityType}.csv`,
+      build: () => toCsv(rows),
+    });
   });
 
   app.get('/projects/:id/report', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
     const query = z.object({ redact: z.string().optional() }).parse(request.query ?? {});
-    const html = maskSecrets(
-      buildHtmlReport(engine.getState(id), new Date().toISOString(), {
-        findings: analyzeWithRedaction(id, query.redact),
-        redactionProfile: query.redact ?? '',
-      }),
-    );
-    recordReport(id, 'designReport', query.redact ?? '', {}, html);
-    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+    return reportEmitter.emit(reply, id, {
+      type: 'designReport',
+      redactionProfile: query.redact ?? '',
+      contentType: 'text/html; charset=utf-8',
+      build: () =>
+        buildHtmlReport(engine.getState(id), new Date().toISOString(), {
+          findings: analyzeWithRedaction(id, query.redact),
+          redactionProfile: query.redact ?? '',
+        }),
+    });
   });
 
-  // AS-IS → TO-BE change report (design §3.12; improvements M11, #68)
+  // AS-IS → TO-BE change report (design §3.12; improvements M11, #68).
+  // Previously the one deliverable that skipped maskSecrets — the emitter
+  // closes that gap (#81).
   app.get('/projects/:id/report/change', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
-    const html = buildChangeReport(
-      engine.getState(id),
-      engine.listChangeSets(id),
-      engine.getLog(id),
-      new Date().toISOString(),
-    );
-    recordReport(id, 'changeReport', '', {}, html);
-    return reply.header('content-type', 'text/html; charset=utf-8').send(html);
+    return reportEmitter.emit(reply, id, {
+      type: 'changeReport',
+      redactionProfile: '',
+      contentType: 'text/html; charset=utf-8',
+      build: () =>
+        buildChangeReport(
+          engine.getState(id),
+          engine.listChangeSets(id),
+          engine.getLog(id),
+          new Date().toISOString(),
+        ),
+    });
   });
 
   // ---------- Reads ----------
