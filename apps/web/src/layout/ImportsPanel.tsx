@@ -4,6 +4,7 @@ import {
   buildCandidates,
   guessImportAdapter,
   IMPORT_FORMAT_SPECS,
+  importSizeBlocker,
   preflightImport,
   wizardImportFormats,
   type Evidence,
@@ -127,13 +128,20 @@ function ImportWizard({
     setIssues(null);
     setValidNote(null);
     setPreflight(null);
+
+    // size gate on the file's TRUE byte count, before reading 64 MB into memory
+    const oversize = importSizeBlocker(file.name, file.size);
+    if (oversize) {
+      setPreflight(oversize);
+      return;
+    }
     const content = await file.text();
 
     const effectiveSpec = IMPORT_FORMAT_SPECS[effectiveAdapter];
     if (effectiveSpec) {
       // cheap string gates shared with the server (#90 A3) — catches the
       // common failure modes instantly instead of via a failed job
-      const blocker = preflightImport(effectiveSpec, file.name, content);
+      const blocker = preflightImport(effectiveSpec, file.name, content, file.size);
       if (blocker) {
         setPreflight(blocker);
         return;

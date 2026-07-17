@@ -42,11 +42,25 @@ export interface ImportFormatSpec {
   exampleProfilePattern?: string;
 }
 
-/** Parse limits every adapter shares (apps/server/src/imports/guards.ts). */
+/**
+ * Parse limits every adapter shares. These are the ONE home — the server's
+ * DEFAULT_PARSE_LIMITS (apps/server/src/imports/guards.ts) derives from them,
+ * so a limit bump lands in the enforcement, the pre-flight and the user-facing
+ * notes together.
+ */
 export const IMPORT_MAX_FILE_BYTES = 64 * 1024 * 1024;
+export const IMPORT_MAX_OBSERVATIONS = 50_000;
 const SHARED_LIMIT_NOTES = [
   'Files over 64 MB are rejected; one import may yield at most 50,000 observations.',
 ];
+
+/** The 64 MB gate on the file's true byte size — callable before reading the file. */
+export function importSizeBlocker(filename: string, sizeBytes: number): string | null {
+  if (sizeBytes > IMPORT_MAX_FILE_BYTES) {
+    return `${filename} exceeds the 64 MB import limit — split the evidence and upload the parts.`;
+  }
+  return null;
+}
 
 const deviceStateExample = {
   schemaVersion: DEVICE_STATE_SCHEMA_VERSION,
@@ -485,10 +499,11 @@ export function preflightImport(
   spec: ImportFormatSpec,
   filename: string,
   content: string,
+  /** True byte size when known (File.size) — string length under-counts multi-byte UTF-8. */
+  sizeBytes: number = content.length,
 ): string | null {
-  if (content.length > IMPORT_MAX_FILE_BYTES) {
-    return `${filename} exceeds the 64 MB import limit — split the evidence and upload the parts.`;
-  }
+  const oversize = importSizeBlocker(filename, sizeBytes);
+  if (oversize) return oversize;
   switch (spec.adapter) {
     case 'nmap-xml':
       return content.includes('<nmaprun')

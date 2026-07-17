@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   IMPORT_FORMAT_SPECS,
   IMPORT_MAX_FILE_BYTES,
+  importSizeBlocker,
   preflightImport,
 } from '../src/import-formats.js';
 
@@ -22,6 +23,15 @@ describe('preflightImport', () => {
   it('rejects any file over the 64 MB limit, naming the limit', () => {
     const oversize = 'x'.repeat(IMPORT_MAX_FILE_BYTES + 1);
     expect(preflightImport(spec('ldif'), 'huge.ldif', oversize)).toContain('64 MB');
+  });
+
+  it('judges size by true byte count when provided — multi-byte UTF-8 cannot sneak under', () => {
+    // few characters, but a byte size over the limit (as File.size would report)
+    expect(
+      preflightImport(spec('ldif'), 'huge.ldif', 'dn: x', IMPORT_MAX_FILE_BYTES + 1),
+    ).toContain('64 MB');
+    expect(importSizeBlocker('ok.ldif', IMPORT_MAX_FILE_BYTES)).toBeNull();
+    expect(importSizeBlocker('huge.ldif', IMPORT_MAX_FILE_BYTES + 1)).toContain('64 MB');
   });
 
   it('nmap-xml: rejects XML without an <nmaprun> root', () => {

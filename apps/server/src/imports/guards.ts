@@ -1,4 +1,5 @@
 import { gunzipSync } from 'node:zlib';
+import { IMPORT_MAX_FILE_BYTES, IMPORT_MAX_OBSERVATIONS } from '@netplan/domain';
 import { z } from 'zod';
 
 /**
@@ -32,11 +33,13 @@ export const parseLimitsSchema = z.object({
 });
 
 export const DEFAULT_PARSE_LIMITS: ParseLimits = {
-  maxFileBytes: 64 * 1024 * 1024,
+  // file-size and observation ceilings live in @netplan/domain, next to the
+  // format descriptors that document them to the user (#90 A0/A3)
+  maxFileBytes: IMPORT_MAX_FILE_BYTES,
   maxParseMillis: 30_000,
   maxDepth: 64,
   maxDecompressionRatio: 100,
-  maxObservations: 50_000,
+  maxObservations: IMPORT_MAX_OBSERVATIONS,
   maxConcurrentParses: 2,
   maxQueuedParses: 16,
 };
