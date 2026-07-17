@@ -2811,10 +2811,6 @@ button:disabled {
 .import-job__status--cancelled {
   color: var(--warn);
 }
-.import-job__control {
-  margin-left: 6px;
-  font-size: var(--text-xs);
-}
 
 /* proposal sign-off (P4-M6) */
 .proposal-register {

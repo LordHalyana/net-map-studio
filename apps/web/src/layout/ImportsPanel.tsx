@@ -72,23 +72,23 @@ export function ImportsPanel() {
                 </span>
               </button>
               {job.status === 'pending' || job.status === 'parsing' ? (
-                <button
-                  type="button"
-                  className="import-job__control"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   data-testid="import-cancel-button"
                   onClick={() => void controlImport('cancel', job.id)}
                 >
                   cancel
-                </button>
+                </Button>
               ) : job.status === 'cancelled' ? (
-                <button
-                  type="button"
-                  className="import-job__control"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   data-testid="import-resume-button"
                   onClick={() => void controlImport('resume', job.id)}
                 >
                   resume
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -201,14 +201,13 @@ function ImportWizard({
         </select>
       </label>
       <div className="import-wizard__upload">
-        <button
-          type="button"
+        <Button
           data-testid="import-upload-button"
           disabled={busy}
           onClick={() => fileInput.current?.click()}
         >
           {busy ? 'Importing…' : '⇪ Import evidence file…'}
-        </button>
+        </Button>
         {validNote && (
           <span className="import-wizard__valid" data-testid="import-validation-ok">
             <Check size={12} className="inline-icon" aria-hidden /> {validNote}
@@ -426,8 +425,8 @@ function ImportReview() {
           </p>
           <ConflictList />
           <div className="import-review__actions">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               data-testid="import-commit-button"
               disabled={pendingConflicts.length > 0}
               title={
@@ -438,20 +437,20 @@ function ImportReview() {
               onClick={() => void commit()}
             >
               <Check size={12} className="inline-icon" aria-hidden /> Commit import
-            </button>
+            </Button>
           </div>
         </>
       )}
       {job.status === 'committed' && (
         <div className="import-review__actions">
           <p>Committed as one ChangeSet — rollback inverts it atomically.</p>
-          <button
-            type="button"
+          <Button
+            variant="danger"
             data-testid="import-rollback-button"
             onClick={() => void rollback()}
           >
             ⤺ Roll back import
-          </button>
+          </Button>
         </div>
       )}
       <ObservationSummary observations={observations} />
@@ -540,13 +539,14 @@ function EvidenceViewer({ evidence, job }: { evidence: Evidence[]; job: ImportJo
             parser {job.parserName} v{record.parserVersion}
             {record.chunkRef ? ` · chunk ${record.chunkRef}` : ''}
           </div>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             data-testid="evidence-view-button"
             onClick={() => void view(record)}
           >
             {viewing === record.id ? 'Hide content' : 'View content'}
-          </button>
+          </Button>
           {viewing === record.id && content !== null && (
             <pre className="evidence-viewer__content" data-testid="evidence-content">
               {content.length > 4000 ? `${content.slice(0, 4000)}…` : content}
