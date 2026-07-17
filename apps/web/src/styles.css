@@ -1525,13 +1525,6 @@ button:disabled {
   color: var(--text);
 }
 
-.findings-device-filter button {
-  padding: 0 3px;
-  border: none;
-  background: none;
-  color: var(--text-dim);
-}
-
 /* canvas readability (M4, #61): compact leaves, minimap, callout leaders */
 .device-node--compact {
   min-width: 0;
@@ -2572,19 +2565,6 @@ button:disabled {
   color: var(--text-dim);
   font-size: var(--text-sm);
 }
-.findings-rerun {
-  background: var(--accent);
-  color: var(--on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.findings-rerun:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 .findings-filters {
   display: flex;
   align-items: center;
@@ -2708,26 +2688,6 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
-}
-.finding-action {
-  background: var(--bg-raised);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-.finding-action:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.finding-action--active {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
-}
-.finding-action:disabled {
-  cursor: default;
 }
 .findings-coverage {
   margin-top: 24px;
