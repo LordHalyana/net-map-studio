@@ -42,6 +42,63 @@ test.describe('A1: expected-format helper panel', () => {
     ).toBeVisible();
   });
 
+  /**
+   * #95: expansion must be recorded against the adapter whose panel was
+   * actually opened, however fast the operator then switches. Opening and
+   * switching in one task pins the race the loop above only hits
+   * intermittently; both halves matter, so both are asserted.
+   *
+   * `dispatchEvent` rather than `selectOption` because pinning the race needs
+   * both actions in a single task, which the awaited locator API cannot
+   * express. A synthetic `change` reaches React here only because it takes the
+   * native change path for <select> — the same trick is silently swallowed by
+   * an <input>'s value tracker.
+   */
+  test('a help panel opened as the adapter switches is recorded against the right adapter', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.getByTestId('nav-imports').click();
+    await expect(page.getByTestId('imports-panel')).toBeVisible();
+
+    await page.getByTestId('import-adapter-select').selectOption('nmap-xml');
+    await expect(page.getByTestId('import-format-help')).toBeVisible();
+
+    await page.evaluate(() => {
+      document.querySelector<HTMLElement>('[data-testid="import-format-help"] summary')?.click();
+      const select = document.querySelector<HTMLSelectElement>(
+        '[data-testid="import-adapter-select"]',
+      );
+      if (!select) throw new Error('adapter select missing');
+      select.value = 'tshark-flows';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await expect(page.getByTestId('import-adapter-select')).toHaveValue('tshark-flows');
+    // tshark-flows was never expanded, so it must arrive collapsed
+    await expect(page.getByTestId('import-format-help')).toHaveJSProperty('open', false);
+
+    // ...and nmap-xml, the panel actually opened, is still remembered (#90 A1)
+    await page.getByTestId('import-adapter-select').selectOption('nmap-xml');
+    await expect(page.getByTestId('import-format-help')).toHaveJSProperty('open', true);
+  });
+
+  // the panel toggles from a cancelled summary click (#95), so the keyboard
+  // path the browser would otherwise give us for free is worth holding onto
+  test('the help panel still toggles from the keyboard', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('nav-imports').click();
+    await page.getByTestId('import-adapter-select').selectOption('nmap-xml');
+    const help = page.getByTestId('import-format-help');
+    await expect(help).toHaveJSProperty('open', false);
+
+    await help.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(help).toHaveJSProperty('open', true);
+    await page.keyboard.press('Space');
+    await expect(help).toHaveJSProperty('open', false);
+  });
+
   test('the minimal example downloads as a working starter file', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('nav-imports').click();
