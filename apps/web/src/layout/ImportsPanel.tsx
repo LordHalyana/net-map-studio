@@ -314,13 +314,23 @@ function FormatHelp({
   }
 
   return (
-    <details
-      className="format-help"
-      data-testid="import-format-help"
-      open={open}
-      onToggle={(e) => onToggle(e.currentTarget.open)}
-    >
-      <summary>Expected format</summary>
+    <details className="format-help" data-testid="import-format-help" open={open}>
+      {/*
+        React alone opens and closes this panel. The native `toggle` event is
+        asynchronous, so letting the browser drive lets a click land after the
+        operator has switched adapters — recording this panel's expansion
+        against whichever adapter is showing by then (#95). Cancelling the
+        summary's default keeps the DOM from ever diverging from `open`.
+        Keyboard toggling still works: Enter and Space fire a click on summary.
+      */}
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          onToggle(!open);
+        }}
+      >
+        Expected format
+      </summary>
       <div className="format-help__body">
         <p className="format-help__summary">{spec.summary}</p>
         <ul className="format-help__chips" aria-label="Accepted files">
