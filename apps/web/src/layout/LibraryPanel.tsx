@@ -1,15 +1,16 @@
 import { useRef, useState, type DragEvent } from 'react';
 import {
   Building2,
+  ChevronDown,
   Cloud,
   DoorOpen,
   FileText,
   Gauge,
+  GripVertical,
   ImagePlus,
   LayoutGrid,
   Map,
   Search,
-  Settings,
   ShieldCheck,
   TriangleAlert,
   Upload,
@@ -29,6 +30,16 @@ import {
 import type { DeviceType } from '@netplan/domain';
 
 export const DND_MIME = 'application/x-netplan-device-type';
+
+const COLLAPSED_KEY = 'netplan.libraryCollapsed';
+
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}') as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
 
 let dropOffset = 0;
 
@@ -94,162 +105,234 @@ export function LibraryPanel() {
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
   const [filter, setFilter] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
   const iconInput = useRef<HTMLInputElement>(null);
 
   const matches = (label: string) =>
     filter.trim() === '' || label.toLowerCase().includes(filter.trim().toLowerCase());
 
+  // an active search overrides collapse so matches are never hidden
+  const filtering = filter.trim() !== '';
+  const isOpen = (key: string) => filtering || !collapsed[key];
+
+  function toggleCategory(key: string) {
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  const structureItems = [
+    { label: 'Network / VLAN', icon: Cloud, testId: 'add-network', onAdd: addNetwork },
+    { label: 'Site', icon: Building2, testId: 'add-site', onAdd: addSite },
+    {
+      label: 'Zone',
+      icon: LayoutGrid,
+      testId: 'add-zone',
+      onAdd: addZone,
+      disabled: !graph || graph.sites.length === 0,
+      title: graph?.sites.length ? 'Add a zone to the first site' : 'Add a site first',
+    },
+  ].filter((item) => matches(item.label));
+
+  const anyMatch =
+    structureItems.length > 0 ||
+    libraryCatalog.some((category) => category.items.some((item) => matches(item.label)));
+
   return (
     <nav className="library-panel" data-testid="library-panel">
-      <div className="library-brand">
-        <span className="library-brand__tile">
-          <Waypoints size={18} aria-hidden />
-        </span>
-        <div className="library-brand__text">
-          <span className="library-brand__name">NetPlan Studio</span>
-          <span className="library-brand__tagline">Network planning, simplified.</span>
+      <div className="library-panel__fixed">
+        <div className="library-brand">
+          <span className="library-brand__tile">
+            <Waypoints size={18} aria-hidden />
+          </span>
+          <div className="library-brand__text">
+            <span className="library-brand__name">NetPlan Studio</span>
+            <span className="library-brand__tagline">Network planning, simplified.</span>
+          </div>
         </div>
-      </div>
-      <section className="library-category primary-nav" data-testid="primary-nav">
-        <ul>
-          {(
-            [
-              ['overview', Gauge, 'Overview'],
-              ['canvas', Map, 'Canvas'],
-              ['networks', Waypoints, 'Networks and VLANs'],
-              ['rules', ShieldCheck, 'Rules'],
-              ['imports', Upload, 'Imports and Evidence'],
-              ['identities', Users, 'Users and Roles'],
-              ['findings', TriangleAlert, 'Findings'],
-              ['reports', FileText, 'Reports'],
-              ['egress', DoorOpen, 'Egress and Threat Intel'],
-              ['settings', Settings, 'Settings'],
-            ] as const
-          ).map(([key, Icon, label]) => (
-            <li key={key}>
-              <button
-                type="button"
-                className={`library-item${view === key ? ' library-item--active' : ''}`}
-                data-testid={`nav-${key}`}
-                aria-current={view === key ? 'page' : undefined}
-                onClick={() => setView(key)}
-              >
-                <span className="library-item__glyph">
-                  <Icon size={15} aria-hidden />
-                </span>
-                {label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <h2 className="panel-title">Library</h2>
-      <label className="library-search">
-        <Search size={13} aria-hidden />
-        <input
-          type="search"
-          placeholder="Search components…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          data-testid="library-search"
-        />
-      </label>
-      <section className="library-category">
-        <h3>Structure</h3>
-        <ul>
-          <li>
-            <button
-              type="button"
-              className="library-item"
-              data-testid="add-network"
-              onClick={addNetwork}
-            >
-              <span className="library-item__glyph">
-                <Cloud size={15} aria-hidden />
-              </span>
-              Network / VLAN
-            </button>
-          </li>
-          <li>
-            <button type="button" className="library-item" data-testid="add-site" onClick={addSite}>
-              <span className="library-item__glyph">
-                <Building2 size={15} aria-hidden />
-              </span>
-              Site
-            </button>
-          </li>
-          <li>
-            <button
-              type="button"
-              className="library-item"
-              data-testid="add-zone"
-              onClick={addZone}
-              disabled={!graph || graph.sites.length === 0}
-              title={graph?.sites.length ? 'Add a zone to the first site' : 'Add a site first'}
-            >
-              <span className="library-item__glyph">
-                <LayoutGrid size={15} aria-hidden />
-              </span>
-              Zone
-            </button>
-          </li>
-        </ul>
-      </section>
-      {libraryCatalog.map((category) => {
-        const visible = category.items.filter((item) => matches(item.label));
-        if (visible.length === 0) return null;
-        return (
-          <section key={category.key} className="library-category">
-            <h3>{category.label}</h3>
-            <div className="library-grid">
-              {visible.map((item) => (
+        <section className="library-category primary-nav" data-testid="primary-nav">
+          <ul>
+            {(
+              [
+                ['overview', Gauge, 'Overview'],
+                ['canvas', Map, 'Canvas'],
+                ['networks', Waypoints, 'Networks and VLANs'],
+                ['rules', ShieldCheck, 'Rules'],
+                ['imports', Upload, 'Imports and Evidence'],
+                ['identities', Users, 'Users and Roles'],
+                ['findings', TriangleAlert, 'Findings'],
+                ['reports', FileText, 'Reports'],
+                ['egress', DoorOpen, 'Egress and Threat Intel'],
+              ] as const
+            ).map(([key, Icon, label]) => (
+              <li key={key}>
                 <button
-                  key={item.deviceType}
                   type="button"
-                  className="library-tile"
-                  data-testid={`library-item-${item.deviceType}`}
-                  title={item.label}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(DND_MIME, item.deviceType);
-                    event.dataTransfer.effectAllowed = 'copy';
-                  }}
-                  onClick={() => addDevice(item.deviceType)}
+                  className={`library-item${view === key ? ' library-item--active' : ''}`}
+                  data-testid={`nav-${key}`}
+                  aria-current={view === key ? 'page' : undefined}
+                  onClick={() => setView(key)}
                 >
-                  <item.icon size={17} aria-hidden />
-                  <span className="library-tile__label">{item.label}</span>
+                  <span className="library-item__glyph">
+                    <Icon size={15} aria-hidden />
+                  </span>
+                  {label}
                 </button>
-              ))}
-            </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <h2 className="panel-title">Library</h2>
+        <label className="library-search">
+          <Search size={13} aria-hidden />
+          <input
+            type="search"
+            placeholder="Search components…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            data-testid="library-search"
+          />
+        </label>
+      </div>
+      <div className="library-panel__scroll">
+        {structureItems.length > 0 && (
+          <section className="library-category">
+            <CategoryHead
+              label="Structure"
+              count={structureItems.length}
+              open={isOpen('structure')}
+              onToggle={() => toggleCategory('structure')}
+              testId="library-cat-structure"
+            />
+            {isOpen('structure') && (
+              <ul>
+                {structureItems.map((item) => (
+                  <li key={item.testId}>
+                    <button
+                      type="button"
+                      className="library-item"
+                      data-testid={item.testId}
+                      onClick={item.onAdd}
+                      disabled={item.disabled}
+                      title={item.title}
+                    >
+                      <span className="library-item__glyph">
+                        <item.icon size={15} aria-hidden />
+                      </span>
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
-        );
-      })}
+        )}
+        {libraryCatalog.map((category) => {
+          const visible = category.items.filter((item) => matches(item.label));
+          if (visible.length === 0) return null;
+          return (
+            <section key={category.key} className="library-category">
+              <CategoryHead
+                label={category.label}
+                count={visible.length}
+                open={isOpen(category.key)}
+                onToggle={() => toggleCategory(category.key)}
+                testId={`library-cat-${category.key}`}
+              />
+              {isOpen(category.key) && (
+                <ul>
+                  {visible.map((item) => (
+                    <li key={item.deviceType}>
+                      <button
+                        type="button"
+                        className="library-item"
+                        data-testid={`library-item-${item.deviceType}`}
+                        title={item.label}
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(DND_MIME, item.deviceType);
+                          event.dataTransfer.effectAllowed = 'copy';
+                        }}
+                        onClick={() => addDevice(item.deviceType)}
+                      >
+                        <span className="library-item__glyph">
+                          <item.icon size={15} aria-hidden />
+                        </span>
+                        {item.label}
+                        <GripVertical size={13} className="library-item__grip" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })}
+        {!anyMatch && (
+          <p className="panel-empty library-empty" data-testid="library-empty">
+            No components match “{filter.trim()}”.
+          </p>
+        )}
+        <button
+          type="button"
+          className="library-dropzone"
+          data-testid="library-dropzone"
+          onClick={() => iconInput.current?.click()}
+          onDragOver={(event: DragEvent) => event.preventDefault()}
+          onDrop={(event: DragEvent) => {
+            event.preventDefault();
+            addCustomWithIcon(event.dataTransfer.files[0]);
+          }}
+          title="Drop or pick an icon image to add a custom component carrying it"
+        >
+          <ImagePlus size={16} aria-hidden />
+          Drag custom icon here or click to upload
+        </button>
+        <input
+          ref={iconInput}
+          type="file"
+          accept="image/png,image/svg+xml,image/jpeg"
+          style={{ display: 'none' }}
+          data-testid="library-dropzone-input"
+          onChange={(e) => {
+            addCustomWithIcon(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+      </div>
+    </nav>
+  );
+}
+
+/** Collapsible category header: label, item count, chevron (prototype variant A). */
+function CategoryHead({
+  label,
+  count,
+  open,
+  onToggle,
+  testId,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  testId: string;
+}) {
+  return (
+    <h3>
       <button
         type="button"
-        className="library-dropzone"
-        data-testid="library-dropzone"
-        onClick={() => iconInput.current?.click()}
-        onDragOver={(event: DragEvent) => event.preventDefault()}
-        onDrop={(event: DragEvent) => {
-          event.preventDefault();
-          addCustomWithIcon(event.dataTransfer.files[0]);
-        }}
-        title="Drop or pick an icon image to add a custom component carrying it"
+        className="library-cat__toggle"
+        aria-expanded={open}
+        data-testid={testId}
+        onClick={onToggle}
       >
-        <ImagePlus size={16} aria-hidden />
-        Drag custom icon here or click to upload
+        {label}
+        <span className="library-cat__count">{count}</span>
+        <ChevronDown size={13} className="library-cat__chev" aria-hidden />
       </button>
-      <input
-        ref={iconInput}
-        type="file"
-        accept="image/png,image/svg+xml,image/jpeg"
-        style={{ display: 'none' }}
-        data-testid="library-dropzone-input"
-        onChange={(e) => {
-          addCustomWithIcon(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-    </nav>
+    </h3>
   );
 }
