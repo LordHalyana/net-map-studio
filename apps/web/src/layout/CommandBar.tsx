@@ -32,6 +32,8 @@ export function CommandBar() {
   const syncError = useAppStore((s) => s.syncError);
   const pendingOps = useAppStore((s) => s.pendingOps);
   const lastSavedAt = useAppStore((s) => s.lastSavedAt);
+  const view = useAppStore((s) => s.view);
+  const setView = useAppStore((s) => s.setView);
 
   // tick so the relative timestamp stays honest
   const [now, setNow] = useState(() => Date.now());
@@ -70,9 +72,17 @@ export function CommandBar() {
       )}
       <GlobalSearch />
       <ExportMenu />
-      <div className="command-bar__avatar" title="Operator (single-operator, ADR-0001)">
+      <button
+        type="button"
+        className={`command-bar__avatar${view === 'settings' ? ' command-bar__avatar--active' : ''}`}
+        data-testid="nav-settings"
+        title="Operator — open Settings (single-operator, ADR-0001)"
+        aria-label="Settings"
+        aria-current={view === 'settings' ? 'page' : undefined}
+        onClick={() => setView('settings')}
+      >
         OP
-      </div>
+      </button>
     </header>
   );
 }
