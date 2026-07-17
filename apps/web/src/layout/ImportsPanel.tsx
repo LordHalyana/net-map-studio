@@ -10,6 +10,7 @@ import {
   type Evidence,
   type ImportFormatSpec,
   type ImportJob,
+  type ImportProfile,
   type Observation,
 } from '@netplan/domain';
 import {
@@ -17,15 +18,19 @@ import {
   validateDeviceStateReport,
   type ValidationIssue,
 } from '@netplan/import-contract';
-import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
+import {
+  cancelImport,
+  getEvidenceBlob,
+  resumeImport,
+  type UploadImportInput,
+} from '../api/imports';
 import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
 import { Button, IconButton, Spinner } from '../ui';
 import { ConflictList } from './ConflictList';
+import { ImportProfiles } from './ImportProfiles';
 
-// dropdown entries and extension guessing derive from the shared, round-trip
-// tested format descriptors (#90 A0) — no adapter list lives in the UI
-const ADAPTERS = wizardImportFormats();
+const NO_PROFILES: ImportProfile[] = [];
 
 /**
  * "Imports and Evidence" (design §3.2B/E, plan M7): the import wizard, the
@@ -57,6 +62,7 @@ export function ImportsPanel() {
       <div className="imports-panel__column imports-panel__jobs">
         <h2 className="panel-title">Imports and Evidence</h2>
         <ImportWizard onUpload={uploadImport} />
+        <ImportProfiles />
         <ul className="imports-panel__job-list" data-testid="import-job-list">
           {importJobs.length === 0 &&
             (loaded ? (
@@ -110,11 +116,7 @@ export function ImportsPanel() {
   );
 }
 
-function ImportWizard({
-  onUpload,
-}: {
-  onUpload: (input: { filename: string; adapter: string; content: string }) => Promise<void>;
-}) {
+function ImportWizard({ onUpload }: { onUpload: (input: UploadImportInput) => Promise<void> }) {
   const [adapter, setAdapter] = useState('device-state');
   // a filename-based guess only applies while the operator hasn't chosen
   const [adapterChosen, setAdapterChosen] = useState(false);
@@ -127,13 +129,32 @@ function ImportWizard({
   const [validNote, setValidNote] = useState<string | null>(null);
   // advisory pre-flight blocker for the text formats (#90 A3)
   const [preflight, setPreflight] = useState<string | null>(null);
+  // which ImportProfile drives a profile-driven adapter (#90 A4); null falls
+  // back to the first profile for the adapter, so the select needs no effect
+  const [profileId, setProfileId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const spec = IMPORT_FORMAT_SPECS[adapter];
+  // a profile in the project puts its adapter (netcat-text) in the dropdown (#90 A4)
+  const profiles = useAppStore((s) => s.graph?.importProfiles) ?? NO_PROFILES;
+  const adapters = wizardImportFormats(profiles);
+  // deleting the last profile removes its adapter — never strand the select
+  // on an entry that no longer exists
+  const effectiveAdapter = adapters.some((a) => a.adapter === adapter) ? adapter : 'device-state';
+  const spec = IMPORT_FORMAT_SPECS[effectiveAdapter];
+  const adapterProfiles = profiles.filter((p) => p.adapter === effectiveAdapter);
+
+  /** The profile an adapter would run under: the chosen one, else the select's default (first). */
+  function profileFor(adapterName: string): ImportProfile | null {
+    const candidates = profiles.filter((p) => p.adapter === adapterName);
+    return candidates.find((p) => p.id === profileId) ?? candidates[0] ?? null;
+  }
+  const selectedProfile = profileFor(effectiveAdapter);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    const effectiveAdapter = adapterChosen ? adapter : guessImportAdapter(file.name);
-    setAdapter(effectiveAdapter);
+    const uploadAdapter = adapterChosen
+      ? effectiveAdapter
+      : guessImportAdapter(file.name, profiles);
+    setAdapter(uploadAdapter);
     setIssues(null);
     setValidNote(null);
     setPreflight(null);
@@ -146,18 +167,27 @@ function ImportWizard({
     }
     const content = await file.text();
 
-    const effectiveSpec = IMPORT_FORMAT_SPECS[effectiveAdapter];
-    if (effectiveSpec) {
+    const uploadSpec = IMPORT_FORMAT_SPECS[uploadAdapter];
+    if (uploadSpec) {
       // cheap string gates shared with the server (#90 A3) — catches the
       // common failure modes instantly instead of via a failed job
-      const blocker = preflightImport(effectiveSpec, file.name, content, file.size);
+      const blocker = preflightImport(uploadSpec, file.name, content, file.size);
       if (blocker) {
         setPreflight(blocker);
         return;
       }
     }
 
-    if (effectiveAdapter === 'device-state') {
+    // a profile-driven adapter needs its profile resolved before upload (#90 A4)
+    const uploadProfile = uploadSpec?.requiresProfile ? profileFor(uploadAdapter) : null;
+    if (uploadSpec?.requiresProfile && uploadProfile === null) {
+      setPreflight(
+        `${uploadSpec.label} needs an Import profile — create one in the section below first.`,
+      );
+      return;
+    }
+
+    if (uploadAdapter === 'device-state') {
       // full contract validation in-browser — the same diagnosis the CLI
       // prints, with zero server round-trip (#90 A2)
       let document: unknown;
@@ -184,7 +214,12 @@ function ImportWizard({
 
     setBusy(true);
     try {
-      await onUpload({ filename: file.name, adapter: effectiveAdapter, content });
+      await onUpload({
+        filename: file.name,
+        adapter: uploadAdapter,
+        content,
+        ...(uploadProfile ? { profileId: uploadProfile.id } : {}),
+      });
     } finally {
       setBusy(false);
     }
@@ -196,19 +231,35 @@ function ImportWizard({
         Source format
         <select
           data-testid="import-adapter-select"
-          value={adapter}
+          value={effectiveAdapter}
           onChange={(e) => {
             setAdapter(e.target.value);
             setAdapterChosen(true);
           }}
         >
-          {ADAPTERS.map((a) => (
+          {adapters.map((a) => (
             <option key={a.adapter} value={a.adapter}>
               {a.label}
             </option>
           ))}
         </select>
       </label>
+      {spec?.requiresProfile && (
+        <label>
+          Import profile
+          <select
+            data-testid="import-profile-select"
+            value={selectedProfile?.id ?? ''}
+            onChange={(e) => setProfileId(e.target.value)}
+          >
+            {adapterProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="import-wizard__upload">
         <Button
           data-testid="import-upload-button"

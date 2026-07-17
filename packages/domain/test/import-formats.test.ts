@@ -3,6 +3,8 @@ import { validateDeviceStateReport } from '@netplan/import-contract';
 import {
   guessImportAdapter,
   IMPORT_FORMAT_SPECS,
+  previewProfilePattern,
+  profilePatternBlocker,
   wizardImportFormats,
 } from '../src/import-formats.js';
 
@@ -56,5 +58,87 @@ describe('guessImportAdapter', () => {
     expect(guessImportAdapter('capture.zeek')).toBe('zeek-conn');
     expect(guessImportAdapter('report.json')).toBe('device-state');
     expect(guessImportAdapter('anything.bin')).toBe('device-state');
+  });
+
+  it('guesses netcat-text for .txt only once a profile unlocks it', () => {
+    expect(guessImportAdapter('scan.txt')).toBe('device-state');
+    expect(guessImportAdapter('scan.txt', [{ adapter: 'netcat-text' }])).toBe('netcat-text');
+  });
+});
+
+/** #90 A4: a profile for an adapter puts it in the wizard; none keeps it out. */
+describe('wizardImportFormats with profiles', () => {
+  it('includes netcat-text once a profile exists for it', () => {
+    const adapters = wizardImportFormats([{ adapter: 'netcat-text' }]).map((s) => s.adapter);
+    expect(adapters).toContain('netcat-text');
+  });
+
+  it('a profile for a different adapter unlocks nothing', () => {
+    const adapters = wizardImportFormats([{ adapter: 'other-text' }]).map((s) => s.adapter);
+    expect(adapters).not.toContain('netcat-text');
+  });
+});
+
+/** #90 A4: the live regex tester behind profile authoring. */
+describe('previewProfilePattern', () => {
+  const netcatPattern = IMPORT_FORMAT_SPECS['netcat-text']?.exampleProfilePattern ?? '';
+  const netcatExample = IMPORT_FORMAT_SPECS['netcat-text']?.example ?? '';
+
+  it('reports captured groups per sample line, null for non-matches', () => {
+    const result = previewProfilePattern(netcatPattern, netcatExample);
+    expect(result.error).toBeNull();
+    expect(result.lines).toHaveLength(3);
+    expect(result.lines[0]).toEqual({
+      line: 'Connection to 10.0.10.21 443 port [tcp/https] succeeded!',
+      groups: { host: '10.0.10.21', port: '443', banner: 'https', status: 'succeeded' },
+    });
+    // the "refused" nc line does not match the example pattern's syntax
+    expect(result.lines[2]?.groups).toBeNull();
+  });
+
+  it('skips blank lines and surfaces an invalid pattern as an error', () => {
+    expect(previewProfilePattern(netcatPattern, '\n\n').lines).toEqual([]);
+    const invalid = previewProfilePattern('(?<host>[', 'anything');
+    expect(invalid.error).toMatch(/regular expression/i);
+    expect(invalid.lines).toEqual([]);
+  });
+
+  it('a pattern without named groups still previews, with empty groups', () => {
+    const result = previewProfilePattern('^Connection', 'Connection to somewhere\nnope');
+    expect(result.error).toBeNull();
+    expect(result.lines[0]?.groups).toEqual({});
+    expect(result.lines[1]?.groups).toBeNull();
+  });
+});
+
+/**
+ * #90 A4: the save-time gate for profile authoring. A profile whose pattern
+ * cannot yield observations (no host/port group) would only ever produce a
+ * dead import — block it with the reason instead.
+ */
+describe('profilePatternBlocker', () => {
+  it('passes the descriptor example pattern', () => {
+    expect(
+      profilePatternBlocker(IMPORT_FORMAT_SPECS['netcat-text']?.exampleProfilePattern ?? ''),
+    ).toBeNull();
+  });
+
+  it('blocks an empty pattern and an invalid regex', () => {
+    expect(profilePatternBlocker('')).toMatch(/regular expression/i);
+    expect(profilePatternBlocker('(?<host>[')).toMatch(/regular expression/i);
+  });
+
+  it('blocks a pattern missing the load-bearing host/port groups, naming them', () => {
+    const missingBoth = profilePatternBlocker('^Connection');
+    expect(missingBoth).toContain('(?<host>');
+    expect(missingBoth).toContain('(?<port>');
+    const missingPort = profilePatternBlocker('(?<host>\\S+)');
+    expect(missingPort).toContain('(?<port>');
+    expect(missingPort).not.toContain('(?<host>…)');
+  });
+
+  it('finds groups wherever they sit in the pattern — no string matching on the source', () => {
+    // groups in reversed order, nested inside alternation
+    expect(profilePatternBlocker('(?:x|(?<port>\\d+) (?<host>\\S+))')).toBeNull();
   });
 });

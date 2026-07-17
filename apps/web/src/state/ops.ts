@@ -4,6 +4,8 @@ import {
   changeSetIdSchema,
   deviceIdSchema,
   deviceSchema,
+  importProfileIdSchema,
+  importProfileSchema,
   interfaceIdSchema,
   interfaceSchema,
   linkIdSchema,
@@ -27,6 +29,7 @@ import {
   type DeviceType,
   type EntityPayload,
   type Flow,
+  type ImportProfile,
   type Interface,
   type InterfaceId,
   type Link,
@@ -234,6 +237,22 @@ export function buildLink(
     target: { kind: 'interface', id: targetInterfaceId },
     kind,
     label,
+  });
+}
+
+/** Mint an ImportProfile (#90 A4) — `adapter` comes from the schema default (netcat-text). */
+export function buildImportProfile(
+  projectId: ProjectId,
+  name: string,
+  pattern: string,
+  description: string,
+): ImportProfile {
+  return importProfileSchema.parse({
+    id: newId(importProfileIdSchema),
+    projectId,
+    name,
+    pattern,
+    description,
   });
 }
 
