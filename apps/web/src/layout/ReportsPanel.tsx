@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { newId, operationIdSchema, projectIdSchema, reportIdSchema } from '@netplan/domain';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
 import { useAppStore } from '../state/store';
+import { Button } from '../ui';
 
 const CSV_ENTITIES = [
   'devices',
@@ -85,8 +86,7 @@ export function ReportsPanel() {
           </select>
         </label>
         <div className="reports-panel__buttons">
-          <button
-            type="button"
+          <Button
             data-testid="reports-generate-bundle"
             onClick={() => {
               void downloadNetplanBundle(project.id, project.name)
@@ -97,48 +97,34 @@ export function ReportsPanel() {
             }}
           >
             Project bundle (.netplan)
-          </button>
-          <button
-            type="button"
-            data-testid="reports-generate-design"
-            onClick={() => openReport('/report')}
-          >
+          </Button>
+          <Button data-testid="reports-generate-design" onClick={() => openReport('/report')}>
             Design report (HTML)
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             data-testid="reports-generate-findings"
             onClick={() => openReport('/report/findings')}
           >
             Findings report (HTML)
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             data-testid="reports-generate-change"
             onClick={() => openReport('/report/change')}
           >
             Change report AS-IS → TO-BE (HTML)
-          </button>
-          <button
-            type="button"
-            data-testid="reports-generate-png"
-            onClick={() => exportImage('png')}
-          >
+          </Button>
+          <Button data-testid="reports-generate-png" onClick={() => exportImage('png')}>
             Topology image (PNG)
-          </button>
-          <button
-            type="button"
-            data-testid="reports-generate-svg"
-            onClick={() => exportImage('svg')}
-          >
+          </Button>
+          <Button data-testid="reports-generate-svg" onClick={() => exportImage('svg')}>
             Topology image (SVG)
-          </button>
+          </Button>
         </div>
         <div className="reports-panel__buttons" data-testid="reports-csv-buttons">
           {CSV_ENTITIES.map((entity) => (
-            <button
+            <Button
               key={entity}
-              type="button"
+              size="sm"
               data-testid={`reports-csv-${entity}`}
               onClick={() => {
                 void downloadCsv(project.id, entity)
@@ -149,7 +135,7 @@ export function ReportsPanel() {
               }}
             >
               {entity}.csv
-            </button>
+            </Button>
           ))}
         </div>
       </div>
