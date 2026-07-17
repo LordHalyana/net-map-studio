@@ -187,7 +187,7 @@ export function EgressPanel() {
       ) : null}
 
       <section className="egress-section" data-testid="egress-settings">
-        <h3>Egress door</h3>
+        <h3 className="field-section__title">Egress door</h3>
         <p className="egress-section__hint">
           Status:{' '}
           <strong data-testid="egress-status">
@@ -249,7 +249,7 @@ export function EgressPanel() {
       </section>
 
       <section className="egress-section" data-testid="local-feed">
-        <h3>Local threat-intel feed (zero egress)</h3>
+        <h3 className="field-section__title">Local threat-intel feed (zero egress)</h3>
         <div className="egress-form-row">
           <select
             data-testid="feed-type"
@@ -305,7 +305,7 @@ export function EgressPanel() {
       </section>
 
       <section className="egress-section" data-testid="enrichment-lookup">
-        <h3>Enrichment lookup</h3>
+        <h3 className="field-section__title">Enrichment lookup</h3>
         <div className="egress-form-row">
           <select
             data-testid="lookup-provider"
@@ -389,7 +389,7 @@ export function EgressPanel() {
       </section>
 
       <section className="egress-section" data-testid="egress-audit">
-        <h3>Egress audit trail</h3>
+        <h3 className="field-section__title">Egress audit trail</h3>
         {audit.length === 0 && !loaded ? (
           <p className="panel-loading">
             <Spinner size="sm" label="Loading audit trail" /> Loading audit trail…

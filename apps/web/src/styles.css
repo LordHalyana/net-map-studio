@@ -2797,10 +2797,6 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
-.egress-section h3 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-md);
-}
 .egress-section__hint {
   font-size: var(--text-sm);
   color: var(--text-dim);
