@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import type { Severity } from '@netplan/domain';
+import { endpointResolver, type PolicyEndpoint, type Severity } from '@netplan/domain';
 import { useAppStore } from '../state/store';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -15,16 +15,13 @@ const STATUS_ACTIONS = [
 
 type StatusFilter = 'all' | 'open' | 'dispositioned';
 
-function endpointLabel(
-  affected: { kind: string; id: string } | null,
+function affectedLabel(
+  affected: PolicyEndpoint | null,
   graph: ReturnType<typeof useAppStore.getState>['graph'],
 ): string {
   if (!affected) return 'Network-wide';
-  if (affected.kind === 'device') {
-    const device = graph?.devices.find((d) => d.id === affected.id);
-    return device ? device.name : `device ${affected.id.slice(0, 8)}`;
-  }
-  return `${affected.kind} ${affected.id.slice(0, 8)}`;
+  if (!graph) return `${affected.kind} ${affected.id.slice(0, 8)}`;
+  return endpointResolver(graph).label(affected);
 }
 
 function toStatusFilter(value: string): StatusFilter {
@@ -212,7 +209,7 @@ export function FindingsPanel() {
                       <dt>Category</dt>
                       <dd>{f.detection.category}</dd>
                       <dt>Affected</dt>
-                      <dd>{endpointLabel(f.detection.affected, graph)}</dd>
+                      <dd>{affectedLabel(f.detection.affected, graph)}</dd>
                       <dt>Confidence</dt>
                       <dd data-testid="finding-confidence">
                         {(f.detection.confidence * 100).toFixed(0)}%

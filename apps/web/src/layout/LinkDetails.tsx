@@ -1,5 +1,6 @@
 import { ArrowLeftRight } from 'lucide-react';
 import {
+  endpointResolver,
   linkKindSchema,
   type Endpoint,
   type Link,
@@ -62,23 +63,17 @@ function EndpointCard({
  * endpoint interfaces, their devices, those devices' networks or zones.
  */
 function governingRules(graph: ProjectState, links: Link[]): PolicyRule[] {
+  const endpoints = endpointResolver(graph);
   const ifaceIds = new Set(links.flatMap((l) => [l.source.id, l.target.id]));
-  const deviceIds = new Set(
-    graph.interfaces.filter((i) => ifaceIds.has(i.id)).map((i) => i.deviceId),
-  );
-  const networkIds = new Set(
-    graph.interfaces
-      .filter((i) => deviceIds.has(i.deviceId))
-      .flatMap((i) => (i.networkId ? [i.networkId] : [])),
-  );
-  const zoneIds = new Set(
-    graph.devices.filter((d) => deviceIds.has(d.id)).flatMap((d) => (d.zoneId ? [d.zoneId] : [])),
-  );
+  const deviceIds = [
+    ...new Set(graph.interfaces.filter((i) => ifaceIds.has(i.id)).map((i) => i.deviceId)),
+  ];
+  // Interface endpoints stay port-precise (ADR-0012): a rule on another
+  // interface of the same device does not govern this link.
   const matches = (endpoint: Endpoint) =>
-    (endpoint.kind === 'interface' && ifaceIds.has(endpoint.id)) ||
-    (endpoint.kind === 'device' && deviceIds.has(endpoint.id)) ||
-    ((endpoint.kind === 'network' || endpoint.kind === 'subnet') && networkIds.has(endpoint.id)) ||
-    (endpoint.kind === 'zone' && zoneIds.has(endpoint.id));
+    endpoint.kind === 'interface'
+      ? ifaceIds.has(endpoint.id)
+      : deviceIds.some((d) => endpoints.touchesDevice(endpoint, d, 'zone'));
   return graph.policyRules.filter((rule) => matches(rule.source) || matches(rule.destination));
 }
 

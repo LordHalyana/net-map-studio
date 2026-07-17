@@ -6,6 +6,7 @@ import {
   changeSetRecordSchema,
   changeSetSchema,
   deviceSchema,
+  endpointResolver,
   findingDispositionSchema,
   findingIdSchema,
   findingStatusSchema,
@@ -1626,21 +1627,10 @@ export function createEngine(db: Db) {
       case 'flow': {
         const entity = state.flows.find((f) => f.id === entityId);
         if (!entity) throw new OperationError('NOT_FOUND', `flow ${entityId} not found`);
-        const resolveFlowEndpoint = (e: Flow['source']): unknown => {
-          switch (e.kind) {
-            case 'external':
-              return { external: e.value };
-            case 'interface':
-              return state.interfaces.find((i) => i.id === e.id) ?? null;
-            case 'device':
-              return state.devices.find((d) => d.id === e.id) ?? null;
-            case 'zone':
-              return state.zones.find((z) => z.id === e.id) ?? null;
-            case 'network':
-            case 'subnet':
-              return state.networks.find((n) => n.id === e.id) ?? null;
-          }
-        };
+        const endpoints = endpointResolver(state);
+        // externals keep their wire shape; entity references resolve or null
+        const resolveFlowEndpoint = (e: Flow['source']): unknown =>
+          e.kind === 'external' ? { external: e.value } : endpoints.entity(e);
         return {
           entity,
           relationships: {
@@ -1719,25 +1709,13 @@ export function createEngine(db: Db) {
       case 'policyRule': {
         const entity = state.policyRules.find((r) => r.id === entityId);
         if (!entity) throw new OperationError('NOT_FOUND', `policyRule ${entityId} not found`);
-        const resolveEndpoint = (e: Endpoint): unknown => {
-          switch (e.kind) {
-            case 'interface':
-              return state.interfaces.find((i) => i.id === e.id) ?? null;
-            case 'device':
-              return state.devices.find((d) => d.id === e.id) ?? null;
-            case 'zone':
-              return state.zones.find((z) => z.id === e.id) ?? null;
-            case 'network':
-            case 'subnet':
-              return state.networks.find((n) => n.id === e.id) ?? null;
-          }
-        };
+        const endpoints = endpointResolver(state);
         return {
           entity,
           relationships: {
             service: state.services.find((s) => s.id === entity.serviceId) ?? null,
-            source: resolveEndpoint(entity.source),
-            destination: resolveEndpoint(entity.destination),
+            source: endpoints.entity(entity.source),
+            destination: endpoints.entity(entity.destination),
           },
         };
       }

@@ -1,4 +1,10 @@
-import type { FindingView, PolicyEndpoint, ProjectState, Severity } from '@netplan/domain';
+import {
+  endpointResolver,
+  type FindingView,
+  type PolicyEndpoint,
+  type ProjectState,
+  type Severity,
+} from '@netplan/domain';
 
 function esc(value: string): string {
   return value
@@ -16,18 +22,7 @@ export interface FindingsReportMeta {
 }
 
 function affectedLabel(state: ProjectState, affected: PolicyEndpoint | null): string {
-  if (!affected) return 'Network-wide';
-  switch (affected.kind) {
-    case 'device':
-      return state.devices.find((d) => d.id === affected.id)?.name ?? affected.id;
-    case 'zone':
-      return state.zones.find((z) => z.id === affected.id)?.name ?? affected.id;
-    case 'network':
-    case 'subnet':
-      return state.networks.find((n) => n.id === affected.id)?.name ?? affected.id;
-    case 'interface':
-      return state.interfaces.find((i) => i.id === affected.id)?.name ?? affected.id;
-  }
+  return affected ? endpointResolver(state).label(affected) : 'Network-wide';
 }
 
 /**

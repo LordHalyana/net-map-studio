@@ -1,18 +1,19 @@
 import type { Edge, Node } from '@xyflow/react';
 import { PORT_DOT_MARKER } from './EdgeMarkerDefs';
 import { EDGE_LABEL_BG, EDGE_LABEL_TEXT, EDGE_NEUTRAL, FLOW_AMBER } from './colors';
-import type {
-  Device,
-  FieldProvenance,
-  Flow,
-  Link,
-  Network,
-  PolicyRule,
-  Position as XY,
-  ProjectState,
-  Severity,
-  Site,
-  Zone,
+import {
+  endpointResolver,
+  type Device,
+  type FieldProvenance,
+  type Flow,
+  type Link,
+  type Network,
+  type PolicyRule,
+  type Position as XY,
+  type ProjectState,
+  type Severity,
+  type Site,
+  type Zone,
 } from '@netplan/domain';
 
 import { footprints } from './footprints';
@@ -132,6 +133,9 @@ export function graphToFlow(
   const nodes: Node[] = [];
   const edges: CanvasEdge[] = [];
   const deviceByInterface = new Map(state.interfaces.map((i) => [i.id, i.deviceId]));
+  // the endpoint resolver (#80) answers "which device does this (kind, id)
+  // reference sit on" for Flow edges and PolicyRule callout anchors below
+  const endpoints = endpointResolver(state);
   // the footprint resolver (#78) answers every "what rectangle does this
   // node paint" question below — cards, container rects, collision rects
   const fp = footprints(state, {
@@ -299,11 +303,8 @@ export function graphToFlow(
   // Observed traffic (Phase 2): aggregated Flows render as bundled dashed
   // edges between the resolved devices — one edge per device pair (§3.3).
   if (options.observed) {
-    const resolveFlowDevice = (endpoint: Flow['source']): string | null => {
-      if (endpoint.kind === 'device') return endpoint.id;
-      if (endpoint.kind === 'interface') return deviceByInterface.get(endpoint.id) ?? null;
-      return null;
-    };
+    const resolveFlowDevice = (endpoint: Flow['source']): string | null =>
+      endpoints.deviceId(endpoint);
     const flowBundles = new Map<string, Flow[]>();
     for (const flow of state.flows) {
       if (!modeVisible(flow.lifecycleState, options.mode)) continue;
@@ -395,27 +396,20 @@ export function graphToFlow(
     const serviceById = new Map(state.services.map((s) => [s.id, s]));
     const deviceById = new Map(state.devices.map((d) => [d.id, d]));
 
+    // the web-only anchor layer over the domain resolver (#80): pixel
+    // positions and hidden-device filtering stay canvas knowledge
     const anchorOf = (endpoint: PolicyRule['source']): { id: string; position: XY } | null => {
-      switch (endpoint.kind) {
-        case 'device': {
-          const device = deviceById.get(endpoint.id);
-          if (!device || hiddenDeviceIds.has(device.id)) return null;
-          return { id: device.id, position: device.position };
-        }
-        case 'interface': {
-          const deviceId = deviceByInterface.get(endpoint.id);
-          const device = deviceId ? deviceById.get(deviceId) : undefined;
-          if (!device || hiddenDeviceIds.has(device.id)) return null;
-          return { id: device.id, position: device.position };
-        }
-        case 'network':
-        case 'subnet': {
-          const position = networkPositions.get(endpoint.id);
-          return position ? { id: endpoint.id, position } : null;
-        }
-        default:
-          return null;
+      const deviceId = endpoints.deviceId(endpoint);
+      if (deviceId) {
+        const device = deviceById.get(deviceId);
+        if (!device || hiddenDeviceIds.has(device.id)) return null;
+        return { id: device.id, position: device.position };
       }
+      if (endpoint.kind === 'network' || endpoint.kind === 'subnet') {
+        const position = networkPositions.get(endpoint.id);
+        return position ? { id: endpoint.id, position } : null;
+      }
+      return null;
     };
 
     // pushing callouts away from the scene centroid steers them into the

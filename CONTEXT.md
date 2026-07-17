@@ -52,7 +52,7 @@ An _intended_ allow / deny / reject / monitor rule with direction, action, loggi
 _Avoid_: ACL entry, firewall rule (when the abstract intent is meant), policy.
 
 **Endpoint**:
-One end of a connection, expressed as a `(kind, id)` reference. A Link's endpoints must be Interfaces; a PolicyRule's or Flow's endpoints may also be a Device, Network or Zone.
+One end of a connection, expressed as a `(kind, id)` reference. A Link's endpoints must be Interfaces; a PolicyRule's or Flow's endpoints may also be a Device, Network or Zone. Resolving the reference — to its entity, a display label, or the Device it sits on — is owned by the endpoint resolver (`endpointResolver(state)` in the domain package); panels, canvas projection, engine reads and export renderers consume it instead of keeping kind switches of their own.
 
 **Service**:
 A protocol, port and process — a listening or advertised capability on a Device, and the object a PolicyRule or Flow references for "what traffic."
