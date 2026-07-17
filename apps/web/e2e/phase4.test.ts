@@ -1,13 +1,9 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * P4-M7 smoke coverage: the egress door settings + disclosure gate, the
  * zero-egress local-feed enrichment path with the audit view, the new import
  * adapters, and the proposal sign-off control (M6).
- *
- * Shared e2e DB: every mutation here is cleaned up (egress disabled, feed
- * emptied); the enrichment uses a hash that matches no inventory, so it can
- * never surface a finding in other specs.
  */
 
 const UNMATCHED_HASH = 'ef'.repeat(32);
@@ -55,7 +51,7 @@ test.describe('P4: egress door & threat intel', () => {
     // zero egress: the outbound audit trail stayed empty
     await expect(page.getByTestId('egress-audit-empty')).toBeVisible();
 
-    // clean up the shared DB: empty the feed again
+    // removing the indicator empties the feed again
     await page.getByTestId('feed-remove').first().click();
     await expect(page.getByTestId('local-feed')).toContainText('No indicators');
   });

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { newId, operationIdSchema, zoneIdSchema, zoneSchema } from '@netplan/domain';
 
 async function openApp(page: Page) {
@@ -234,15 +234,6 @@ test.describe('Site & Zone delete from the inspector (ui-polish M3)', () => {
     graph = await fetchFullGraph(page);
     expect(graph.zones.find((z) => z.name === zoneName)).toBeDefined();
     expect(graph.devices.find((d) => d.name === deviceName)?.zoneId).toBe(zone.id);
-
-    // leave no zone-contained device behind: auto-arrange deliberately skips
-    // contained devices, and a later suite asserts arrange yields zero
-    // overlapping nodes across the shared e2e database
-    await page.locator('.react-flow__controls-fitview').click();
-    await page.getByTestId(`device-node-${deviceName}`).click();
-    await page.keyboard.press('Delete');
-    await expect(page.getByTestId(`device-node-${deviceName}`)).not.toBeVisible();
-    await waitSaved(page);
   });
 
   test('deleting a site cascades its zones', async ({ page }) => {

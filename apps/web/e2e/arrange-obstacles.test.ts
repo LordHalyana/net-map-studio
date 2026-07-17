@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import {
   deviceIdSchema,
   deviceSchema,
@@ -19,14 +19,13 @@ import {
   type Site,
   type Zone,
 } from '@netplan/domain';
-import { changeSet, opCreateEntity, opDeleteEntity } from '../src/state/ops';
+import { changeSet, opCreateEntity } from '../src/state/ops';
 
 /**
  * Auto-arrange obstacle avoidance (#75): the acceptance scenario — a Zone
  * holding a device plus a pinned device must never end up under the arranged
  * block, and no arranged node may land inside a container it doesn't belong
- * to. Self-contained: seeds its own scene and deletes it afterwards instead
- * of relying on suite-order cleanliness.
+ * to. Seeds its own scene onto the freshly reset store.
  */
 
 async function openApp(page: Page) {
@@ -149,26 +148,6 @@ async function seedScenario(page: Page): Promise<Seeded> {
   return { projectId, site, zone, contained, pinned, fanDevices, interfaces, network };
 }
 
-/** Delete everything the seed created, dependents first, in one changeset. */
-async function cleanupScenario(page: Page, seeded: Seeded) {
-  const { projectId } = seeded;
-  const ops = [
-    ...seeded.interfaces.map((i) =>
-      opDeleteEntity(projectId, { entityType: 'interface', entity: i }),
-    ),
-    ...seeded.fanDevices.map((d) => opDeleteEntity(projectId, { entityType: 'device', entity: d })),
-    opDeleteEntity(projectId, { entityType: 'device', entity: seeded.pinned }),
-    opDeleteEntity(projectId, { entityType: 'device', entity: seeded.contained }),
-    opDeleteEntity(projectId, { entityType: 'network', entity: seeded.network }),
-    opDeleteEntity(projectId, { entityType: 'zone', entity: seeded.zone }),
-    opDeleteEntity(projectId, { entityType: 'site', entity: seeded.site }),
-  ];
-  const response = await page.request.post(`/api/projects/${projectId}/operations`, {
-    data: changeSet(projectId, 'Clean up #75 obstacle scene', ops),
-  });
-  expect(response.ok()).toBe(true);
-}
-
 type Rect = { x: number; y: number; width: number; height: number };
 
 // deliberately independent of the intersects() under test in autoArrange.ts
@@ -181,66 +160,59 @@ test.describe('Auto-arrange obstacle avoidance (#75)', () => {
   }) => {
     await openApp(page);
     const seeded = await seedScenario(page);
-    try {
-      await page.reload();
-      await expect(page.getByTestId('app-shell')).toBeVisible();
-      await expect(page.getByTestId('device-node-obst-contained')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('app-shell')).toBeVisible();
+    await expect(page.getByTestId('device-node-obst-contained')).toBeVisible();
 
-      await page.getByTestId('auto-arrange').click();
-      await waitSaved(page);
-      await page.getByTestId('zoom-100').click();
-      await page.waitForTimeout(400);
+    await page.getByTestId('auto-arrange').click();
+    await waitSaved(page);
+    await page.getByTestId('zoom-100').click();
+    await page.waitForTimeout(400);
 
-      // pinned and zone-contained devices never move
-      const graph = await fetchGraph(page);
-      expect(graph.devices.find((d) => d.id === seeded.contained.id)?.position).toEqual(
-        seeded.contained.position,
-      );
-      expect(graph.devices.find((d) => d.id === seeded.pinned.id)?.position).toEqual(
-        seeded.pinned.position,
-      );
+    // pinned and zone-contained devices never move
+    const graph = await fetchGraph(page);
+    expect(graph.devices.find((d) => d.id === seeded.contained.id)?.position).toEqual(
+      seeded.contained.position,
+    );
+    expect(graph.devices.find((d) => d.id === seeded.pinned.id)?.position).toEqual(
+      seeded.pinned.position,
+    );
 
-      // zero overlapping device nodes at 100% zoom — including the contained
-      // and pinned cards the layout skipped
-      const deviceBoxes: { name: string; box: Rect }[] = [];
-      for (const node of await page.locator('.device-node').all()) {
-        const box = await node.boundingBox();
-        const testId = await node.getAttribute('data-testid');
-        if (box && testId) deviceBoxes.push({ name: testId, box });
+    // zero overlapping device nodes at 100% zoom — including the contained
+    // and pinned cards the layout skipped
+    const deviceBoxes: { name: string; box: Rect }[] = [];
+    for (const node of await page.locator('.device-node').all()) {
+      const box = await node.boundingBox();
+      const testId = await node.getAttribute('data-testid');
+      if (box && testId) deviceBoxes.push({ name: testId, box });
+    }
+    expect(deviceBoxes.length).toBeGreaterThan(7);
+    for (let i = 0; i < deviceBoxes.length; i++) {
+      for (let j = i + 1; j < deviceBoxes.length; j++) {
+        const a = deviceBoxes[i];
+        const b = deviceBoxes[j];
+        if (!a || !b) continue;
+        expect(boxesIntersect(a.box, b.box), `${a.name} and ${b.name} overlap after arrange`).toBe(
+          false,
+        );
       }
-      expect(deviceBoxes.length).toBeGreaterThan(7);
-      for (let i = 0; i < deviceBoxes.length; i++) {
-        for (let j = i + 1; j < deviceBoxes.length; j++) {
-          const a = deviceBoxes[i];
-          const b = deviceBoxes[j];
-          if (!a || !b) continue;
-          expect(
-            boxesIntersect(a.box, b.box),
-            `${a.name} and ${b.name} overlap after arrange`,
-          ).toBe(false);
-        }
-      }
+    }
 
-      // no arranged (movable) node sits inside a container it doesn't belong to
-      const movableNames = new Set(
-        graph.devices.filter((d) => !d.zoneId && !d.pinned).map((d) => `device-node-${d.name}`),
-      );
-      const siteBoxes: Rect[] = [];
-      for (const node of await page.locator('[data-testid^="site-node-"]').all()) {
-        const box = await node.boundingBox();
-        if (box) siteBoxes.push(box);
+    // no arranged (movable) node sits inside a container it doesn't belong to
+    const movableNames = new Set(
+      graph.devices.filter((d) => !d.zoneId && !d.pinned).map((d) => `device-node-${d.name}`),
+    );
+    const siteBoxes: Rect[] = [];
+    for (const node of await page.locator('[data-testid^="site-node-"]').all()) {
+      const box = await node.boundingBox();
+      if (box) siteBoxes.push(box);
+    }
+    expect(siteBoxes.length).toBeGreaterThan(0);
+    for (const { name, box } of deviceBoxes) {
+      if (!movableNames.has(name)) continue;
+      for (const siteBox of siteBoxes) {
+        expect(boxesIntersect(box, siteBox), `${name} intrudes into a site container`).toBe(false);
       }
-      expect(siteBoxes.length).toBeGreaterThan(0);
-      for (const { name, box } of deviceBoxes) {
-        if (!movableNames.has(name)) continue;
-        for (const siteBox of siteBoxes) {
-          expect(boxesIntersect(box, siteBox), `${name} intrudes into a site container`).toBe(
-            false,
-          );
-        }
-      }
-    } finally {
-      await cleanupScenario(page, seeded);
     }
   });
 });

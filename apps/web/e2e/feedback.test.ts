@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * Improvements M6 (#63): feedback sweep — toasts, saved-ago timestamp,

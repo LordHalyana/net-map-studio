@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { newId, operationIdSchema } from '@netplan/domain';
 
 /** Reposition a device through the API — keeps canvas geometry deterministic. */

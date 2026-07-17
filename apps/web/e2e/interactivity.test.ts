@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { flowIdSchema, identityIdSchema, newId, operationIdSchema } from '@netplan/domain';
 
 /**
@@ -99,26 +99,6 @@ async function moveDeviceViaApi(page: Page, deviceName: string, x: number, y: nu
 }
 
 test.describe('Flow & rule interactivity (improvements M3, #60)', () => {
-  // The e2e database is shared across suites: rules.test.ts asserts absolute
-  // rule counts and distant leftovers force later fitViews to minimum zoom —
-  // so every test here removes the flows and rules it minted.
-  test.afterEach(async ({ page }) => {
-    const p = await project(page);
-    const graph = (await (await page.request.get(`/api/projects/${p.id}/graph`)).json()) as {
-      policyRules: ({ id: string } & Record<string, unknown>)[];
-      flows: ({ id: string } & Record<string, unknown>)[];
-    };
-    for (const rule of graph.policyRules) {
-      await postOp(page, p.id, { kind: 'DeletePolicyRule', ruleId: rule.id, snapshot: rule });
-    }
-    for (const flow of graph.flows) {
-      await postOp(page, p.id, {
-        kind: 'DeleteEntity',
-        payload: { entityType: 'flow', entity: flow },
-      });
-    }
-  });
-
   test('clicking a flow edge opens read-only Flow details with provenance', async ({ page }) => {
     await openApp(page);
     const a = await addDeviceViaLibrary(page, 'server');
@@ -253,13 +233,6 @@ test.describe('Flow & rule interactivity (improvements M3, #60)', () => {
 
     await expect(page.getByTestId('findings-panel')).toBeVisible();
     await expect(page.locator('.finding-card--focused')).toHaveCount(1);
-
-    // shared-DB hygiene: leave no committed device-state job behind
-    // (later suites select import jobs by adapter+status — see findings.test.ts)
-    await page.getByTestId('nav-imports').click();
-    await page.getByTestId('import-job-device-state-committed').click();
-    await page.getByTestId('import-rollback-button').click();
-    await expect(page.getByTestId('import-review')).toContainText('rolledBack');
   });
 
   test('Link Info lists the PolicyRules governing the selected link', async ({ page }) => {

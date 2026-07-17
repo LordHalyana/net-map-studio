@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 /**
  * M9/M10 DoD (plan §2): AS-IS hides planned-only objects; modifications are
@@ -42,13 +42,6 @@ async function importAndCommitSample(page: Page) {
   await page.getByTestId('nav-canvas').click();
 }
 
-async function rollbackSample(page: Page) {
-  await page.getByTestId('nav-imports').click();
-  await page.getByTestId('import-job-device-state-committed').click();
-  await page.getByTestId('import-rollback-button').click();
-  await expect(page.getByTestId('import-review')).toContainText('rolledBack');
-}
-
 test.describe('M9: AS-IS / TO-BE / Diff overlay (ADR-0009)', () => {
   test('planned objects hide in AS-IS; modifications render as field-deltas on the same object', async ({
     page,
@@ -57,12 +50,9 @@ test.describe('M9: AS-IS / TO-BE / Diff overlay (ADR-0009)', () => {
     await importAndCommitSample(page);
 
     // author a TO-BE addition: manually drawn objects are born Planned
-    // (earlier suite files may have left planned devices — count relatively)
     const planned = page.locator('.device-node__lifecycle--planned');
-    const plannedBefore = await planned.count();
     await page.getByTestId('library-item-firewall').click();
-    const plannedCount = plannedBefore + 1;
-    await expect(planned).toHaveCount(plannedCount);
+    await expect(planned).toHaveCount(1);
 
     // AS-IS hides planned-only objects, keeps the Observed import
     await page.getByTestId('mode-asIs').click();
@@ -71,7 +61,7 @@ test.describe('M9: AS-IS / TO-BE / Diff overlay (ADR-0009)', () => {
 
     // TO-BE shows them again
     await page.getByTestId('mode-toBe').click();
-    await expect(page.locator('.device-node__lifecycle--planned')).toHaveCount(plannedCount);
+    await expect(page.locator('.device-node__lifecycle--planned')).toHaveCount(1);
 
     // a TO-BE modification on an existing Observed object: same UUID, no duplicate
     await page.getByTestId('device-node-web01').click();
@@ -96,20 +86,9 @@ test.describe('M9: AS-IS / TO-BE / Diff overlay (ADR-0009)', () => {
     await expect(page.getByTestId('diff-removals')).toContainText('db01');
     await expect(page.getByTestId('device-node-db01')).toBeVisible();
 
-    // cleanup: restore flag, revert os, remove the planned firewall, roll back
+    // restoring clears the removal flag again
     await page.getByTestId('restore-in-proposal').click();
-    await page.getByTestId('mode-toBe').click();
-    await page.getByTestId('device-node-web01').click();
-    await page.getByTestId('device-os-input').fill('Ubuntu Server 24.04');
-    await page.getByTestId('device-os-input').press('Enter');
-    // other suite files may have left overlapping nodes — force the selection click
-    const firewall = page
-      .locator('.device-node', { has: page.locator('.device-node__lifecycle--planned') })
-      .last();
-    await firewall.click({ force: true });
-    await page.getByTestId('delete-device').click();
-    await expect(page.getByTestId('sync-status')).toHaveText('Saved');
-    await rollbackSample(page);
+    await expect(page.getByTestId('diff-removals')).not.toContainText('db01');
   });
 });
 
@@ -149,10 +128,5 @@ test.describe('M10: identity overlay & Users and Roles (ADR-0022)', () => {
     await expect(page.getByTestId('identity-inspector-assignments')).toContainText(
       'localAdministrator',
     );
-
-    // cleanup — the overlay toggle lives in the canvas toolbar (M5)
-    await page.getByTestId('nav-canvas').click();
-    await page.getByTestId('toggle-identity-overlay').click();
-    await rollbackSample(page);
   });
 });

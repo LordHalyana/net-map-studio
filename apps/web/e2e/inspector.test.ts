@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 async function openApp(page: Page) {
   await page.goto('/');
@@ -199,11 +199,5 @@ test.describe('inspector completion (improvements M9, #66)', () => {
     await page.locator('[data-testid^="device-finding-"]').first().click();
     await expect(page.getByTestId('findings-panel')).toBeVisible();
     await expect(page.locator('.finding-card--focused')).toHaveCount(1);
-
-    // shared-DB hygiene: roll the committed import back
-    await page.getByTestId('nav-imports').click();
-    await page.getByTestId('import-job-device-state-committed').click();
-    await page.getByTestId('import-rollback-button').click();
-    await expect(page.getByTestId('import-review')).toContainText('rolledBack');
   });
 });

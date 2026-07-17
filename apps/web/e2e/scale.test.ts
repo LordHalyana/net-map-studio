@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import {
   changeSetIdSchema,
   deviceIdSchema,
@@ -123,9 +123,6 @@ test.describe('scale, layout & polish (M11 DoD, acceptance #1)', () => {
     await page.getByTestId('search-result-bulk-0').click();
     await expect(page.getByTestId('inspector-device')).toBeVisible();
     expect(Date.now() - interactStart).toBeLessThan(5_000);
-
-    // clean up: drop the huge project so later tests start from a small store
-    await page.request.delete(`/api/projects/${projectId}`);
   });
 
   test('auto-arrange moves unpinned devices and leaves pinned ones alone', async ({ page }) => {
