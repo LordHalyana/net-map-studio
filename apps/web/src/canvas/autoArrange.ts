@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import type { ChangeSet, Operation, ProjectState } from '@netplan/domain';
-import { changeSet, opSetField } from '../state/ops';
+import { changeSet, opSetField, opSetNetworkLayoutHint } from '../state/ops';
 import { footprints, type Rect } from './footprints';
 
 const NODE_SEP = 56;
@@ -127,18 +127,8 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
 
   for (const { network, box } of arrangedNetworks) {
     const position = { x: box.x, y: box.y + shift };
-    const previous = network.layoutHints['main'];
-    if (previous && previous.x === position.x && previous.y === position.y) continue;
-    ops.push(
-      opSetField(
-        state.project.id,
-        'network',
-        network.id,
-        'layoutHints',
-        { ...network.layoutHints, main: position },
-        network.layoutHints,
-      ),
-    );
+    const op = opSetNetworkLayoutHint(state.project.id, network, 'main', position);
+    if (op) ops.push(op);
   }
 
   if (ops.length === 0) return null;

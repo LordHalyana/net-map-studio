@@ -18,7 +18,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import { deviceTypeSchema, type Severity } from '@netplan/domain';
 import { useAppStore, type Selection } from '../state/store';
-import { buildDevice, deleteDevicesChangeSet, opCreateDevice, opSetField } from '../state/ops';
+import {
+  buildDevice,
+  deleteDevicesChangeSet,
+  opCreateDevice,
+  opSetField,
+  opSetNetworkLayoutHint,
+} from '../state/ops';
 import { DeviceNode } from './DeviceNode';
 import { NetworkNode, SiteNode, ZoneNode } from './ContainerNodes';
 import { EdgeMarkerDefs } from './EdgeMarkerDefs';
@@ -235,22 +241,9 @@ function CanvasInner() {
           return;
         }
         case 'network': {
-          // Per-(network, view) layout hint (ADR-0013) — the projection keeps
-          // its position without the Network becoming a topological node.
           const network = graph.networks.find((n) => n.id === node.id);
-          const previous = network?.layoutHints['main'];
-          if (network && (previous?.x !== x || previous?.y !== y)) {
-            dispatch(
-              opSetField(
-                project.id,
-                'network',
-                network.id,
-                'layoutHints',
-                { ...network.layoutHints, main: node.position },
-                network.layoutHints,
-              ),
-            );
-          }
+          const op = network && opSetNetworkLayoutHint(project.id, network, 'main', node.position);
+          if (op) dispatch(op);
           return;
         }
       }
