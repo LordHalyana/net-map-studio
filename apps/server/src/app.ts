@@ -104,6 +104,12 @@ export async function buildApp(options: AppOptions = {}) {
   app.decorate('importStore', importStore);
   app.decorate('egressDoor', egressDoor);
 
+  // Draining in-flight parse work is part of teardown (#93): closing must not
+  // cut a half-written import mid-commit. Living on onClose keeps the invariant
+  // beside where importStore is wired, so every close path — signal handlers,
+  // tests — drains, not just the graceful-shutdown caller.
+  app.addHook('onClose', () => importStore.whenIdle());
+
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
   app.addHook('onRoute', (route) => {

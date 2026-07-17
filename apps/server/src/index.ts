@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildApp } from './app.js';
+import { installShutdownHandlers } from './lifecycle.js';
 
 /**
  * When NETPLAN_SERVE_WEB is set, serve the built SPA from this process too
@@ -25,6 +26,9 @@ const app = await buildApp({ serveWebRoot: webRoot });
 
 const port = Number(process.env.PORT ?? 3001);
 await app.listen({ port, host: '127.0.0.1' });
+// Release the listener on SIGTERM/SIGINT so the port never outlives the
+// process — otherwise the next e2e `webServer` start fails on :3001 (#93).
+installShutdownHandlers(app);
 app.log.info(
   `NetPlan Studio ${webRoot ? 'app (SPA + API)' : 'API'} listening on http://127.0.0.1:${port}`,
 );
