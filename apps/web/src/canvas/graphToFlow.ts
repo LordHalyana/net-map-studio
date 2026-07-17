@@ -16,6 +16,7 @@ import {
   type Zone,
 } from '@netplan/domain';
 
+import { toAbsolute } from '../state/containment';
 import { footprints } from './footprints';
 import { networkColor, networkColorMap } from './networkColor';
 import { primaryIpByDevice } from './primaryIp';
@@ -393,6 +394,9 @@ export function graphToFlow(
   if (options.rules) {
     const serviceById = new Map(state.services.map((s) => [s.id, s]));
     const deviceById = new Map(state.devices.map((d) => [d.id, d]));
+    // callout math runs in canvas coordinates, so zone-contained devices must
+    // leave ADR-0013's zone-relative frame first (#87)
+    const absoluteByDevice = new Map(state.devices.map((d) => [d.id, toAbsolute(d, state)]));
 
     // the web-only anchor layer over the domain resolver (#80): pixel
     // positions and hidden-device filtering stay canvas knowledge
@@ -401,7 +405,7 @@ export function graphToFlow(
       if (deviceId) {
         const device = deviceById.get(deviceId);
         if (!device || hiddenDeviceIds.has(device.id)) return null;
-        return { id: device.id, position: device.position };
+        return { id: device.id, position: absoluteByDevice.get(device.id) ?? device.position };
       }
       if (endpoint.kind === 'network' || endpoint.kind === 'subnet') {
         const position = networkPositions.get(endpoint.id);
@@ -412,7 +416,7 @@ export function graphToFlow(
 
     // pushing callouts away from the scene centroid steers them into the
     // sparse side of their subject edge instead of onto a node row
-    const anchored = [...state.devices.map((d) => d.position), ...networkPositions.values()];
+    const anchored = [...absoluteByDevice.values(), ...networkPositions.values()];
     const centroid = anchored.reduce(
       (acc, p) => ({ x: acc.x + p.x / anchored.length, y: acc.y + p.y / anchored.length }),
       { x: 0, y: 0 },
@@ -421,7 +425,7 @@ export function graphToFlow(
     // the rendered node rectangles for the collision nudge below
     const CALLOUT_SIZE = { width: 160, height: 72 };
     const nodeRects = [
-      ...state.devices.map((d) => ({ ...d.position, ...fp.device(d.id) })),
+      ...[...absoluteByDevice].map(([id, p]) => ({ ...p, ...fp.device(id) })),
       ...[...networkPositions.values()].map((p) => ({ ...p, ...fp.network() })),
     ];
     const collides = (p: XY) =>
