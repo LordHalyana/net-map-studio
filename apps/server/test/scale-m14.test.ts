@@ -83,30 +83,36 @@ async function seed(app: FastifyInstance): Promise<{ id: string; deviceIds: stri
 }
 
 describe('M14 API scale (#71)', () => {
-  it('graph load stays under threshold and can omit or cap flows', async () => {
-    const app = await createApp();
-    const { id } = await seed(app);
+  // Seeding 5.5k ops + parsing three full snapshots overruns the default 5s
+  // budget under parallel suite load; the perf guard is the loadMs assertion.
+  it(
+    'graph load stays under threshold and can omit or cap flows',
+    { timeout: 15_000 },
+    async () => {
+      const app = await createApp();
+      const { id } = await seed(app);
 
-    const started = Date.now();
-    const full = projectStateSchema.parse(
-      (await app.inject({ method: 'GET', url: `/projects/${id}/graph` })).json(),
-    );
-    const loadMs = Date.now() - started;
-    expect(full.devices).toHaveLength(DEVICE_COUNT);
-    expect(full.flows).toHaveLength(FLOW_COUNT);
-    expect(loadMs).toBeLessThan(3000);
+      const started = Date.now();
+      const full = projectStateSchema.parse(
+        (await app.inject({ method: 'GET', url: `/projects/${id}/graph` })).json(),
+      );
+      const loadMs = Date.now() - started;
+      expect(full.devices).toHaveLength(DEVICE_COUNT);
+      expect(full.flows).toHaveLength(FLOW_COUNT);
+      expect(loadMs).toBeLessThan(3000);
 
-    const omitted = projectStateSchema.parse(
-      (await app.inject({ method: 'GET', url: `/projects/${id}/graph?flows=omit` })).json(),
-    );
-    expect(omitted.flows).toHaveLength(0);
-    expect(omitted.devices).toHaveLength(DEVICE_COUNT);
+      const omitted = projectStateSchema.parse(
+        (await app.inject({ method: 'GET', url: `/projects/${id}/graph?flows=omit` })).json(),
+      );
+      expect(omitted.flows).toHaveLength(0);
+      expect(omitted.devices).toHaveLength(DEVICE_COUNT);
 
-    const capped = projectStateSchema.parse(
-      (await app.inject({ method: 'GET', url: `/projects/${id}/graph?flows=100` })).json(),
-    );
-    expect(capped.flows).toHaveLength(100);
-  });
+      const capped = projectStateSchema.parse(
+        (await app.inject({ method: 'GET', url: `/projects/${id}/graph?flows=100` })).json(),
+      );
+      expect(capped.flows).toHaveLength(100);
+    },
+  );
 
   it('the flows endpoint paginates and filters', async () => {
     const app = await createApp();

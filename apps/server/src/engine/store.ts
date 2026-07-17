@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, lte, or, sql } from 'drizzle-orm';
 import {
   addressSchema,
   baselineSchema,
@@ -111,6 +111,26 @@ export interface ApplyResult {
 /** One wire-shaped log row — the domain schema is the single source (ADR-0017). */
 export type LogEntry = OperationLogEntry;
 
+/** Filters for the paged Flow read (#82). ISO timestamps compare as strings. */
+export interface FlowQuery {
+  /** Entity id or external address literal; matches either end of the flow. */
+  endpoint?: string;
+  /** Destination port, mirroring the /flows `service` query param. */
+  service?: number;
+  /** Keep flows still seen at or after this instant (lastSeen >= since). */
+  since?: string;
+  /** Keep flows first seen at or before this instant (firstSeen <= until). */
+  until?: string;
+  limit: number;
+  offset?: number;
+}
+
+export interface FlowPage {
+  flows: Flow[];
+  /** Size of the whole filtered set, not the page. */
+  total: number;
+}
+
 export interface SearchResult {
   entityType: Exclude<SettableEntityType, 'project'>;
   entity:
@@ -193,7 +213,12 @@ export function createEngine(db: Db) {
     return project;
   }
 
-  function getState(projectId: string): ProjectState {
+  /**
+   * The full project snapshot. `omitFlows` skips the Flow load entirely
+   * (ADR-0019 scale, #82): at the ~5k-flow tier the graph read must not
+   * materialize flows it is about to drop — callers page them via queryFlows.
+   */
+  function getState(projectId: string, options?: { omitFlows?: boolean }): ProjectState {
     const project = requireProject(projectId);
     return {
       project,
@@ -260,13 +285,15 @@ export function createEngine(db: Db) {
         .orderBy(asc(policyRules.id))
         .all()
         .map((r) => policyRuleSchema.parse(r)),
-      flows: db
-        .select()
-        .from(flows)
-        .where(eq(flows.projectId, projectId))
-        .orderBy(asc(flows.id))
-        .all()
-        .map((r) => flowSchema.parse(r)),
+      flows: options?.omitFlows
+        ? []
+        : db
+            .select()
+            .from(flows)
+            .where(eq(flows.projectId, projectId))
+            .orderBy(asc(flows.id))
+            .all()
+            .map((r) => flowSchema.parse(r)),
       hostArtifacts: db
         .select()
         .from(hostArtifacts)
@@ -324,6 +351,46 @@ export function createEngine(db: Db) {
         .all()
         .map((r) => baselineSchema.parse(r)),
     };
+  }
+
+  /**
+   * Paged Flow read (#82, advancing ADR-0019): filtering, endpoint matching
+   * and slicing run in the database, so memory never scales with the
+   * project's total Flow count. The endpoint predicate — "either end of the
+   * flow is this entity id or this external address literal" — lives here and
+   * nowhere else; routes and future consumers (exports, findings) delegate.
+   */
+  function queryFlows(projectId: string, query: FlowQuery): FlowPage {
+    requireProject(projectId);
+    const conditions = [eq(flows.projectId, projectId)];
+    // Empty-string filters mean "not filtering" — the pre-#82 route contract.
+    if (query.endpoint) {
+      // Entity endpoints carry `id`, external literals carry `value` — the
+      // stored JSON never has both, so probing each key mirrors the kind check.
+      conditions.push(
+        or(
+          sql`json_extract(${flows.source}, '$.id') = ${query.endpoint}`,
+          sql`json_extract(${flows.source}, '$.value') = ${query.endpoint}`,
+          sql`json_extract(${flows.destination}, '$.id') = ${query.endpoint}`,
+          sql`json_extract(${flows.destination}, '$.value') = ${query.endpoint}`,
+        )!,
+      );
+    }
+    if (query.service !== undefined) conditions.push(eq(flows.port, query.service));
+    if (query.since) conditions.push(gte(flows.lastSeen, query.since));
+    if (query.until) conditions.push(lte(flows.firstSeen, query.until));
+    const where = and(...conditions);
+    const total = db.select({ total: count() }).from(flows).where(where).get()?.total ?? 0;
+    const page = db
+      .select()
+      .from(flows)
+      .where(where)
+      .orderBy(asc(flows.id))
+      .limit(query.limit)
+      .offset(query.offset ?? 0)
+      .all()
+      .map((r) => flowSchema.parse(r));
+    return { flows: page, total };
   }
 
   function getLog(projectId: string): LogEntry[] {
@@ -1729,6 +1796,7 @@ export function createEngine(db: Db) {
     deleteProject,
     importState,
     getState,
+    queryFlows,
     getLog,
     getWatermark,
     applyOperation,
