@@ -2824,6 +2824,11 @@ button:disabled {
 .proposal-status {
   font-weight: 600;
 }
+.proposal-actions {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+}
 .proposal-status--draft {
   color: var(--text-dim);
 }
