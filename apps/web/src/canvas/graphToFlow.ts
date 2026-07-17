@@ -303,13 +303,11 @@ export function graphToFlow(
   // Observed traffic (Phase 2): aggregated Flows render as bundled dashed
   // edges between the resolved devices — one edge per device pair (§3.3).
   if (options.observed) {
-    const resolveFlowDevice = (endpoint: Flow['source']): string | null =>
-      endpoints.deviceId(endpoint);
     const flowBundles = new Map<string, Flow[]>();
     for (const flow of state.flows) {
       if (!modeVisible(flow.lifecycleState, options.mode)) continue;
-      const sourceDevice = resolveFlowDevice(flow.source);
-      const targetDevice = resolveFlowDevice(flow.destination);
+      const sourceDevice = endpoints.deviceId(flow.source);
+      const targetDevice = endpoints.deviceId(flow.destination);
       if (!sourceDevice || !targetDevice) continue;
       if (hiddenDeviceIds.has(sourceDevice) || hiddenDeviceIds.has(targetDevice)) continue;
       const key = `${sourceDevice}~${targetDevice}`;
@@ -320,8 +318,8 @@ export function graphToFlow(
     for (const [key, bundle] of flowBundles) {
       const first = bundle[0];
       if (!first) continue;
-      const sourceDevice = resolveFlowDevice(first.source) ?? '';
-      const targetDevice = resolveFlowDevice(first.destination) ?? '';
+      const sourceDevice = endpoints.deviceId(first.source) ?? '';
+      const targetDevice = endpoints.deviceId(first.destination) ?? '';
       const observations = bundle.reduce((sum, f) => sum + f.observationCount, 0);
       const label =
         bundle.length === 1
