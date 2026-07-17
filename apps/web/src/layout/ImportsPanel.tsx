@@ -4,6 +4,7 @@ import {
   buildCandidates,
   guessImportAdapter,
   IMPORT_FORMAT_SPECS,
+  preflightImport,
   wizardImportFormats,
   type Evidence,
   type ImportFormatSpec,
@@ -114,6 +115,8 @@ function ImportWizard({
   // upload; a valid report shows its host count next to the upload button
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
   const [validNote, setValidNote] = useState<string | null>(null);
+  // advisory pre-flight blocker for the text formats (#90 A3)
+  const [preflight, setPreflight] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const spec = IMPORT_FORMAT_SPECS[adapter];
 
@@ -123,7 +126,19 @@ function ImportWizard({
     setAdapter(effectiveAdapter);
     setIssues(null);
     setValidNote(null);
+    setPreflight(null);
     const content = await file.text();
+
+    const effectiveSpec = IMPORT_FORMAT_SPECS[effectiveAdapter];
+    if (effectiveSpec) {
+      // cheap string gates shared with the server (#90 A3) — catches the
+      // common failure modes instantly instead of via a failed job
+      const blocker = preflightImport(effectiveSpec, file.name, content);
+      if (blocker) {
+        setPreflight(blocker);
+        return;
+      }
+    }
 
     if (effectiveAdapter === 'device-state') {
       // full contract validation in-browser — the same diagnosis the CLI
@@ -192,6 +207,13 @@ function ImportWizard({
           </span>
         )}
       </div>
+      {preflight && (
+        <div className="import-validation" data-testid="import-preflight-error">
+          <p className="imports-panel__notice">
+            <TriangleAlert size={12} className="inline-icon" aria-hidden /> {preflight}
+          </p>
+        </div>
+      )}
       {issues && (
         <div className="import-validation" data-testid="import-validation-errors">
           <p className="imports-panel__notice">

@@ -101,6 +101,26 @@ test.describe('A2: device-state pre-upload validation', () => {
     await expect(page.getByTestId('import-review')).toBeVisible({ timeout: 15_000 });
   });
 
+  test('a bad-header tshark CSV is blocked pre-upload, naming the missing columns', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.getByTestId('nav-imports').click();
+    const jobsBefore = await page.getByTestId('import-job-list').locator('li').count();
+
+    await page.getByTestId('import-adapter-select').selectOption('tshark-flows');
+    await page.getByTestId('import-evidence-file-input').setInputFiles({
+      name: 'flows.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('src,dst\n10.0.0.1,10.0.0.2', 'utf8'),
+    });
+
+    const error = page.getByTestId('import-preflight-error');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText('source and destination');
+    expect(await page.getByTestId('import-job-list').locator('li').count()).toBe(jobsBefore);
+  });
+
   test('the JSON Schema downloads from the device-state help panel', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('nav-imports').click();

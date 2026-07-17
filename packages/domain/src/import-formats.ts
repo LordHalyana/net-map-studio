@@ -460,3 +460,67 @@ export function guessImportAdapter(filename: string): string {
   }
   return 'device-state';
 }
+
+/** Headers live at the top of a file — pre-flight never scans all 64 MB. */
+const PREFLIGHT_SCAN_CHARS = 65_536;
+
+function firstNonBlankLine(content: string): string {
+  return (
+    content
+      .slice(0, PREFLIGHT_SCAN_CHARS)
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0) ?? ''
+  );
+}
+
+/**
+ * Advisory pre-upload checks (#90 A3): the same trivially-checkable gates the
+ * server enforces, run in the browser so the common failure modes are caught
+ * instantly instead of surfacing as a failed job. These are string checks
+ * only — no parsing logic is duplicated, and the server stays the authority
+ * (device-state gets FULL client-side validation separately, A2).
+ * Returns a human-readable blocker, or null to proceed.
+ */
+export function preflightImport(
+  spec: ImportFormatSpec,
+  filename: string,
+  content: string,
+): string | null {
+  if (content.length > IMPORT_MAX_FILE_BYTES) {
+    return `${filename} exceeds the 64 MB import limit — split the evidence and upload the parts.`;
+  }
+  switch (spec.adapter) {
+    case 'nmap-xml':
+      return content.includes('<nmaprun')
+        ? null
+        : 'Not an Nmap XML document (no <nmaprun> root) — export the scan with nmap -oX.';
+    case 'tshark-flows': {
+      const trimmed = content.trimStart();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) return null; // JSON — server parses it
+      const header = firstNonBlankLine(content)
+        .split(',')
+        .map((column) => column.trim());
+      const missing = ['source', 'destination'].filter((column) => !header.includes(column));
+      if (missing.length === 0) return null;
+      return `CSV header is missing the ${missing.join(' and ')} column${
+        missing.length === 1 ? '' : 's'
+      } — see the expected format panel for the shape.`;
+    }
+    case 'zeek-conn': {
+      const firstLine = firstNonBlankLine(content).trimStart();
+      if (firstLine.startsWith('{')) return null; // JSON-lines
+      if (!firstLine.startsWith('#')) {
+        return 'Not a Zeek conn.log: expected # header lines (TSV) or JSON-lines starting with { — see the expected format panel.';
+      }
+      const hasFields = content
+        .slice(0, PREFLIGHT_SCAN_CHARS)
+        .split(/\r?\n/)
+        .some((line) => line.startsWith('#fields'));
+      return hasFields
+        ? null
+        : 'Zeek TSV conn.log is missing its #fields header — the adapter cannot map columns without it.';
+    }
+    default:
+      return null;
+  }
+}
