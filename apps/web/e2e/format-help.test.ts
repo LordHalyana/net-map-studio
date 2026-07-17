@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { wizardImportFormats } from '@netplan/domain';
+import { test, expect, type Page } from '@playwright/test';
+import { IMPORT_FORMAT_SPECS, wizardImportFormats } from '@netplan/domain';
 
 /**
  * #90 A1 DoD: every adapter in the wizard dropdown shows its full expected
@@ -53,5 +53,64 @@ test.describe('A1: expected-format helper panel', () => {
     await help.getByTestId('import-format-download').click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('example.csv');
+  });
+});
+
+/**
+ * #90 A2 DoD: a malformed device-state report is fully diagnosed in-browser
+ * before any upload; a valid report shows its host count; the JSON Schema
+ * downloads. The invalid case creates no job, the valid case stays in
+ * review (no entities committed) — nothing to clean up.
+ */
+
+async function chooseDeviceStateFile(page: Page, content: string) {
+  await page.getByTestId('nav-imports').click();
+  await expect(page.getByTestId('imports-panel')).toBeVisible();
+  await page.getByTestId('import-adapter-select').selectOption('device-state');
+  await page.getByTestId('import-evidence-file-input').setInputFiles({
+    name: 'report.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content, 'utf8'),
+  });
+}
+
+test.describe('A2: device-state pre-upload validation', () => {
+  test('a malformed report is blocked in-browser with per-path issues', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('nav-imports').click();
+    const jobsBefore = await page.getByTestId('import-job-list').locator('li').count();
+
+    await chooseDeviceStateFile(
+      page,
+      JSON.stringify({ schemaVersion: '1.0.0', hosts: [{ hostname: 'app-01' }] }),
+    );
+
+    const errors = page.getByTestId('import-validation-errors');
+    await expect(errors).toBeVisible();
+    await expect(errors).toContainText('upload blocked');
+    await expect(errors).toContainText('hosts.0.deviceId');
+    // blocked means blocked: no job was created
+    expect(await page.getByTestId('import-job-list').locator('li').count()).toBe(jobsBefore);
+  });
+
+  test('a valid report shows its host count and uploads normally', async ({ page }) => {
+    await page.goto('/');
+    await chooseDeviceStateFile(page, IMPORT_FORMAT_SPECS['device-state']?.example ?? '');
+
+    await expect(page.getByTestId('import-validation-ok')).toContainText('1 host, schema 1.0.0');
+    await expect(page.getByTestId('import-review')).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('the JSON Schema downloads from the device-state help panel', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('nav-imports').click();
+    await page.getByTestId('import-adapter-select').selectOption('device-state');
+    const help = page.getByTestId('import-format-help');
+    await help.locator('summary').click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await help.getByTestId('import-format-schema-download').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('device-state.schema.json');
   });
 });

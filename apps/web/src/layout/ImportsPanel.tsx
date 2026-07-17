@@ -10,6 +10,11 @@ import {
   type ImportJob,
   type Observation,
 } from '@netplan/domain';
+import {
+  deviceStateJsonSchema,
+  validateDeviceStateReport,
+  type ValidationIssue,
+} from '@netplan/import-contract';
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
@@ -105,6 +110,10 @@ function ImportWizard({
   const [busy, setBusy] = useState(false);
   // "Expected format" expansion is remembered per adapter (#90 A1)
   const [helpOpen, setHelpOpen] = useState<Record<string, boolean>>({});
+  // device-state pre-upload validation result (#90 A2): issues block the
+  // upload; a valid report shows its host count next to the upload button
+  const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
+  const [validNote, setValidNote] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const spec = IMPORT_FORMAT_SPECS[adapter];
 
@@ -112,13 +121,38 @@ function ImportWizard({
     if (!file) return;
     const effectiveAdapter = adapterChosen ? adapter : guessImportAdapter(file.name);
     setAdapter(effectiveAdapter);
+    setIssues(null);
+    setValidNote(null);
+    const content = await file.text();
+
+    if (effectiveAdapter === 'device-state') {
+      // full contract validation in-browser — the same diagnosis the CLI
+      // prints, with zero server round-trip (#90 A2)
+      let document: unknown;
+      try {
+        document = JSON.parse(content);
+      } catch (error) {
+        setIssues([
+          {
+            path: '(root)',
+            message: `not valid JSON — ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ]);
+        return;
+      }
+      const result = validateDeviceStateReport(document);
+      if (!result.ok) {
+        setIssues(result.issues);
+        return;
+      }
+      setValidNote(
+        `${result.hostCount} host${result.hostCount === 1 ? '' : 's'}, schema ${result.schemaVersion}`,
+      );
+    }
+
     setBusy(true);
     try {
-      await onUpload({
-        filename: file.name,
-        adapter: effectiveAdapter,
-        content: await file.text(),
-      });
+      await onUpload({ filename: file.name, adapter: effectiveAdapter, content });
     } finally {
       setBusy(false);
     }
@@ -143,14 +177,43 @@ function ImportWizard({
           ))}
         </select>
       </label>
-      <button
-        type="button"
-        data-testid="import-upload-button"
-        disabled={busy}
-        onClick={() => fileInput.current?.click()}
-      >
-        {busy ? 'Importing…' : '⇪ Import evidence file…'}
-      </button>
+      <div className="import-wizard__upload">
+        <button
+          type="button"
+          data-testid="import-upload-button"
+          disabled={busy}
+          onClick={() => fileInput.current?.click()}
+        >
+          {busy ? 'Importing…' : '⇪ Import evidence file…'}
+        </button>
+        {validNote && (
+          <span className="import-wizard__valid" data-testid="import-validation-ok">
+            <Check size={12} className="inline-icon" aria-hidden /> {validNote}
+          </span>
+        )}
+      </div>
+      {issues && (
+        <div className="import-validation" data-testid="import-validation-errors">
+          <p className="imports-panel__notice">
+            <TriangleAlert size={12} className="inline-icon" aria-hidden /> Not a valid device-state
+            report — upload blocked. Fix these first:
+          </p>
+          <ul className="import-validation__issues">
+            {issues.slice(0, MAX_SHOWN_ISSUES).map((issue) => (
+              <li key={`${issue.path}:${issue.message}`}>
+                <code>{issue.path}</code> — {issue.message}
+              </li>
+            ))}
+          </ul>
+          {issues.length > MAX_SHOWN_ISSUES && (
+            <p className="import-validation__more">
+              +{issues.length - MAX_SHOWN_ISSUES} more issue
+              {issues.length - MAX_SHOWN_ISSUES === 1 ? '' : 's'} — the validator CLI prints the
+              full list
+            </p>
+          )}
+        </div>
+      )}
       <input
         ref={fileInput}
         type="file"
@@ -171,6 +234,9 @@ function ImportWizard({
     </div>
   );
 }
+
+/** How many validation issues render inline before the "+n more" line (#90 A2). */
+const MAX_SHOWN_ISSUES = 20;
 
 /** `example.csv` for ".csv"-style suffixes; the bare suffix (`conn.log`) otherwise. */
 function exampleFilename(spec: ImportFormatSpec): string {
@@ -262,6 +328,23 @@ function FormatHelp({
           >
             <Download size={12} className="inline-icon" aria-hidden /> Download example
           </Button>
+          {spec.adapter === 'device-state' && (
+            <Button
+              size="sm"
+              data-testid="import-format-schema-download"
+              title="The machine-readable contract — wire it into your collection pipeline's CI"
+              onClick={() =>
+                downloadBlob(
+                  'device-state.schema.json',
+                  new Blob([`${JSON.stringify(deviceStateJsonSchema(), null, 2)}\n`], {
+                    type: 'application/json',
+                  }),
+                )
+              }
+            >
+              <Download size={12} className="inline-icon" aria-hidden /> JSON Schema
+            </Button>
+          )}
         </div>
         <pre className="format-example" data-testid="import-format-example">
           {spec.example}
