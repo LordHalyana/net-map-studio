@@ -1161,31 +1161,9 @@ button:disabled {
   margin-bottom: 10px;
 }
 
-.networks-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.networks-table th {
-  text-align: left;
-  padding: 6px 10px;
-  color: var(--text-dim);
-  font-size: var(--text-xs);
-  border-bottom: 1px solid var(--border);
-}
-
-.networks-table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-}
-
+/* rows select the network in the inspector — the whole row is a target */
 .networks-table tbody tr {
   cursor: pointer;
-}
-
-.networks-table tbody tr:hover {
-  background: var(--bg-raised);
 }
 
 .networks-table__row--selected {
@@ -1236,28 +1214,6 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.reports-table,
-.settings-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.reports-table th,
-.settings-table th {
-  text-align: left;
-  padding: 6px 10px;
-  color: var(--text-dim);
-  font-size: var(--text-xs);
-  border-bottom: 1px solid var(--border);
-}
-
-.reports-table td,
-.settings-table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
 }
 
 .reports-table__hash {
@@ -2340,7 +2296,6 @@ button:disabled {
   margin: 10px 0;
 }
 
-.import-review table,
 .provenance-table,
 .identities-table,
 .conflict__diffs {
@@ -2349,8 +2304,6 @@ button:disabled {
   font-size: var(--text-sm);
 }
 
-.import-review th,
-.import-review td,
 .provenance-table td,
 .identities-table th,
 .identities-table td,
@@ -2781,16 +2734,9 @@ button:disabled {
   padding: 4px 0;
   border-bottom: 1px solid var(--border);
 }
-.egress-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
+/* hashes and long indicators must wrap inside their cells */
 .egress-table th,
 .egress-table td {
-  text-align: left;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
   word-break: break-all;
 }
 .egress-stale {
@@ -3093,14 +3039,40 @@ select {
 
 /* ---------- panel polish (ui-polish M6) ---------- */
 
-/* one data-table header voice across Networks / Settings / Reports */
-.networks-table th,
-.settings-table th,
-.reports-table th {
+/* ONE data table (#90 B3): .networks-table / .reports-table /
+   .settings-table / .egress-table / the import-review candidates collapsed
+   into this class + thin per-table modifiers. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.data-table th {
+  text-align: left;
+  padding: 6px var(--space-2);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
+}
+
+.data-table td {
+  text-align: left;
+  padding: 6px var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tbody tr:hover {
+  background: var(--hover-wash);
+}
+
+/* counts, ports, addresses */
+.data-table__num {
+  text-align: right;
+  font-family: var(--font-mono);
 }
 
 /* addresses, CIDRs, hashes */

@@ -493,7 +493,7 @@ function ObservationSummary({ observations }: { observations: Observation[] }) {
   return (
     <details className="import-review__candidates" data-testid="import-candidates" open>
       <summary>Candidates ({rows.length})</summary>
-      <table>
+      <table className="data-table">
         <thead>
           <tr>
             <th>Candidate</th>
@@ -506,7 +506,9 @@ function ObservationSummary({ observations }: { observations: Observation[] }) {
             <tr key={row.key} data-testid={`candidate-${row.kind}`}>
               <td>{row.key}</td>
               <td>{row.kind}</td>
-              <td data-testid="candidate-confidence">{Math.round(row.confidence * 100)}%</td>
+              <td className="data-table__num" data-testid="candidate-confidence">
+                {Math.round(row.confidence * 100)}%
+              </td>
             </tr>
           ))}
         </tbody>

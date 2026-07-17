@@ -41,7 +41,7 @@ export function NetworksPanel() {
       {graph.networks.length === 0 ? (
         <p className="panel-empty">No networks yet — add one, or import evidence.</p>
       ) : (
-        <table className="networks-table" data-testid="networks-table">
+        <table className="data-table networks-table" data-testid="networks-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -68,7 +68,7 @@ export function NetworksPanel() {
                   <td>{network.kind}</td>
                   <td>{network.vlanId ?? '—'}</td>
                   <td className="mono">{network.cidr || '—'}</td>
-                  <td>{members}</td>
+                  <td className="data-table__num">{members}</td>
                   <td>
                     <IconButton
                       icon={X}

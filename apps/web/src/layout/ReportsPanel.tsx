@@ -155,7 +155,7 @@ export function ReportsPanel() {
       {reports.length === 0 ? (
         <p className="panel-empty">No reports generated yet.</p>
       ) : (
-        <table className="reports-table" data-testid="reports-table">
+        <table className="data-table reports-table" data-testid="reports-table">
           <thead>
             <tr>
               <th>Type</th>

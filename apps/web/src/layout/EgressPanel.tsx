@@ -342,7 +342,7 @@ export function EgressPanel() {
         ) : enrichments.length === 0 ? (
           <p className="panel-empty">No stored enrichments.</p>
         ) : (
-          <table className="egress-table" data-testid="enrichment-list">
+          <table className="data-table egress-table" data-testid="enrichment-list">
             <thead>
               <tr>
                 <th>Indicator</th>
@@ -399,7 +399,7 @@ export function EgressPanel() {
             No outbound calls have been made or attempted.
           </p>
         ) : (
-          <table className="egress-table">
+          <table className="data-table egress-table">
             <thead>
               <tr>
                 <th>When</th>
