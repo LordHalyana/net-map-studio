@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Info, TriangleAlert, X } from 'lucide-react';
 import {
+  endpointResolver,
   endpointSchema,
   policyActionSchema,
   policyDirectionSchema,
@@ -42,20 +43,6 @@ function endpointOptions(graph: ProjectState) {
     ...graph.zones.map((z) => ({ value: `zone:${z.id}`, label: `▦ ${z.name}` })),
     ...graph.devices.map((d) => ({ value: `device:${d.id}`, label: `▢ ${d.name}` })),
   ];
-}
-
-function endpointLabel(graph: ProjectState, endpoint: Endpoint): string {
-  switch (endpoint.kind) {
-    case 'network':
-    case 'subnet':
-      return graph.networks.find((n) => n.id === endpoint.id)?.name ?? '(deleted)';
-    case 'device':
-      return graph.devices.find((d) => d.id === endpoint.id)?.name ?? '(deleted)';
-    case 'zone':
-      return graph.zones.find((z) => z.id === endpoint.id)?.name ?? '(deleted)';
-    case 'interface':
-      return graph.interfaces.find((i) => i.id === endpoint.id)?.name ?? '(deleted)';
-  }
 }
 
 function serviceLabel(service: Service): string {
@@ -286,6 +273,7 @@ function RuleRow({
 }) {
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
+  const endpoints = endpointResolver(graph);
   const service = rule.serviceId ? graph.services.find((s) => s.id === rule.serviceId) : undefined;
   // planned-never-observed is informational (§3.11, M8 #65) — muted, not a ⚠
   const infoWarnings = warnings.filter((w) => w.category === 'plannedNeverObserved');
@@ -306,7 +294,7 @@ function RuleRow({
       <div className="rule-row__main">
         <span className={`rule-row__action rule-row__action--${rule.action}`}>{rule.action}</span>
         <span className="rule-row__traffic">
-          {endpointLabel(graph, rule.source)} → {endpointLabel(graph, rule.destination)}
+          {endpoints.label(rule.source)} → {endpoints.label(rule.destination)}
         </span>
         <span className="rule-row__service">{service ? serviceLabel(service) : 'any service'}</span>
         <span className="rule-row__direction">{rule.direction}</span>

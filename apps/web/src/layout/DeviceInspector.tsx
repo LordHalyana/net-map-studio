@@ -4,6 +4,7 @@ import {
   addressKindSchema,
   criticalitySchema,
   deviceTypeSchema,
+  endpointResolver,
   interfaceKindSchema,
   lifecycleStateSchema,
   networkIdSchema,
@@ -11,6 +12,7 @@ import {
   type Address,
   type Device,
   type Interface,
+  type Link,
   type PolicyRule,
   type ProjectState,
 } from '@netplan/domain';
@@ -545,22 +547,19 @@ function DeviceUsersRolesSection({ device, graph }: { device: Device; graph: Pro
 }
 
 function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectState }) {
+  const endpoints = endpointResolver(graph);
   const interfaceIds = new Set(
     graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),
   );
-  const describe = (interfaceId: string) => {
-    const iface = graph.interfaces.find((i) => i.id === interfaceId);
-    const peer = iface ? graph.devices.find((d) => d.id === iface.deviceId) : undefined;
-    return `${peer?.name ?? '?'} · ${iface?.name ?? '?'}`;
-  };
+  const describe = (interfaceId: Link['source']['id']) =>
+    endpoints.label({ kind: 'interface', id: interfaceId });
   const links = graph.links.filter(
     (l) => interfaceIds.has(l.source.id) || interfaceIds.has(l.target.id),
   );
-  const touchesFlow = (endpoint: (typeof graph.flows)[number]['source']) =>
-    (endpoint.kind === 'device' && endpoint.id === device.id) ||
-    (endpoint.kind === 'interface' && interfaceIds.has(endpoint.id));
   const flowCount = graph.flows.filter(
-    (f) => touchesFlow(f.source) || touchesFlow(f.destination),
+    (f) =>
+      endpoints.touchesDevice(f.source, device.id, 'direct') ||
+      endpoints.touchesDevice(f.destination, device.id, 'direct'),
   ).length;
   if (links.length === 0 && flowCount === 0) return null;
 
@@ -600,18 +599,9 @@ function ConnectionsSection({ device, graph }: { device: Device; graph: ProjectS
 function DeviceRulesSection({ device, graph }: { device: Device; graph: ProjectState }) {
   const dispatch = useAppStore((s) => s.dispatch);
   const projectId = graph.project.id;
-  const interfaceIds = new Set(
-    graph.interfaces.filter((i) => i.deviceId === device.id).map((i) => i.id),
-  );
-  const networkIds = new Set(
-    graph.interfaces
-      .filter((i) => i.deviceId === device.id && i.networkId)
-      .map((i) => i.networkId ?? ''),
-  );
+  const endpoints = endpointResolver(graph);
   const touches = (endpoint: PolicyRule['source']) =>
-    (endpoint.kind === 'device' && endpoint.id === device.id) ||
-    (endpoint.kind === 'interface' && interfaceIds.has(endpoint.id)) ||
-    ((endpoint.kind === 'network' || endpoint.kind === 'subnet') && networkIds.has(endpoint.id));
+    endpoints.touchesDevice(endpoint, device.id, 'membership');
   const rules = graph.policyRules.filter((r) => touches(r.source) || touches(r.destination));
   if (rules.length === 0) return null;
 

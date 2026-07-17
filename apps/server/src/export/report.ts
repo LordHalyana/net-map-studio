@@ -1,4 +1,9 @@
-import type { Endpoint, FindingView, ProjectState, Severity } from '@netplan/domain';
+import {
+  endpointResolver,
+  type FindingView,
+  type ProjectState,
+  type Severity,
+} from '@netplan/domain';
 
 function esc(value: string): string {
   return value
@@ -6,26 +11,6 @@ function esc(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-}
-
-function endpointName(state: ProjectState, endpoint: Endpoint): string {
-  switch (endpoint.kind) {
-    case 'interface':
-      return state.interfaces.find((i) => i.id === endpoint.id)?.name ?? endpoint.id;
-    case 'device':
-      return state.devices.find((d) => d.id === endpoint.id)?.name ?? endpoint.id;
-    case 'network':
-    case 'subnet':
-      return state.networks.find((n) => n.id === endpoint.id)?.name ?? endpoint.id;
-    case 'zone':
-      return state.zones.find((z) => z.id === endpoint.id)?.name ?? endpoint.id;
-  }
-}
-
-function interfaceLabel(state: ProjectState, interfaceId: string): string {
-  const iface = state.interfaces.find((i) => i.id === interfaceId);
-  const device = iface ? state.devices.find((d) => d.id === iface.deviceId) : undefined;
-  return `${device?.name ?? '?'} · ${iface?.name ?? '?'}`;
 }
 
 export interface HtmlReportExtras {
@@ -40,6 +25,7 @@ export function buildHtmlReport(
   generatedAt: string,
   extras: HtmlReportExtras = {},
 ): string {
+  const endpoints = endpointResolver(state);
   const deviceRows = state.devices
     .map((d) => {
       const zone = state.zones.find((z) => z.id === d.zoneId);
@@ -65,8 +51,8 @@ export function buildHtmlReport(
     .map(
       (l) =>
         `<tr><td>${esc(l.label || '—')}</td><td>${esc(l.kind)}</td><td>${esc(
-          interfaceLabel(state, l.source.id),
-        )}</td><td>${esc(interfaceLabel(state, l.target.id))}</td></tr>`,
+          endpoints.label(l.source),
+        )}</td><td>${esc(endpoints.label(l.target))}</td></tr>`,
     )
     .join('\n');
 
@@ -115,8 +101,8 @@ export function buildHtmlReport(
   const ruleRows = state.policyRules
     .map((r) => {
       const service = r.serviceId ? state.services.find((s) => s.id === r.serviceId) : undefined;
-      return `<tr><td>${esc(r.action)}</td><td>${esc(endpointName(state, r.source))}</td><td>${esc(
-        endpointName(state, r.destination),
+      return `<tr><td>${esc(r.action)}</td><td>${esc(endpoints.label(r.source))}</td><td>${esc(
+        endpoints.label(r.destination),
       )}</td><td>${esc(service ? service.name : 'any')}</td><td>${esc(r.direction)}</td><td>${
         r.logging ? 'yes' : 'no'
       }</td><td>${esc(r.justification || '—')}</td></tr>`;
