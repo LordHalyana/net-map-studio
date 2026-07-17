@@ -457,9 +457,18 @@ export const IMPORT_FORMAT_SPECS: Record<string, ImportFormatSpec> = {
   },
 };
 
-/** The formats the import wizard offers — profile-driven adapters stay out until a profile exists (A4). */
-export function wizardImportFormats(): ImportFormatSpec[] {
-  return Object.values(IMPORT_FORMAT_SPECS).filter((spec) => !spec.requiresProfile);
+/** The slice of an ImportProfile the wizard helpers need — which adapter it drives. */
+export type ProfileRef = { adapter: string };
+
+/**
+ * The formats the import wizard offers. A profile-driven adapter joins the
+ * dropdown once the project holds a profile for it (#90 A4) — with none, the
+ * adapter would only ever produce a failed job, so it stays out.
+ */
+export function wizardImportFormats(profiles: readonly ProfileRef[] = []): ImportFormatSpec[] {
+  return Object.values(IMPORT_FORMAT_SPECS).filter(
+    (spec) => !spec.requiresProfile || profiles.some((profile) => profile.adapter === spec.adapter),
+  );
 }
 
 /**
@@ -467,12 +476,50 @@ export function wizardImportFormats(): ImportFormatSpec[] {
  * Falls back to device-state — its strict contract diagnoses a wrong guess
  * instantly, so it is the safest default.
  */
-export function guessImportAdapter(filename: string): string {
+export function guessImportAdapter(filename: string, profiles: readonly ProfileRef[] = []): string {
   const lower = filename.toLowerCase();
-  for (const spec of wizardImportFormats()) {
+  for (const spec of wizardImportFormats(profiles)) {
     if (spec.extensions.some((suffix) => lower.endsWith(suffix))) return spec.adapter;
   }
   return 'device-state';
+}
+
+/** One sample line through the profile pattern: its captured groups, or null for a non-match. */
+export interface ProfileLineMatch {
+  line: string;
+  groups: Record<string, string> | null;
+}
+
+export interface ProfilePatternPreview {
+  /** Why the pattern cannot run at all (not a valid regex), or null. */
+  error: string | null;
+  /** Non-blank sample lines with the groups the pattern captured on each. */
+  lines: ProfileLineMatch[];
+}
+
+/**
+ * The live tester behind profile authoring (#90 A4): run a candidate pattern
+ * over pasted sample lines and report the captured groups per line — purely
+ * advisory, the netcat-text adapter stays the authority on what a match emits.
+ */
+export function previewProfilePattern(pattern: string, sample: string): ProfilePatternPreview {
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern);
+  } catch (cause) {
+    return {
+      error: cause instanceof Error ? cause.message : 'pattern must be a valid regular expression',
+      lines: [],
+    };
+  }
+  const lines = sample
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => {
+      const match = regex.exec(line);
+      return { line, groups: match ? { ...match.groups } : null };
+    });
+  return { error: null, lines };
 }
 
 /** Headers live at the top of a file — pre-flight never scans all 64 MB. */
