@@ -570,13 +570,13 @@ export async function buildApp(options: AppOptions = {}) {
     // graph read. `?flows=omit` drops them; `?flows=<n>` caps them; the client
     // fetches the visible layer's flows from /flows.
     const query = z.object({ flows: z.string().optional() }).parse(request.query ?? {});
-    const state = engine.getState(id);
-    if (query.flows === 'omit') return { ...state, flows: [] };
+    if (query.flows === 'omit') return engine.getState(id, { omitFlows: true });
     const cap = query.flows ? Number.parseInt(query.flows, 10) : null;
-    if (cap !== null && Number.isInteger(cap) && cap >= 0 && state.flows.length > cap) {
-      return { ...state, flows: state.flows.slice(0, cap) };
+    if (cap !== null && Number.isInteger(cap) && cap >= 0) {
+      const state = engine.getState(id, { omitFlows: true });
+      return { ...state, flows: engine.queryFlows(id, { limit: cap }).flows };
     }
-    return state;
+    return engine.getState(id);
   });
 
   // Dedicated flows endpoint (ADR-0019, M14 #71): limit/offset + filters so
@@ -593,22 +593,7 @@ export async function buildApp(options: AppOptions = {}) {
         until: z.string().optional(),
       })
       .parse(request.query ?? {});
-    let flows = engine.getState(id).flows;
-    if (query.endpoint) {
-      const needle = query.endpoint;
-      flows = flows.filter(
-        (f) =>
-          (f.source.kind !== 'external' && f.source.id === needle) ||
-          (f.destination.kind !== 'external' && f.destination.id === needle) ||
-          (f.source.kind === 'external' && f.source.value === needle) ||
-          (f.destination.kind === 'external' && f.destination.value === needle),
-      );
-    }
-    if (query.service !== undefined) flows = flows.filter((f) => f.port === query.service);
-    if (query.since) flows = flows.filter((f) => f.lastSeen >= query.since!);
-    if (query.until) flows = flows.filter((f) => f.firstSeen <= query.until!);
-    const total = flows.length;
-    return { flows: flows.slice(query.offset, query.offset + query.limit), total };
+    return engine.queryFlows(id, query);
   });
 
   app.get('/projects/:id/log', async (request) => {
