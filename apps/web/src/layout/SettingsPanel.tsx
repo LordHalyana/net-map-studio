@@ -42,7 +42,7 @@ export function SettingsPanel() {
       </div>
 
       <h3 className="field-section__title">Egress &amp; threat intel</h3>
-      <p className="panel-empty">
+      <p className="panel-hint">
         Outbound calls pass one guarded chokepoint, off by default (ADR-0027).
       </p>
       <button type="button" data-testid="settings-open-egress" onClick={() => setView('egress')}>
@@ -50,7 +50,7 @@ export function SettingsPanel() {
       </button>
 
       <h3 className="field-section__title">Rule engine configuration</h3>
-      <p className="panel-empty" data-testid="settings-rule-config">
+      <p className="panel-hint" data-testid="settings-rule-config">
         Config version {DEFAULT_ENGINE_CONFIG.version} ·{' '}
         {Object.keys(DEFAULT_ENGINE_CONFIG.rules).length === 0
           ? 'no per-rule overrides — every rule runs enabled at its declared severity (ADR-0024)'
@@ -113,7 +113,7 @@ export function SettingsPanel() {
       )}
 
       <h3 className="field-section__title">Evidence retention</h3>
-      <p className="panel-empty" data-testid="settings-retention">
+      <p className="panel-hint" data-testid="settings-retention">
         Structured evidence is retained inline; oversized raw captures downgrade to hash-only. Raw
         evidence can be purged from the Imports view (kept as hash-only, audited); a secret whose
         source is purged can no longer be revealed.

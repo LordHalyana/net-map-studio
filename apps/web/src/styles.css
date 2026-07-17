@@ -368,6 +368,15 @@ button:disabled {
   font-size: var(--text-sm);
 }
 
+/* Descriptive prose / config summary rendered alongside content — not an
+   empty state. Declarations intentionally duplicate .panel-empty rather than
+   grouping the selectors, so the two can be restyled independently as the
+   semantic split (hint vs. empty) calls for it (#101). */
+.panel-hint {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
 /* ---------- library (visual-parity M5, gap G5) ---------- */
 
 .library-brand {
