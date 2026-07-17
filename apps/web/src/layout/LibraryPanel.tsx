@@ -131,6 +131,7 @@ export function LibraryPanel() {
                 type="button"
                 className={`library-item${view === key ? ' library-item--active' : ''}`}
                 data-testid={`nav-${key}`}
+                aria-current={view === key ? 'page' : undefined}
                 onClick={() => setView(key)}
               >
                 <span className="library-item__glyph">

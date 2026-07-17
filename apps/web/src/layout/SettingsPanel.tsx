@@ -56,7 +56,7 @@ export function SettingsPanel() {
           ? 'no per-rule overrides — every rule runs enabled at its declared severity (ADR-0024)'
           : `${Object.keys(DEFAULT_ENGINE_CONFIG.rules).length} per-rule override(s)`}
       </p>
-      <table className="settings-table" data-testid="settings-indicator-lists">
+      <table className="data-table settings-table" data-testid="settings-indicator-lists">
         <thead>
           <tr>
             <th>Indicator list (rule config data, ADR-0024)</th>
@@ -79,7 +79,7 @@ export function SettingsPanel() {
           No secrets detected in imported evidence.
         </p>
       ) : (
-        <table className="settings-table" data-testid="settings-secrets">
+        <table className="data-table settings-table" data-testid="settings-secrets">
           <thead>
             <tr>
               <th>Kind</th>

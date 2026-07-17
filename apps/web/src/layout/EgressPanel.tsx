@@ -19,6 +19,7 @@ import {
   type EnrichmentView,
 } from '../api/egress';
 import { useAppStore } from '../state/store';
+import { Button, Spinner, Toggle } from '../ui';
 
 /**
  * The egress door & threat-intel workspace (P4-M7, ADR-0027/0028): per-project
@@ -48,6 +49,8 @@ export function EgressPanel() {
   const [feedEntries, setFeedEntries] = useState<LocalFeedEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // first fetch in flight → loading rows, never misleading empty states (#90 B2)
+  const [loaded, setLoaded] = useState(false);
 
   // settings form
   const [enabled, setEnabled] = useState(false);
@@ -86,7 +89,9 @@ export function EgressPanel() {
   }, [project]);
 
   useEffect(() => {
-    refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    refresh()
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoaded(true));
   }, [refresh]);
 
   if (!project) return <p className="panel-empty">Open a project first.</p>;
@@ -186,63 +191,61 @@ export function EgressPanel() {
         <p className="egress-section__hint">
           Status:{' '}
           <strong data-testid="egress-status">
-            {settings?.enabled ? 'open (opt-in)' : 'shut — zero packets leave this machine'}
+            {!loaded && !settings ? (
+              <Spinner size="sm" label="Loading egress settings" />
+            ) : settings?.enabled ? (
+              'open (opt-in)'
+            ) : (
+              'shut — zero packets leave this machine'
+            )}
           </strong>
         </p>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-enable"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-enable"
+            checked={enabled}
+            onChange={setEnabled}
+            label="Enable egress for this project"
+          />
           Enable egress for this project
-        </label>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-allow-ip"
-              checked={allowIp}
-              onChange={(e) => setAllowIp(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        </div>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-allow-ip"
+            checked={allowIp}
+            onChange={setAllowIp}
+            label={`Allow ${INDICATOR_LABELS.ip} to leave`}
+          />
           Allow {INDICATOR_LABELS.ip} to leave (per-type opt-in)
-        </label>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-allow-domain"
-              checked={allowDomain}
-              onChange={(e) => setAllowDomain(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        </div>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-allow-domain"
+            checked={allowDomain}
+            onChange={setAllowDomain}
+            label={`Allow ${INDICATOR_LABELS.domain} to leave`}
+          />
           Allow {INDICATOR_LABELS.domain} to leave (per-type opt-in)
-        </label>
+        </div>
         <p className="egress-disclosure" data-testid="egress-disclosure">
           {DISCLOSURE}
         </p>
-        <label className="egress-check">
-          <span className="switch switch--inline">
-            <input
-              type="checkbox"
-              data-testid="egress-acknowledge"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-            />
-            <span className="switch__track" />
-          </span>
+        <div className="egress-check">
+          <Toggle
+            className="switch--inline"
+            data-testid="egress-acknowledge"
+            checked={acknowledged}
+            onChange={setAcknowledged}
+            label="I have read the disclosure"
+          />
           I have read the disclosure and understand what leaves this machine.
-        </label>
-        <button type="button" data-testid="egress-save" onClick={saveSettings}>
+        </div>
+        <Button variant="primary" data-testid="egress-save" onClick={saveSettings}>
           Save egress settings
-        </button>
+        </Button>
       </section>
 
       <section className="egress-section" data-testid="local-feed">
@@ -272,20 +275,29 @@ export function EgressPanel() {
             <option value="suspicious">suspicious</option>
             <option value="benign">benign</option>
           </select>
-          <button type="button" data-testid="feed-add" onClick={addFeedEntry}>
+          <Button data-testid="feed-add" onClick={addFeedEntry}>
             Add
-          </button>
+          </Button>
         </div>
-        {feedEntries.length === 0 ? (
+        {feedEntries.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading local feed" /> Loading local feed…
+          </p>
+        ) : feedEntries.length === 0 ? (
           <p className="panel-empty">No indicators yet — the feed is operator-supplied.</p>
         ) : (
           <ul className="egress-list" data-testid="feed-entries">
             {feedEntries.map((entry, i) => (
               <li key={`${entry.indicatorType}:${entry.indicator}`}>
                 <code>{entry.indicator}</code> ({entry.indicatorType}) — {entry.verdict}
-                <button type="button" data-testid="feed-remove" onClick={() => removeFeedEntry(i)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="feed-remove"
+                  onClick={() => removeFeedEntry(i)}
+                >
                   remove
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -318,15 +330,19 @@ export function EgressPanel() {
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />
-          <button type="button" data-testid="lookup-run" onClick={lookup} disabled={!lookupQuery}>
+          <Button data-testid="lookup-run" onClick={lookup} disabled={!lookupQuery}>
             Look up
-          </button>
+          </Button>
         </div>
 
-        {enrichments.length === 0 ? (
+        {enrichments.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading enrichments" /> Loading enrichments…
+          </p>
+        ) : enrichments.length === 0 ? (
           <p className="panel-empty">No stored enrichments.</p>
         ) : (
-          <table className="egress-table" data-testid="enrichment-list">
+          <table className="data-table egress-table" data-testid="enrichment-list">
             <thead>
               <tr>
                 <th>Indicator</th>
@@ -356,13 +372,14 @@ export function EgressPanel() {
                     )}
                   </td>
                   <td>
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       data-testid="enrichment-refetch"
                       onClick={() => refetch(view)}
                     >
                       re-fetch
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -373,12 +390,16 @@ export function EgressPanel() {
 
       <section className="egress-section" data-testid="egress-audit">
         <h3>Egress audit trail</h3>
-        {audit.length === 0 ? (
+        {audit.length === 0 && !loaded ? (
+          <p className="panel-loading">
+            <Spinner size="sm" label="Loading audit trail" /> Loading audit trail…
+          </p>
+        ) : audit.length === 0 ? (
           <p className="panel-empty" data-testid="egress-audit-empty">
             No outbound calls have been made or attempted.
           </p>
         ) : (
-          <table className="egress-table">
+          <table className="data-table egress-table">
             <thead>
               <tr>
                 <th>When</th>

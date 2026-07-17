@@ -7,6 +7,7 @@ import {
 } from '@netplan/domain';
 import { listChangeSets, postOperation, registerChangeSet } from '../api/client';
 import { useAppStore } from '../state/store';
+import { Button, Spinner } from '../ui';
 
 /**
  * The solo sign-off control (P4-M6, ADR-0026): registered proposal ChangeSets
@@ -19,6 +20,7 @@ export function ProposalSignOff() {
   const [proposals, setProposals] = useState<ChangeSetRecord[]>([]);
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!project) return;
@@ -27,7 +29,9 @@ export function ProposalSignOff() {
   }, [project]);
 
   useEffect(() => {
-    refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    refresh()
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoaded(true));
   }, [refresh]);
 
   if (!project) return null;
@@ -76,8 +80,7 @@ export function ProposalSignOff() {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
         />
-        <button
-          type="button"
+        <Button
           data-testid="proposal-register"
           disabled={!label.trim()}
           onClick={() => {
@@ -86,8 +89,13 @@ export function ProposalSignOff() {
           }}
         >
           Register
-        </button>
+        </Button>
       </div>
+      {!loaded && proposals.length === 0 && (
+        <p className="panel-loading">
+          <Spinner size="sm" label="Loading proposals" /> Loading proposals…
+        </p>
+      )}
       <ul data-testid="proposal-list">
         {proposals.map((proposal) => (
           <li key={proposal.id} data-testid={`proposal-${proposal.reviewStatus}`}>
@@ -95,16 +103,21 @@ export function ProposalSignOff() {
             <span className={`proposal-status proposal-status--${proposal.reviewStatus}`}>
               {proposal.reviewStatus}
             </span>
-            {(NEXT[proposal.reviewStatus ?? 'draft'] ?? []).map((status) => (
-              <button
-                key={status}
-                type="button"
-                data-testid={`proposal-set-${status}`}
-                onClick={() => transition(proposal, status)}
-              >
-                {status === 'proposed' ? 'propose' : status === 'approved' ? 'approve' : 'reject'}
-              </button>
-            ))}
+            <span className="proposal-actions">
+              {(NEXT[proposal.reviewStatus ?? 'draft'] ?? []).map((status) => (
+                <Button
+                  key={status}
+                  size="sm"
+                  variant={
+                    status === 'approved' ? 'primary' : status === 'rejected' ? 'danger' : 'default'
+                  }
+                  data-testid={`proposal-set-${status}`}
+                  onClick={() => transition(proposal, status)}
+                >
+                  {status === 'proposed' ? 'propose' : status === 'approved' ? 'approve' : 'reject'}
+                </Button>
+              ))}
+            </span>
           </li>
         ))}
       </ul>

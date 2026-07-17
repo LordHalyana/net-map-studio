@@ -20,7 +20,7 @@ import {
 import { cancelImport, getEvidenceBlob, resumeImport } from '../api/imports';
 import { downloadBlob } from '../export/exports';
 import { useAppStore } from '../state/store';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, Spinner } from '../ui';
 import { ConflictList } from './ConflictList';
 
 // dropdown entries and extension guessing derive from the shared, round-trip
@@ -39,9 +39,11 @@ export function ImportsPanel() {
   const uploadImport = useAppStore((s) => s.uploadImport);
   const selectImport = useAppStore((s) => s.selectImport);
   const project = useAppStore((s) => s.project);
+  // first fetch in flight → loading row, never a misleading "No imports yet" (#90 B2)
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void refreshImports();
+    void refreshImports().finally(() => setLoaded(true));
   }, [refreshImports]);
 
   async function controlImport(action: 'cancel' | 'resume', jobId: string) {
@@ -56,7 +58,14 @@ export function ImportsPanel() {
         <h2 className="panel-title">Imports and Evidence</h2>
         <ImportWizard onUpload={uploadImport} />
         <ul className="imports-panel__job-list" data-testid="import-job-list">
-          {importJobs.length === 0 && <li className="panel-empty">No imports yet.</li>}
+          {importJobs.length === 0 &&
+            (loaded ? (
+              <li className="panel-empty">No imports yet.</li>
+            ) : (
+              <li className="panel-loading">
+                <Spinner size="sm" label="Loading imports" /> Loading imports…
+              </li>
+            ))}
           {importJobs.map((job) => (
             <li key={job.id}>
               <button
@@ -72,23 +81,23 @@ export function ImportsPanel() {
                 </span>
               </button>
               {job.status === 'pending' || job.status === 'parsing' ? (
-                <button
-                  type="button"
-                  className="import-job__control"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   data-testid="import-cancel-button"
                   onClick={() => void controlImport('cancel', job.id)}
                 >
                   cancel
-                </button>
+                </Button>
               ) : job.status === 'cancelled' ? (
-                <button
-                  type="button"
-                  className="import-job__control"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   data-testid="import-resume-button"
                   onClick={() => void controlImport('resume', job.id)}
                 >
                   resume
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -201,14 +210,19 @@ function ImportWizard({
         </select>
       </label>
       <div className="import-wizard__upload">
-        <button
-          type="button"
+        <Button
           data-testid="import-upload-button"
           disabled={busy}
           onClick={() => fileInput.current?.click()}
         >
-          {busy ? 'Importing…' : '⇪ Import evidence file…'}
-        </button>
+          {busy ? (
+            <>
+              <Spinner size="sm" label="Importing" /> Importing…
+            </>
+          ) : (
+            '⇪ Import evidence file…'
+          )}
+        </Button>
         {validNote && (
           <span className="import-wizard__valid" data-testid="import-validation-ok">
             <Check size={12} className="inline-icon" aria-hidden /> {validNote}
@@ -426,8 +440,8 @@ function ImportReview() {
           </p>
           <ConflictList />
           <div className="import-review__actions">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               data-testid="import-commit-button"
               disabled={pendingConflicts.length > 0}
               title={
@@ -438,20 +452,20 @@ function ImportReview() {
               onClick={() => void commit()}
             >
               <Check size={12} className="inline-icon" aria-hidden /> Commit import
-            </button>
+            </Button>
           </div>
         </>
       )}
       {job.status === 'committed' && (
         <div className="import-review__actions">
           <p>Committed as one ChangeSet — rollback inverts it atomically.</p>
-          <button
-            type="button"
+          <Button
+            variant="danger"
             data-testid="import-rollback-button"
             onClick={() => void rollback()}
           >
             ⤺ Roll back import
-          </button>
+          </Button>
         </div>
       )}
       <ObservationSummary observations={observations} />
@@ -479,7 +493,7 @@ function ObservationSummary({ observations }: { observations: Observation[] }) {
   return (
     <details className="import-review__candidates" data-testid="import-candidates" open>
       <summary>Candidates ({rows.length})</summary>
-      <table>
+      <table className="data-table">
         <thead>
           <tr>
             <th>Candidate</th>
@@ -492,7 +506,9 @@ function ObservationSummary({ observations }: { observations: Observation[] }) {
             <tr key={row.key} data-testid={`candidate-${row.kind}`}>
               <td>{row.key}</td>
               <td>{row.kind}</td>
-              <td data-testid="candidate-confidence">{Math.round(row.confidence * 100)}%</td>
+              <td className="data-table__num" data-testid="candidate-confidence">
+                {Math.round(row.confidence * 100)}%
+              </td>
             </tr>
           ))}
         </tbody>
@@ -540,13 +556,14 @@ function EvidenceViewer({ evidence, job }: { evidence: Evidence[]; job: ImportJo
             parser {job.parserName} v{record.parserVersion}
             {record.chunkRef ? ` · chunk ${record.chunkRef}` : ''}
           </div>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             data-testid="evidence-view-button"
             onClick={() => void view(record)}
           >
             {viewing === record.id ? 'Hide content' : 'View content'}
-          </button>
+          </Button>
           {viewing === record.id && content !== null && (
             <pre className="evidence-viewer__content" data-testid="evidence-content">
               {content.length > 4000 ? `${content.slice(0, 4000)}…` : content}

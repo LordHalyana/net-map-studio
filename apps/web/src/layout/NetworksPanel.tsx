@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useAppStore } from '../state/store';
 import { buildNetwork, opCreateEntity, opDeleteEntity } from '../state/ops';
+import { Button, IconButton } from '../ui';
 
 /**
  * NETWORKS & VLANS destination (design §3.2B; improvements M10, #67): the
@@ -33,14 +34,14 @@ export function NetworksPanel() {
     <section className="networks-panel" data-testid="networks-panel">
       <div className="networks-panel__head">
         <h2 className="panel-title">Networks &amp; VLANs</h2>
-        <button type="button" data-testid="networks-add" onClick={addNetwork}>
+        <Button data-testid="networks-add" onClick={addNetwork}>
           + Add network
-        </button>
+        </Button>
       </div>
       {graph.networks.length === 0 ? (
         <p className="panel-empty">No networks yet — add one, or import evidence.</p>
       ) : (
-        <table className="networks-table" data-testid="networks-table">
+        <table className="data-table networks-table" data-testid="networks-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -67,11 +68,13 @@ export function NetworksPanel() {
                   <td>{network.kind}</td>
                   <td>{network.vlanId ?? '—'}</td>
                   <td className="mono">{network.cidr || '—'}</td>
-                  <td>{members}</td>
+                  <td className="data-table__num">{members}</td>
                   <td>
-                    <button
-                      type="button"
-                      title={
+                    <IconButton
+                      icon={X}
+                      size="sm"
+                      variant="danger"
+                      label={
                         members > 0
                           ? 'Remove the interface memberships first'
                           : 'Delete this network'
@@ -84,9 +87,7 @@ export function NetworksPanel() {
                           opDeleteEntity(project.id, { entityType: 'network', entity: network }),
                         );
                       }}
-                    >
-                      <X size={12} aria-hidden />
-                    </button>
+                    />
                   </td>
                 </tr>
               );

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { endpointResolver, type PolicyEndpoint, type Severity } from '@netplan/domain';
 import { useAppStore } from '../state/store';
+import { Button, IconButton, Spinner } from '../ui';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -98,15 +99,20 @@ export function FindingsPanel() {
           ) : (
             <span className="findings-watermark">Not yet computed</span>
           )}
-          <button
-            type="button"
-            className="findings-rerun"
+          <Button
+            variant="primary"
             data-testid="findings-rerun"
             onClick={() => void refreshFindings()}
             disabled={loading}
           >
-            {loading ? 'Running…' : 'Re-run analysis'}
-          </button>
+            {loading ? (
+              <>
+                <Spinner size="sm" label="Running analysis" /> Running…
+              </>
+            ) : (
+              'Re-run analysis'
+            )}
+          </Button>
         </div>
       </div>
 
@@ -141,21 +147,25 @@ export function FindingsPanel() {
         {deviceFilter && (
           <span className="findings-device-filter" data-testid="findings-device-filter">
             Device: {filteredDevice?.name ?? deviceFilter.slice(0, 8)}
-            <button
-              type="button"
+            <IconButton
+              icon={X}
+              size="sm"
+              label="Show findings for all devices"
               data-testid="findings-device-filter-clear"
-              title="Show findings for all devices"
-              aria-label="Show findings for all devices"
               onClick={() => focusFindingsForDevice(null)}
-            >
-              <X size={12} aria-hidden />
-            </button>
+            />
           </span>
         )}
         <span className="findings-count" data-testid="findings-count">
           {visible.length} of {findings.length} findings
         </span>
       </div>
+
+      {!report && loading && (
+        <p className="panel-loading" data-testid="findings-loading">
+          <Spinner size="sm" label="Computing findings" /> Computing findings…
+        </p>
+      )}
 
       {report && findings.length === 0 && (
         <p className="panel-empty" data-testid="findings-empty">
@@ -244,26 +254,25 @@ export function FindingsPanel() {
 
                   <div className="finding-actions" data-testid="finding-actions">
                     {STATUS_ACTIONS.map(([status, label]) => (
-                      <button
+                      <Button
                         key={status}
-                        type="button"
-                        className={`finding-action${f.status === status ? ' finding-action--active' : ''}`}
+                        size="sm"
+                        variant={f.status === status ? 'primary' : 'default'}
                         data-testid={`finding-set-${status}`}
                         disabled={f.status === status}
                         onClick={() => void disposeFinding(f.fingerprint, status, f.status)}
                       >
                         {label}
-                      </button>
+                      </Button>
                     ))}
                     {f.status !== 'new' && (
-                      <button
-                        type="button"
-                        className="finding-action"
+                      <Button
+                        size="sm"
                         data-testid="finding-reset"
                         onClick={() => void disposeFinding(f.fingerprint, 'new', f.status)}
                       >
                         Reopen
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </article>
