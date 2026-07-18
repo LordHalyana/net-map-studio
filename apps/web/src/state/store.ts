@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import {
   netplanBundleSchema,
   projectSchema,
@@ -12,6 +13,7 @@ import {
   type UndoRedoAvailability,
 } from '@netplan/domain';
 import {
+  apiFetch,
   createProject,
   getAvailability,
   getGraph,
@@ -301,23 +303,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   revealSecret: async (secretId) => {
     const project = get().project;
     if (!project) throw new Error('no project');
-    const response = await fetch(`/api/projects/${project.id}/secrets/${secretId}/reveal`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const body: unknown = await response.json().catch(() => null);
-      const message =
-        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-          ? body.error
-          : `Reveal failed: ${response.status}`;
-      get().pushToast(message);
-      throw new Error(message);
+    let value: string;
+    try {
+      ({ value } = await apiFetch(
+        `/projects/${project.id}/secrets/${secretId}/reveal`,
+        z.object({ value: z.string() }),
+        { method: 'POST', body: '{}' },
+      ));
+    } catch (error) {
+      get().pushToast(error instanceof Error ? error.message : 'Reveal failed');
+      throw error;
     }
-    const body: unknown = await response.json();
-    const value =
-      body && typeof body === 'object' && 'value' in body && typeof body.value === 'string'
-        ? body.value
-        : '';
     // the reveal flag moved server-side; refresh so the audit + state reflect it
     await get().reload();
     return value;
@@ -387,20 +383,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   /** Restore a .netplan bundle (ADR-0016) and switch to the imported project. */
   importBundle: async (bundleText) => {
     const bundle = netplanBundleSchema.parse(JSON.parse(bundleText));
-    const response = await fetch('/api/projects/import', {
+    const project = await apiFetch('/projects/import', projectSchema, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(bundle),
     });
-    if (!response.ok) {
-      const body: unknown = await response.json().catch(() => null);
-      const message =
-        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-          ? body.error
-          : `Import failed: ${response.status}`;
-      throw new Error(message);
-    }
-    const project = projectSchema.parse(await response.json());
     const [graph, availability] = await Promise.all([
       getGraph(project.id),
       getAvailability(project.id),

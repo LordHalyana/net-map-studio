@@ -28,7 +28,18 @@ export class ApiError extends Error {
   }
 }
 
-async function api<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
+/**
+ * The one fetch path of the web client (#110 D1): JSON round-trip, server
+ * error message extraction, `ApiError` carrying the HTTP status, and a Zod
+ * parse on the way in. Every API module and the store call this — never
+ * `fetch` directly — so error shape and status propagate identically no
+ * matter which panel made the call.
+ */
+export async function apiFetch<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { 'content-type': 'application/json' },
     ...init,
@@ -47,6 +58,8 @@ async function api<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): P
   }
   return schema.parse(await response.json());
 }
+
+const api = apiFetch;
 
 export const listProjects = (): Promise<Project[]> => api('/projects', z.array(projectSchema));
 

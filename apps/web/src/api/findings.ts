@@ -8,7 +8,7 @@ import {
   type FindingStatus,
   type MutationResponse,
 } from '@netplan/domain';
-import { postOperation } from './client';
+import { apiFetch, postOperation } from './client';
 
 export const findingsReportSchema = z.object({
   findings: z.array(findingViewSchema),
@@ -18,14 +18,8 @@ export const findingsReportSchema = z.object({
 });
 export type FindingsReport = z.infer<typeof findingsReportSchema>;
 
-const BASE = '/api';
-
-export async function getFindings(projectId: string): Promise<FindingsReport> {
-  const response = await fetch(`${BASE}/projects/${projectId}/findings`, {
-    headers: { 'content-type': 'application/json' },
-  });
-  if (!response.ok) throw new Error(`Failed to load findings: ${response.status}`);
-  return findingsReportSchema.parse(await response.json());
+export function getFindings(projectId: string): Promise<FindingsReport> {
+  return apiFetch(`/projects/${projectId}/findings`, findingsReportSchema);
 }
 
 /** Disposition mutations flow through the Operation log (ADR-0023), keyed by fingerprint. */
