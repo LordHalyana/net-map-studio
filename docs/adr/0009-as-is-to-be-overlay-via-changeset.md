@@ -1,6 +1,6 @@
 # AS-IS / TO-BE / Diff as an overlay via ChangeSet
 
-AS-IS is the committed model; TO-BE is AS-IS **plus a proposal ChangeSet** (additions as new `Planned` objects, removals as `Removed-in-proposal` flags, and modifications as field-deltas against the *same* object ID). Diff is the rendered proposal. Every object also carries a **Lifecycle State** marker from day one. This is the only model that expresses a *modification* to an existing object without duplicating it, and it reuses the ChangeSet entity we already have.
+AS-IS is the committed model; TO-BE is AS-IS **plus a proposal ChangeSet** (additions as new `Planned` objects, removals as `Removed-in-proposal` flags, and modifications as field-deltas against the _same_ object ID). Diff is the rendered proposal. Every object also carries a **Lifecycle State** marker from day one. This is the only model that expresses a _modification_ to an existing object without duplicating it, and it reuses the ChangeSet entity we already have.
 
 ## Considered Options
 

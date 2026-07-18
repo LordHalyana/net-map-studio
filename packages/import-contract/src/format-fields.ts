@@ -83,9 +83,15 @@ function walkProperties(node: SchemaNode, prefix: string, out: ImportFormatField
   }
 }
 
+function isSchemaNode(value: unknown): value is SchemaNode {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** The device-state contract as a field table — generated, never hand-written. */
 export function deviceStateFormatFields(): ImportFormatField[] {
   const out: ImportFormatField[] = [];
-  walkProperties(deviceStateJsonSchema() as SchemaNode, '', out);
+  const root: unknown = deviceStateJsonSchema();
+  if (!isSchemaNode(root)) throw new Error('device-state JSON schema root is not an object');
+  walkProperties(root, '', out);
   return out;
 }

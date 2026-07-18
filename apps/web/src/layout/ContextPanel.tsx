@@ -1,4 +1,4 @@
-import { useAppStore } from '../state/store';
+import { useAppStore, type ContextTab } from '../state/store';
 import { Tabs } from '../ui';
 import { ConnectForm } from './ConnectForm';
 import { FlowDetails } from './FlowDetails';
@@ -31,7 +31,7 @@ export function ContextPanel() {
     details = <FlowDetails flowIds={selection.ids} graph={graph} />;
   }
 
-  const tabs = [
+  const tabs: { id: ContextTab; label: string }[] = [
     { id: 'details', label: detailsTitle },
     { id: 'rules', label: 'Rules' },
     { id: 'activity', label: 'Activity' },
@@ -45,7 +45,7 @@ export function ContextPanel() {
         className="context-panel__tabs"
         tabs={tabs}
         active={connectMode ? null : tab}
-        onSelect={(id) => setTab(id as typeof tab)}
+        onSelect={setTab}
         testIdPrefix="context-tab-"
       />
       {connectMode || tab === 'details' ? (

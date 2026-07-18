@@ -10,7 +10,7 @@
 
 1. **Read first:** `CONTEXT.md` (Endpoint, Flow, Finding), ADR-0010 (Operation-log mutation spine), ADR-0012 (polymorphic endpoints), ADR-0019 (evidence store scale targets), ADR-0023 (findings = derived detection + persisted disposition), ADR-0027 (single guarded egress door).
 2. **No behaviour changes unless a milestone says so.** Most milestones are refactors or hardening — existing tests are the safety net and must stay green untouched wherever possible. Where a milestone fixes a defect (C-track), add the regression test in the same commit.
-3. **The Operation log stays the spine** (ADR-0010). C2 changes *how many* Operations a secret scan emits, not whether secrets flow through Operations.
+3. **The Operation log stays the spine** (ADR-0010). C2 changes _how many_ Operations a secret scan emits, not whether secrets flow through Operations.
 4. **Keep the tests green.** The e2e suite shares one DB (`workers: 1`) and uses the per-test reset fixture from `apps/web/e2e/fixtures` — any new e2e test imports `test` from `'./fixtures'` and seeds its own state.
 5. **Commit granularly** on a feature branch — one coherent, DoD-passing milestone step per commit.
 6. **Track A lands first.** It builds the net (CI + real linting) that catches regressions from every other track. B, C and D are then independent of each other.
@@ -71,7 +71,7 @@ Create `.github/workflows/ci.yml` running on PRs and pushes to `main`:
 
 ### Current state
 
-CONTEXT.md's Endpoint entry names the resolver as the single owner of `(kind, id)` resolution, and every consumer *outside* the domain package uses it (`apps/server/src/engine/store.ts`, `export/report.ts`, `apps/web/src/canvas/graphToFlow.ts`). But the findings rules themselves hand-roll the fan-out: `packages/domain/src/findings/rules/helpers.ts:113-135` (`flowEndpointDevice`, `endpointCoversDevice`) and `packages/domain/src/rule-validation.ts:78-90` (`endpointExists`) re-implement kind-switches and linear lookups. The cost is both drift risk (a forgotten `case 'subnet'` silently misroutes) and performance: `crossZoneFlowRule` (`findings/rules/segmentation-identity.ts:20-42`) iterates every Flow × every PolicyRule × a full interface re-scan per check — cubic over the collection CONTEXT.md calls high-cardinality.
+CONTEXT.md's Endpoint entry names the resolver as the single owner of `(kind, id)` resolution, and every consumer _outside_ the domain package uses it (`apps/server/src/engine/store.ts`, `export/report.ts`, `apps/web/src/canvas/graphToFlow.ts`). But the findings rules themselves hand-roll the fan-out: `packages/domain/src/findings/rules/helpers.ts:113-135` (`flowEndpointDevice`, `endpointCoversDevice`) and `packages/domain/src/rule-validation.ts:78-90` (`endpointExists`) re-implement kind-switches and linear lookups. The cost is both drift risk (a forgotten `case 'subnet'` silently misroutes) and performance: `crossZoneFlowRule` (`findings/rules/segmentation-identity.ts:20-42`) iterates every Flow × every PolicyRule × a full interface re-scan per check — cubic over the collection CONTEXT.md calls high-cardinality.
 
 ### B1 — Per-run resolution index on RuleContext
 
@@ -134,7 +134,7 @@ CONTEXT.md's Endpoint entry names the resolver as the single owner of `(kind, id
 
 1. **Close SQLite on shutdown:** `db/index.ts:39` returns `{ db, sqlite }` but `app.ts:92` keeps only `db`; no `onClose` closes the handle, so WAL/`-shm` files never checkpoint on graceful exit and every `buildApp` in tests leaks a handle. Capture `sqlite`, add `app.addHook('onClose', ...)` **after** the existing import-drain hook (`app.ts:111`) so the queue drains before close.
 2. **Atomic `.netplan` import:** `app.ts:275-284` runs `engine.importState(...)` and `importStore.restoreAttachments(...)` (`imports/store.ts:772-788`) as two separate transactions — a failure between them leaves a project with no evidence. Fold both into one transaction.
-3. **Validate restored rows' project:** `restoreAttachments` inserts `importJobs`/`evidence` rows trusting each row's own `projectId` — a crafted bundle can inject rows into a *different* existing project. Assert `record.projectId === project.id` (jobs likewise); reject the bundle otherwise.
+3. **Validate restored rows' project:** `restoreAttachments` inserts `importJobs`/`evidence` rows trusting each row's own `projectId` — a crafted bundle can inject rows into a _different_ existing project. Assert `record.projectId === project.id` (jobs likewise); reject the bundle otherwise.
 
 **DoD:** a test asserts the WAL file is checkpointed/removed after graceful close; an import that fails during attachment restore leaves no partial project; a bundle with a foreign `projectId` on an evidence row is rejected with a 4xx; suite runs leak no handles (spot-check via process handle count or repeated `buildApp` loop).
 

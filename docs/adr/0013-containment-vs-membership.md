@@ -8,4 +8,4 @@ Physical grouping (Site › Zone/Rack › Device) is modeled as single-parent **
 
 ## Consequences
 
-- A network-node on the canvas is a *projection* of a Membership property, not a stored topological node — so per-(network, view) layout positions are persisted as hints without making the Network a real node.
+- A network-node on the canvas is a _projection_ of a Membership property, not a stored topological node — so per-(network, view) layout positions are persisted as hints without making the Network a real node.

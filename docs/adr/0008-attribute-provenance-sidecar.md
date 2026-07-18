@@ -1,6 +1,6 @@
 # Provenance stored in an attribute-provenance sidecar
 
-Per-field provenance (source, evidence reference, confidence, parser version, accept/reject/override status) is stored in a separate `FieldProvenance` sidecar keyed by `(entityType, entityId, field)`, **not** as field-envelope objects on every column and **not** as one source per record. The entity tables hold the *current accepted value* — plain, indexable, queryable by the canvas/search/rules — while the sidecar holds provenance, history and competing observations (which the Reconciliation queue needs).
+Per-field provenance (source, evidence reference, confidence, parser version, accept/reject/override status) is stored in a separate `FieldProvenance` sidecar keyed by `(entityType, entityId, field)`, **not** as field-envelope objects on every column and **not** as one source per record. The entity tables hold the _current accepted value_ — plain, indexable, queryable by the canvas/search/rules — while the sidecar holds provenance, history and competing observations (which the Reconciliation queue needs).
 
 ## Considered Options
 

@@ -16,6 +16,7 @@
 6. **Commit granularly** on a feature branch — one coherent step per commit, DoD-passing commits only. Do not commit to `main`.
 
 ### Working agreements
+
 - TypeScript `strict` everywhere. No `any`; no `as` outside tests (this repo prefers `shoehorn` in tests).
 - **Zod schemas in `packages/domain` are the single source of truth** (ADR-0017). Types are `z.infer`red. Never define an entity shape twice.
 - All primary keys are **UUIDv7**, mintable on client or server (ADR-0015).
@@ -46,9 +47,11 @@ M0 Scaffold
 ## 2. Milestones
 
 ### M0 — Repo scaffolding & toolchain
+
 **Realizes:** ADR-0003, ADR-0017.
 
 **Deliverables**
+
 - pnpm-workspaces monorepo: `packages/domain`, `apps/web`, `apps/server`.
 - Root + per-package `tsconfig` (strict, composite/project references).
 - Vite (`apps/web`), `tsx` dev + `tsup` build (`apps/server`).
@@ -62,9 +65,11 @@ M0 Scaffold
 ---
 
 ### M1 — Domain package: entities & operations as Zod
+
 **Realizes:** ADR-0003, ADR-0009 (lifecycleState), ADR-0011, ADR-0012, ADR-0015; seams for ADR-0008.
 
 **Deliverables**
+
 - Branded `Id` types (UUIDv7-backed) and a `newId()` mint helper.
 - Zod schemas + inferred types for the **Phase-1 entities**: `Project`, `Site`, `Zone`, `Device`, `Interface`, `Address`, `Network`, `Link`, `Service`, `PolicyRule`.
 - `lifecycleState` enum (`observed | inferred | manuallyVerified | planned | deprecated | removedInProposal`) on every modellable object; Phase-1 objects default to `planned`.
@@ -76,10 +81,12 @@ M0 Scaffold
 
 ---
 
-### M2 — Persistence & the Operation-log engine  ⭐ the spine
+### M2 — Persistence & the Operation-log engine ⭐ the spine
+
 **Realizes:** ADR-0007, ADR-0010, ADR-0015; seam for ADR-0016.
 
 **Deliverables**
+
 - Drizzle SQLite schema for all Phase-1 entities, UUIDv7 PKs, `lifecycleState` column on each.
 - `operation_log` (append-only) and `change_sets` tables.
 - **Apply/invert engine:** `apply(op)` mutates relational state **and** appends to the log in one transaction; `invert(op)` produces and applies the inverse. Current state always lives in the entity tables (not a fold over the log) — ADR-0010 forbids event-sourcing.
@@ -91,9 +98,11 @@ M0 Scaffold
 ---
 
 ### M3 — Application API (Fastify)
+
 **Realizes:** ADR-0006, ADR-0010.
 
 **Deliverables**
+
 - `apps/server` Fastify app.
 - `Project` CRUD.
 - **Single mutation surface:** `POST /projects/:id/operations` accepts one Operation or a ChangeSet, validates with the domain Zod schema, applies through the M2 engine, returns new/changed state + updated undo/redo availability. All writes funnel here.
@@ -105,9 +114,11 @@ M0 Scaffold
 ---
 
 ### M4 — Canvas shell & client op-sync
+
 **Realizes:** ADR-0004, ADR-0005, ADR-0010, ADR-0015.
 
 **Deliverables**
+
 - Five-region dark-mode layout: command bar (top), component library (left nav), canvas (center), inspector (right), context panel (bottom) — matching the concept image.
 - React Flow mounted: pan, zoom, minimap, fit-to-screen, zoom controls, snap-to-grid.
 - Client state layer: the client **mints UUIDv7s**, applies Operations optimistically, and syncs them to `POST …/operations`; reconciles the returned state. This is the client half of the ADR-0010 spine.
@@ -117,9 +128,11 @@ M0 Scaffold
 ---
 
 ### M5 — Component library, Device nodes & inspector
+
 **Realizes:** design §3.2B/§3.2D; ADR-0005.
 
 **Deliverables**
+
 - Left library with the concept-image categories (Network, Security, Servers/Services, Endpoints, POS/Payment, Building/IoT, Custom). Add via drag-drop, double-click, and keyboard.
 - Custom React node components rendering badges: type icon, status, `lifecycleState`, (placeholders for confidence/evidence-count wired but empty in Phase 1).
 - Right **inspector** for a Device: name, type, vendor, model, serial/asset, location, criticality; Interfaces with MAC/IP Addresses and Network membership; tags/notes. Edits emit Operations.
@@ -130,9 +143,11 @@ M0 Scaffold
 ---
 
 ### M6 — Networks (Membership) & physical Containers (Containment)
+
 **Realizes:** ADR-0013.
 
 **Deliverables**
+
 - `Network` rendered as a **network-node**; membership is `interface.networkId`, drawn as membership edges (a projection, not a stored Link — ADR-0013). Persist per-(network, view) layout hints.
 - `Site`/`Zone` as **collapsible React Flow container nodes** (sub-flows); a Device has exactly one physical parent.
 - Logical-topology layer filter that can tint/overlay by Network.
@@ -142,9 +157,11 @@ M0 Scaffold
 ---
 
 ### M7 — Connect mode: Links
+
 **Realizes:** ADR-0011, ADR-0012; design §3.3.
 
 **Deliverables**
+
 - **Connect mode** (not freehand): pick source Interface → pick destination → compact form → app renders the `Link` edge (design §3.3).
 - Link endpoints constrained to Interfaces (ADR-0012); invalid targets rejected in the UI.
 - Edge-bundling scaffold: multiple records between the same pair collapse into one expandable edge (design §3.3).
@@ -154,22 +171,26 @@ M0 Scaffold
 ---
 
 ### M8 — PolicyRules, Services & the rule editor
+
 **Realizes:** ADR-0011, ADR-0012; design §3.11.
 
 **Deliverables**
+
 - `Service` objects (protocol, port/range, process).
 - `PolicyRule` with polymorphic endpoints (device/network/zone/subnet — ADR-0012), direction, action (allow/deny/reject/monitor), logging, owner, justification, optional review date.
 - Bottom **context panel** as the link/rule editor (matches the concept image's LINK INFO panel): source/destination, protocol/service, direction, action, logging toggle.
 - Rule validation (a starter set from §3.11): overlapping/contradictory, any-to-any, orphaned (referencing deleted objects), shadowed-by-broader. Surface as inline warnings (not `Finding`s — that entity is Phase 3).
 
-**DoD:** author an allow rule *network-to-network* (e.g. Staff-VLAN → Servers-VLAN) and a default deny; the validator flags an any-to-any rule and an orphaned rule; rules persist via Operations.
+**DoD:** author an allow rule _network-to-network_ (e.g. Staff-VLAN → Servers-VLAN) and a default deny; the validator flags an any-to-any rule and an orphaned rule; rules persist via Operations.
 
 ---
 
 ### M9 — Undo/redo, ChangeSet & activity log
+
 **Realizes:** ADR-0010.
 
 **Deliverables**
+
 - Undo/redo controls in the command bar, wired to the M2 invert engine.
 - ChangeSet grouping so a multi-step edit undoes/redoes as one unit.
 - Bottom-panel **Activity log** view rendering the operation history (the audit trail, free from ADR-0010).
@@ -179,9 +200,11 @@ M0 Scaffold
 ---
 
 ### M10 — Export/import bundle, image & report
+
 **Realizes:** ADR-0016; design §3.12; acceptance #9/#10.
 
 **Deliverables**
+
 - **`.netplan` bundle** export: versioned `project.json` carrying every entity with its UUIDv7 (Phase 1 = json + schema version; evidence subtree/manifest are seams — ADR-0016).
 - Import/restore that preserves UUIDs and object relationships exactly.
 - PNG/SVG topology export (from React Flow).
@@ -193,9 +216,11 @@ M0 Scaffold
 ---
 
 ### M11 — Scale, layout & polish
+
 **Realizes:** design acceptance #1; §3.2C.
 
 **Deliverables**
+
 - Performance pass to keep **100+ devices** interactive: viewport culling, node/edge memoization, bundled edges.
 - Auto-arrange via a layout engine (elkjs or dagre over React Flow) with **manual pin** flags so operator-positioned nodes aren't moved (design §3.2C).
 - Global search, fit-to-screen, grid, layer filters (physical/logical), zoom presets.
@@ -207,6 +232,7 @@ M0 Scaffold
 ## 3. Phase-1 Definition of Done (maps to design §3.15)
 
 Phase 1 is complete when an operator can:
+
 - ✅ Create a Project and build **100+ Devices** without the canvas becoming impractical (#1 → M11).
 - ✅ Create typed **Links** and **PolicyRules** with protocols, ports, direction and action (#2 → M7, M8).
 - ✅ Model **Networks/VLANs**, **Interfaces** and physical grouping (#3 partial → M6; modelled OS **Identity/RoleAssignment** deferred to Phase 2 per ADR-0014).
@@ -220,14 +246,14 @@ Acceptance items #4 (import), #5 (reconcile), #6 (trace to evidence) and #8 (fin
 
 ## 4. Seams to leave for later phases (build the shape, not the feature)
 
-| Seam | Where | For |
-|---|---|---|
-| `FieldProvenance` sidecar type | `packages/domain` (defined, unused) | Phase 2 provenance (ADR-0008) — entity tables must need **no migration** to add it |
-| `Flow`, `Evidence`, `ImportJob` types | `packages/domain` (stubs) | Phase 2 import pipeline |
-| `Finding` type | `packages/domain` (stub) | Phase 3 findings engine |
-| Proposal/overlay machinery | `lifecycleState` column present; overlay logic absent | Phase 2 AS-IS/TO-BE (ADR-0009) |
-| Evidence subtree + hash manifest | `.netplan` bundle envelope | Phase 2 (ADR-0016) |
-| Access-Role enforcement | Access-Role data modellable; not enforced | Multi-user (ADR-0001) |
+| Seam                                  | Where                                                 | For                                                                                |
+| ------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `FieldProvenance` sidecar type        | `packages/domain` (defined, unused)                   | Phase 2 provenance (ADR-0008) — entity tables must need **no migration** to add it |
+| `Flow`, `Evidence`, `ImportJob` types | `packages/domain` (stubs)                             | Phase 2 import pipeline                                                            |
+| `Finding` type                        | `packages/domain` (stub)                              | Phase 3 findings engine                                                            |
+| Proposal/overlay machinery            | `lifecycleState` column present; overlay logic absent | Phase 2 AS-IS/TO-BE (ADR-0009)                                                     |
+| Evidence subtree + hash manifest      | `.netplan` bundle envelope                            | Phase 2 (ADR-0016)                                                                 |
+| Access-Role enforcement               | Access-Role data modellable; not enforced             | Multi-user (ADR-0001)                                                              |
 
 **Do not build these features.** Only ensure the types/columns/envelope exist so adding them later is additive, never a reshape.
 
