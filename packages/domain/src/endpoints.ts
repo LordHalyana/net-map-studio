@@ -58,10 +58,6 @@ export function isValidLinkEndpoint(endpoint: Endpoint): endpoint is LinkEndpoin
   return linkEndpointSchema.safeParse(endpoint).success;
 }
 
-export function isValidPolicyEndpoint(endpoint: Endpoint): boolean {
-  return policyEndpointSchema.safeParse(endpoint).success;
-}
-
 /** The entity a `(kind, id)` reference denotes; `subnet` denotes a Network. */
 export type EndpointEntity = Device | Interface | Network | Zone;
 

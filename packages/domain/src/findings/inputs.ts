@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { deviceIdSchema } from '../ids.js';
 import { evidenceIdSchema } from '../imports.js';
-import { inputClassSchema, type InputClass } from './coverage.js';
+import { HOST_ARTIFACT_INPUT_CLASS, inputClassSchema, type InputClass } from './coverage.js';
 
 /**
  * Per-Device security telemetry (ADR-0018 Phase-3 fields): the neutral analysis
@@ -63,10 +63,10 @@ export type HostSecurityInventory = z.infer<typeof hostSecurityInventorySchema>;
 /** The input classes a non-empty inventory can contribute to coverage (M9). */
 export function inventoryCoverage(inventory: HostSecurityInventory): InputClass[] {
   const classes = new Set<InputClass>(inventory.collectedClasses);
-  if (inventory.processes.length > 0) classes.add('processes');
-  if (inventory.persistence.length > 0) classes.add('persistence');
-  if (inventory.software.length > 0) classes.add('installedSoftware');
-  if (inventory.files.length > 0) classes.add('fileInventory');
+  if (inventory.processes.length > 0) classes.add(HOST_ARTIFACT_INPUT_CLASS.process);
+  if (inventory.persistence.length > 0) classes.add(HOST_ARTIFACT_INPUT_CLASS.persistence);
+  if (inventory.software.length > 0) classes.add(HOST_ARTIFACT_INPUT_CLASS.software);
+  if (inventory.files.length > 0) classes.add(HOST_ARTIFACT_INPUT_CLASS.file);
   if (inventory.software.some((s) => s.remoteAccess)) classes.add('remoteAccess');
   return [...classes];
 }
