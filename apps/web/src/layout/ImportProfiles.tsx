@@ -22,8 +22,8 @@ export function ImportProfiles() {
   const project = useAppStore((s) => s.project);
   const profiles = useAppStore((s) => s.graph?.importProfiles);
   const dispatch = useAppStore((s) => s.dispatch);
-  // 'new' opens the editor on a fresh profile; an id edits that one
-  const [editing, setEditing] = useState<'new' | string | null>(null);
+  // 'new' opens the editor on a fresh profile; a profile id edits that one
+  const [editing, setEditing] = useState<string | null>(null);
   if (!project) return null;
   const list = profiles ?? [];
 

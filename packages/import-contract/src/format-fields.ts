@@ -32,9 +32,13 @@ interface SchemaNode {
 /** Bounds this wide are Zod's safe-integer sentinels, not real constraints. */
 const INT_SENTINEL = 9_007_199_254_740_991;
 
+function literalLabel(value: unknown): string {
+  return typeof value === 'string' ? value : (JSON.stringify(value) ?? 'unknown');
+}
+
 function typeLabel(node: SchemaNode): string {
-  if (node.const !== undefined) return `"${String(node.const)}" (exactly)`;
-  if (node.enum) return node.enum.map((value) => `'${String(value)}'`).join(' | ');
+  if (node.const !== undefined) return `"${literalLabel(node.const)}" (exactly)`;
+  if (node.enum) return node.enum.map((value) => `'${literalLabel(value)}'`).join(' | ');
   if (node.type === 'string') {
     return node.format === 'date-time' ? 'ISO 8601 timestamp' : 'string';
   }

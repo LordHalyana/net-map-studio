@@ -7,7 +7,13 @@ export function toCsv(rows: Record<string, unknown>[]): string {
 
   const cell = (value: unknown): string => {
     const text =
-      value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+      value == null
+        ? ''
+        : typeof value === 'string'
+          ? value
+          : typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint'
+            ? String(value)
+            : (JSON.stringify(value) ?? '');
     return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
 

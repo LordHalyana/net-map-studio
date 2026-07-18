@@ -27,7 +27,10 @@ function emit(result: AdapterRunResult): void {
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
-    chunks.push(chunk instanceof Buffer ? chunk : Buffer.from(chunk));
+    const piece: unknown = chunk;
+    if (piece instanceof Buffer) chunks.push(piece);
+    else if (piece instanceof Uint8Array || typeof piece === 'string')
+      chunks.push(Buffer.from(piece));
   }
   return Buffer.concat(chunks).toString('utf8');
 }

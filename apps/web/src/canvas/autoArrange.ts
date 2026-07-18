@@ -1,4 +1,4 @@
-import dagre from '@dagrejs/dagre';
+import dagre, { type EdgeLabel, type GraphLabel, type NodeLabel } from '@dagrejs/dagre';
 import type { ChangeSet, Operation, ProjectState } from '@netplan/domain';
 import { changeSet, opSetField, opSetNetworkLayoutHint } from '../state/ops';
 import { footprints, type Rect } from './footprints';
@@ -48,7 +48,7 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
   const movable = candidates.filter((d) => !d.pinned);
   if (movable.length === 0) return null;
 
-  const graph = new dagre.graphlib.Graph();
+  const graph = new dagre.graphlib.Graph<GraphLabel, NodeLabel, EdgeLabel>();
   graph.setGraph({ rankdir: 'TB', nodesep: NODE_SEP, ranksep: RANK_SEP, marginx: 40, marginy: 40 });
   graph.setDefaultEdgeLabel(() => ({}));
 
@@ -91,7 +91,7 @@ export function autoArrangeChangeSet(state: ProjectState): ChangeSet | null {
 
   const boxOf = (id: string, size: { width: number; height: number }): Rect | null => {
     const node = graph.node(id);
-    if (!node) return null;
+    if (!node || node.x === undefined || node.y === undefined) return null;
     return {
       x: Math.round(node.x - size.width / 2),
       y: Math.round(node.y - size.height / 2),
