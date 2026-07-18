@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { OperationLogEntry, ProjectState } from '@netplan/domain';
-import { getLog } from '../api/client';
+import type { ProjectState } from '@netplan/domain';
 import { ProposalSignOff } from './ProposalSignOff';
 import { useAppStore } from '../state/store';
+import { useOperationLog } from '../state/useOperationLog';
 
 /**
  * The rendered Diff (ADR-0009, design §3.10): additions are Planned objects,
@@ -12,15 +11,10 @@ import { useAppStore } from '../state/store';
  */
 export function DiffPanel() {
   const graph = useAppStore((s) => s.graph);
-  const project = useAppStore((s) => s.project);
-  const [log, setLog] = useState<OperationLogEntry[]>([]);
-
-  useEffect(() => {
-    if (!project) return;
-    void getLog(project.id).then(setLog);
-  }, [project, graph]);
+  const { entries: log, error: logError } = useOperationLog();
 
   if (!graph) return null;
+  if (logError) return <p className="panel-empty">Couldn’t load the change log — {logError}</p>;
 
   const named = (state: ProjectState) => [
     ...state.devices.map((d) => ({ id: d.id, name: d.name, type: 'device', lc: d.lifecycleState })),

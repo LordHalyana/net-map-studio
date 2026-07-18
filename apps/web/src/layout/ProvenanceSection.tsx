@@ -28,7 +28,14 @@ export function ProvenanceSection({
 
   useEffect(() => {
     if (!project || rows.length === 0) return;
-    void listEvidence(project.id).then(setEvidence);
+    listEvidence(project.id)
+      .then(setEvidence)
+      .catch((error: unknown) => {
+        // labels fall back to raw ids; surface the failure instead of silence
+        useAppStore
+          .getState()
+          .pushToast(error instanceof Error ? error.message : 'Failed to load evidence');
+      });
   }, [project, rows.length]);
 
   if (rows.length === 0) return null;

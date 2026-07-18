@@ -8,6 +8,7 @@ import {
   type ImportJob,
   type ImportResolutionAction,
   type Operation,
+  type OperationLogEntry,
   type Project,
   type ProjectState,
   type UndoRedoAvailability,
@@ -17,6 +18,7 @@ import {
   createProject,
   getAvailability,
   getGraph,
+  getLog,
   listProjects,
   postOperation,
   postRedo,
@@ -129,6 +131,11 @@ interface AppState {
   lastSavedAt: number | null;
   /** The server's operation-log seq after the last acknowledged mutation (#110 C4). */
   watermark: number | null;
+  /** The one shared operation-log read (#110 D2) — panels consume via useOperationLog(). */
+  operationLog: OperationLogEntry[];
+  operationLogLoading: boolean;
+  operationLogError: string | null;
+  refreshOperationLog: () => Promise<void>;
   /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
   toasts: Toast[];
   pushToast: (message: string, severity?: Toast['severity']) => void;
@@ -208,6 +215,12 @@ interface AppState {
 /** Serializes syncs so operations reach the server in dispatch order. */
 let syncQueue: Promise<void> = Promise.resolve();
 
+// One log fetch per graph version (#110 D2): the synced marker is the graph
+// object identity (every adoption produces a new object), the in-flight
+// promise dedupes simultaneous panel mounts.
+let logSynced: { projectId: string; graph: ProjectState | null } | null = null;
+let logInflight: Promise<void> | null = null;
+
 /** Single-flight guard: StrictMode re-runs effects, and a double bootstrap would create two projects. */
 let bootstrapPromise: Promise<void> | null = null;
 
@@ -220,6 +233,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingOps: 0,
   lastSavedAt: null,
   watermark: null,
+  operationLog: [],
+  operationLogLoading: false,
+  operationLogError: null,
+
+  refreshOperationLog: async () => {
+    const { project, graph } = get();
+    if (!project) return;
+    if (logSynced && logSynced.projectId === project.id && logSynced.graph === graph) return;
+    if (logInflight) {
+      // a fetch for an older graph version is running — let it land, then
+      // re-check whether this version still needs one
+      await logInflight;
+      return get().refreshOperationLog();
+    }
+    const target = { projectId: project.id, graph };
+    set({ operationLogLoading: true });
+    logInflight = getLog(project.id)
+      .then((entries) => {
+        logSynced = target;
+        set({ operationLog: entries, operationLogError: null, operationLogLoading: false });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Failed to load the activity log';
+        set({ operationLogError: message, operationLogLoading: false });
+        get().pushToast(message);
+      })
+      .finally(() => {
+        logInflight = null;
+      });
+    return logInflight;
+  },
   toasts: [],
   layers: {
     logical: true,
