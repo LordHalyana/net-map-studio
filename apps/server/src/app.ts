@@ -330,7 +330,8 @@ export async function buildApp(options: AppOptions = {}) {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);
     // secrets masking (§3.13, M13 #70): scan the newly committed evidence
-    importStore.scanEvidenceSecrets(params.id);
+    // — scoped to this job's evidence, one ChangeSet (#110 C2)
+    importStore.scanEvidenceSecrets(params.id, params.jobId);
     return { ...detail, state: engine.getState(params.id) };
   });
 
