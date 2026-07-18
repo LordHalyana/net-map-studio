@@ -1,6 +1,6 @@
 import type { Flow } from '../../entities.js';
 import type { DetectionDraft, Rule } from '../rule.js';
-import { applicableBaselines, flowEndpointDevice, numberParam } from './helpers.js';
+import { applicableBaselines, numberParam } from './helpers.js';
 
 /**
  * M8 — external-connection family (design §3.8): unexpected external
@@ -32,10 +32,10 @@ export const unexpectedExternalDestinationRule: Rule = {
     for (const flow of ctx.state.flows) {
       const dest = externalValue(flow.destination);
       if (dest === undefined) continue;
-      const source = flowEndpointDevice(ctx.state, flow.source);
+      const source = ctx.index.flowEndpointDevice(flow.source);
       if (!source) continue; // no internal scope to measure expectation against
 
-      const baselines = applicableBaselines(ctx.state, source);
+      const baselines = applicableBaselines(ctx, source);
       if (baselines.length === 0) continue; // no expected-traffic yardstick governs this scope
       const expected = baselines.some((b) =>
         b.expectedTraffic.some((t) => trafficMatches(t.destination, dest)),
@@ -82,9 +82,9 @@ export const beaconLikeRule: Rule = {
       const interval = spanMinutes / (flow.observationCount - 1);
       if (interval < minIntervalMinutes || interval > maxIntervalMinutes) continue;
 
-      const source = flowEndpointDevice(ctx.state, flow.source);
+      const source = ctx.index.flowEndpointDevice(flow.source);
       const dest =
-        externalValue(flow.destination) ?? flowEndpointDevice(ctx.state, flow.destination)?.name;
+        externalValue(flow.destination) ?? ctx.index.flowEndpointDevice(flow.destination)?.name;
       drafts.push({
         affected: source ? { kind: 'device', id: source.id } : null,
         salientKey: `beacon:${flow.id}`,

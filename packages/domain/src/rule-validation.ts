@@ -1,7 +1,7 @@
 import type { Endpoint } from './endpoints.js';
 import type { Flow, Network, PolicyRule, Service } from './entities.js';
 import type { ProjectState } from './state.js';
-import { endpointCoversDevice, flowEndpointDevice } from './findings/rules/helpers.js';
+import { buildResolutionIndex, type ResolutionIndex } from './resolution.js';
 
 /**
  * Rule-validation set (design §3.11). These are inline warnings, not Findings
@@ -53,18 +53,23 @@ function ruleServiceMatchesFlow(state: ProjectState, rule: PolicyRule, flow: Flo
  * endpoints resolve to known Devices only — external peers never match, so
  * they neither satisfy a rule nor silently pass one.
  */
-export function ruleMatchesFlow(state: ProjectState, rule: PolicyRule, flow: Flow): boolean {
-  const src = flowEndpointDevice(state, flow.source);
-  const dst = flowEndpointDevice(state, flow.destination);
+export function ruleMatchesFlow(
+  index: ResolutionIndex,
+  state: ProjectState,
+  rule: PolicyRule,
+  flow: Flow,
+): boolean {
+  const src = index.flowEndpointDevice(flow.source);
+  const dst = index.flowEndpointDevice(flow.destination);
   if (!src || !dst) return false;
   if (!ruleServiceMatchesFlow(state, rule, flow)) return false;
   const forward =
-    endpointCoversDevice(state, rule.source, src) &&
-    endpointCoversDevice(state, rule.destination, dst);
+    index.endpointCoversDevice(rule.source, src) &&
+    index.endpointCoversDevice(rule.destination, dst);
   const reverse =
     rule.direction === 'bidirectional' &&
-    endpointCoversDevice(state, rule.source, dst) &&
-    endpointCoversDevice(state, rule.destination, src);
+    index.endpointCoversDevice(rule.source, dst) &&
+    index.endpointCoversDevice(rule.destination, src);
   return forward || reverse;
 }
 
@@ -73,20 +78,6 @@ function isAnyNetwork(network: Network): boolean {
   return (
     network.cidr === '0.0.0.0/0' || network.cidr === '::/0' || network.name.toLowerCase() === 'any'
   );
-}
-
-function endpointExists(state: ProjectState, endpoint: Endpoint): boolean {
-  switch (endpoint.kind) {
-    case 'interface':
-      return state.interfaces.some((i) => i.id === endpoint.id);
-    case 'device':
-      return state.devices.some((d) => d.id === endpoint.id);
-    case 'network':
-    case 'subnet':
-      return state.networks.some((n) => n.id === endpoint.id);
-    case 'zone':
-      return state.zones.some((z) => z.id === endpoint.id);
-  }
 }
 
 function sameEndpoint(a: Endpoint, b: Endpoint): boolean {
@@ -152,6 +143,9 @@ function overlaps(state: ProjectState, a: PolicyRule, b: PolicyRule): boolean {
 export function validatePolicyRules(state: ProjectState): RuleWarning[] {
   const warnings: RuleWarning[] = [];
   const rules = state.policyRules;
+  // One resolution index per validation pass (#110 B1) — the same single home
+  // for (kind, id) resolution the findings engine uses.
+  const index = buildResolutionIndex(state);
 
   for (const rule of rules) {
     // orphaned: references to deleted objects
@@ -159,7 +153,7 @@ export function validatePolicyRules(state: ProjectState): RuleWarning[] {
       ['source', rule.source],
       ['destination', rule.destination],
     ] as const) {
-      if (!endpointExists(state, endpoint)) {
+      if (!index.endpointExists(endpoint)) {
         warnings.push({
           ruleId: rule.id,
           category: 'orphaned',
@@ -244,12 +238,12 @@ export function validatePolicyRules(state: ProjectState): RuleWarning[] {
   // PolicyRule addresses. The cross-zone Finding remains the security-severity
   // slice; this is the general visibility warning.
   const deviceName = (flow: Flow, side: 'source' | 'destination') =>
-    flowEndpointDevice(state, flow[side])?.name ?? '?';
+    index.flowEndpointDevice(flow[side])?.name ?? '?';
   for (const flow of state.flows) {
-    const src = flowEndpointDevice(state, flow.source);
-    const dst = flowEndpointDevice(state, flow.destination);
+    const src = index.flowEndpointDevice(flow.source);
+    const dst = index.flowEndpointDevice(flow.destination);
     if (!src || !dst) continue; // external peers are the external-connection rule's turf
-    if (rules.some((rule) => ruleMatchesFlow(state, rule, flow))) continue;
+    if (rules.some((rule) => ruleMatchesFlow(index, state, rule, flow))) continue;
     warnings.push({
       ruleId: null,
       flowId: flow.id,
@@ -263,7 +257,7 @@ export function validatePolicyRules(state: ProjectState): RuleWarning[] {
   // traffic exists at all, so a pure planning project stays quiet.
   if (state.flows.length > 0) {
     for (const rule of rules) {
-      if (state.flows.some((flow) => ruleMatchesFlow(state, rule, flow))) continue;
+      if (state.flows.some((flow) => ruleMatchesFlow(index, state, rule, flow))) continue;
       warnings.push({
         ruleId: rule.id,
         category: 'plannedNeverObserved',

@@ -4,6 +4,7 @@ import type { ProjectState } from '../state.js';
 import { hashConfig, resolveRuleSettings, type EngineConfig, type RuleSettings } from './config.js';
 import type { EnrichmentInput } from './enrichment.js';
 import type { HostSecurityInventory } from './inputs.js';
+import { buildResolutionIndex } from '../resolution.js';
 import { computeFingerprint } from './fingerprint.js';
 import {
   detectionRecordSchema,
@@ -93,8 +94,11 @@ export function runAnalysis(
 ): AnalysisRun {
   const configHash = hashConfig(ctx.config);
   const detections: DetectionRecord[] = [];
+  // One resolution index per run (#110 B1) — shared by every rule invocation.
+  const index = buildResolutionIndex(ctx.state);
   const ruleContext = (settings: RuleSettings): RuleContext => ({
     state: ctx.state,
+    index,
     provenance: ctx.provenance,
     evidence: ctx.evidence,
     hostInventories: ctx.hostInventories ?? [],

@@ -1,7 +1,6 @@
 import { computeDeviceCoverage, type InputClass } from '../coverage.js';
 import { inventoryCoverage } from '../inputs.js';
 import type { DetectionDraft, Rule } from '../rule.js';
-import { flowEndpointDevice, policyAllows } from './helpers.js';
 
 /**
  * M9 — segmentation, identity-anomaly & collection-quality families (design
@@ -18,11 +17,11 @@ export const crossZoneFlowRule: Rule = {
   detect(ctx) {
     const drafts: DetectionDraft[] = [];
     for (const flow of ctx.state.flows) {
-      const src = flowEndpointDevice(ctx.state, flow.source);
-      const dst = flowEndpointDevice(ctx.state, flow.destination);
+      const src = ctx.index.flowEndpointDevice(flow.source);
+      const dst = ctx.index.flowEndpointDevice(flow.destination);
       if (!src || !dst) continue;
       if (src.zoneId == null || dst.zoneId == null || src.zoneId === dst.zoneId) continue;
-      if (policyAllows(ctx.state, src, dst)) continue; // sanctioned by intended policy
+      if (ctx.index.policyAllows(src, dst)) continue; // sanctioned by intended policy
 
       drafts.push({
         affected: { kind: 'device', id: src.id },

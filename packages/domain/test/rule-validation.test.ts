@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildResolutionIndex,
   ruleMatchesFlow,
   validatePolicyRules,
   type Flow,
@@ -18,6 +19,9 @@ import {
   makeSite,
   makeZone,
 } from '@netplan/domain/fixtures';
+
+const matchesIn = (state: ProjectState, rule: PolicyRule, flow: Flow) =>
+  ruleMatchesFlow(buildResolutionIndex(state), state, rule, flow);
 
 const project = makeProject();
 const staff = makeNetwork(project.id, { name: 'Staff-VLAN', vlanId: 10 });
@@ -142,12 +146,12 @@ describe('rule ↔ flow validation (§3.11, improvements M8 #65)', () => {
       destination: { kind: 'device', id: deviceB.id },
       action: 'allow',
     });
-    expect(ruleMatchesFlow(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
+    expect(matchesIn(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
   });
 
   it('matches a network-endpoint rule through interface membership', () => {
     const rule = makePolicyRule(staff, servers, { action: 'allow' });
-    expect(ruleMatchesFlow(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
+    expect(matchesIn(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
   });
 
   it('matches a zone-endpoint rule through containment', () => {
@@ -156,7 +160,7 @@ describe('rule ↔ flow validation (§3.11, improvements M8 #65)', () => {
       destination: { kind: 'zone', id: zoneB.id },
       action: 'allow',
     });
-    expect(ruleMatchesFlow(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
+    expect(matchesIn(observedState([rule], [flowAB]), rule, flowAB)).toBe(true);
   });
 
   it('respects direction: a one-way rule does not match reverse traffic', () => {
@@ -168,8 +172,8 @@ describe('rule ↔ flow validation (§3.11, improvements M8 #65)', () => {
     });
     const oneWay = makePolicyRule(staff, servers, { action: 'allow', direction: 'inbound' });
     const bidi = makePolicyRule(staff, servers, { action: 'allow', direction: 'bidirectional' });
-    expect(ruleMatchesFlow(observedState([oneWay], [reverse]), oneWay, reverse)).toBe(false);
-    expect(ruleMatchesFlow(observedState([bidi], [reverse]), bidi, reverse)).toBe(true);
+    expect(matchesIn(observedState([oneWay], [reverse]), oneWay, reverse)).toBe(false);
+    expect(matchesIn(observedState([bidi], [reverse]), bidi, reverse)).toBe(true);
   });
 
   it('respects the service scope: a port-specific rule misses other ports', () => {
@@ -180,7 +184,7 @@ describe('rule ↔ flow validation (§3.11, improvements M8 #65)', () => {
       protocol: 'tcp',
       port: 22,
     });
-    expect(ruleMatchesFlow(observedState([rule], [otherPort]), rule, otherPort)).toBe(false);
+    expect(matchesIn(observedState([rule], [otherPort]), rule, otherPort)).toBe(false);
   });
 
   it('warns observed-without-rule for an unmatched flow between known devices', () => {

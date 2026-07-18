@@ -1,7 +1,7 @@
 import { combineConfidence } from '../confidence.js';
 import type { EvidenceId } from '../imports.js';
 import type { CorrelationRule, DetectionDraft, DetectionRecord } from './rule.js';
-import { flowEndpointDevice, numberParam } from './rules/helpers.js';
+import { numberParam } from './rules/helpers.js';
 
 /**
  * M10 — network-wide correlation capstone (design §3.8). A conservative second
@@ -64,7 +64,7 @@ export const sharedIndicatorDestinationRule: CorrelationRule = {
       if (flow.destination.kind !== 'external') continue;
       const dest = flow.destination.value.toLowerCase();
       if (!indicators.has(dest)) continue;
-      const source = flowEndpointDevice(ctx.state, flow.source);
+      const source = ctx.index.flowEndpointDevice(flow.source);
       if (!source) continue;
       const perHost = byDestination.get(dest) ?? new Map<string, number>();
       perHost.set(source.id, Math.max(perHost.get(source.id) ?? 0, flow.confidence));

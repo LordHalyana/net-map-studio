@@ -1,6 +1,7 @@
 export * from './ids.js';
 export * from './lifecycle.js';
 export * from './endpoints.js';
+export * from './resolution.js';
 export * from './entities.js';
 export * from './operations.js';
 export * from './state.js';

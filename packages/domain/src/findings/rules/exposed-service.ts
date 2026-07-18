@@ -1,7 +1,6 @@
 import type { Baseline, Device, Service } from '../../entities.js';
 import type { FieldProvenance } from '../../imports.js';
-import type { ProjectState } from '../../state.js';
-import type { DetectionDraft, Rule } from '../rule.js';
+import type { DetectionDraft, Rule, RuleContext } from '../rule.js';
 import { applicableBaselines } from './helpers.js';
 
 /**
@@ -37,8 +36,8 @@ const CLEARTEXT_PORTS: Record<number, string> = {
   514: 'rsh',
 };
 
-function deviceOf(state: ProjectState, service: Service): Device | undefined {
-  return service.deviceId ? state.devices.find((d) => d.id === service.deviceId) : undefined;
+function deviceOf(ctx: RuleContext, service: Service): Device | undefined {
+  return service.deviceId ? ctx.index.device(service.deviceId) : undefined;
 }
 
 function baselineExpects(baseline: Baseline, service: Service): boolean {
@@ -65,10 +64,10 @@ export const exposedManagementServiceRule: Rule = {
     for (const service of ctx.state.services) {
       const port = service.portStart;
       if (port == null || !(port in MANAGEMENT_PORTS)) continue;
-      const device = deviceOf(ctx.state, service);
+      const device = deviceOf(ctx, service);
       if (!device) continue;
 
-      const baselines = applicableBaselines(ctx.state, device);
+      const baselines = applicableBaselines(ctx, device);
       const expectingBaseline = baselines.find((b) => baselineExpects(b, service));
       if (expectingBaseline) continue; // expected here — not a finding
 
@@ -109,7 +108,7 @@ export const clearTextProtocolRule: Rule = {
     for (const service of ctx.state.services) {
       const port = service.portStart;
       if (port == null || !(port in CLEARTEXT_PORTS)) continue;
-      const device = deviceOf(ctx.state, service);
+      const device = deviceOf(ctx, service);
       drafts.push({
         affected: device ? { kind: 'device', id: device.id } : null,
         salientKey: `clearText:${service.id}:${port}`,
