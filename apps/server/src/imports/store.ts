@@ -38,6 +38,8 @@ import {
   type ImportResolutionAction,
   type NetplanBundle,
   type Observation,
+  type Operation,
+  type Project,
   type ProjectState,
   type ReportType,
 } from '@netplan/domain';
@@ -768,15 +770,34 @@ export function createImportStore(
     }
   }
 
-  /** Restore the evidence subtree of an imported bundle. */
-  function restoreAttachments(bundle: NetplanBundle): void {
+  /**
+   * Restore the evidence subtree of an imported bundle. Every restored
+   * ImportJob/Evidence row must belong to the imported project (#110 C3) —
+   * each row's own projectId is untrusted input, and a crafted bundle must
+   * not be able to inject rows into a different existing project.
+   */
+  function restoreAttachments(bundle: NetplanBundle, outerTx?: EngineTx): void {
     verifyEvidenceHashes(bundle);
-    db.transaction((tx) => {
+    const projectId = bundle.project.project.id;
+    const insertAll = (tx: EngineTx) => {
       for (const job of bundle.importJobs) {
-        tx.insert(importJobs).values(importJobSchema.parse(job)).run();
+        const record = importJobSchema.parse(job);
+        if (record.projectId !== projectId) {
+          throw new OperationError(
+            'INVALID',
+            `Bundle ImportJob ${record.id} belongs to a different project`,
+          );
+        }
+        tx.insert(importJobs).values(record).run();
       }
       for (const file of bundle.evidence) {
         const record = evidenceSchema.parse(file.record);
+        if (record.projectId !== projectId) {
+          throw new OperationError(
+            'INVALID',
+            `Bundle Evidence ${record.id} belongs to a different project`,
+          );
+        }
         tx.insert(evidenceTable).values(record).run();
         if (file.content !== null) {
           tx.insert(evidenceBlobs)
@@ -784,6 +805,22 @@ export function createImportStore(
             .run();
         }
       }
+    };
+    if (outerTx) insertAll(outerTx);
+    else db.transaction(insertAll);
+  }
+
+  /**
+   * Import a .netplan bundle atomically (#110 C3): state insert and
+   * attachment restore share ONE transaction, so a failure partway leaves no
+   * project at all — never a Project whose Evidence is missing.
+   */
+  function importBundle(bundle: NetplanBundle): Project {
+    verifyEvidenceHashes(bundle);
+    return db.transaction((tx) => {
+      const project = engine.importState(bundle.project, tx);
+      restoreAttachments(bundle, tx);
+      return project;
     });
   }
 
@@ -815,17 +852,23 @@ export function createImportStore(
   }
 
   /**
-   * Detect secrets across a project's retained evidence and persist them
-   * masked-by-default (§3.13). The raw value never lands — only its mask,
-   * kind and (evidenceId, offset, length) so an audited reveal can re-read
-   * the original from the source blob. Idempotent per (evidence, offset).
+   * Detect secrets across retained evidence and persist them masked-by-default
+   * (§3.13). The raw value never lands — only its mask, kind and
+   * (evidenceId, offset, length) so an audited reveal can re-read the original
+   * from the source blob. Idempotent per (evidence, offset).
+   *
+   * Scoped and batched (#110 C2): `jobId` limits the scan to one ImportJob's
+   * Evidence — commit latency no longer grows with every previous import —
+   * and all new detections land as ONE ChangeSet: one transaction, one
+   * activity-log entry, one undo unit, still fully on the operation log
+   * (ADR-0010).
    */
-  function scanEvidenceSecrets(projectId: string): number {
+  function scanEvidenceSecrets(projectId: string, jobId?: string): number {
     const existing = new Set(
       engine.getState(projectId).secretMatches.map((s) => `${s.evidenceId}:${s.offset}`),
     );
-    let created = 0;
-    for (const record of listEvidence(projectId)) {
+    const operations: Operation[] = [];
+    for (const record of listEvidence(projectId, jobId)) {
       const blob = getEvidenceBlob(projectId, record.id);
       if (!blob) continue; // hashOnly — nothing to scan
       const text =
@@ -836,7 +879,7 @@ export function createImportStore(
         const key = `${record.id}:${found.index}`;
         if (existing.has(key)) continue;
         existing.add(key);
-        engine.applyOperation({
+        operations.push({
           id: newId(operationIdSchema),
           projectId: projectIdSchema.parse(projectId),
           kind: 'CreateEntity',
@@ -855,10 +898,17 @@ export function createImportStore(
             }),
           },
         });
-        created += 1;
       }
     }
-    return created;
+    if (operations.length > 0) {
+      engine.applyChangeSet({
+        id: newId(changeSetIdSchema),
+        projectId: projectIdSchema.parse(projectId),
+        label: `Detected ${operations.length} secret${operations.length === 1 ? '' : 's'} in evidence`,
+        operations,
+      });
+    }
+    return operations.length;
   }
 
   /**
@@ -978,5 +1028,6 @@ export function createImportStore(
     streamBundle,
     verifyEvidenceHashes,
     restoreAttachments,
+    importBundle,
   };
 }

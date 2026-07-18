@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import Fastify, { type FastifyInstance, type RouteHandlerMethod } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { maskSecrets } from '@netplan/domain';
-import { createReportEmitter } from '../src/export/report-emitter.js';
+import { contentDispositionValue, createReportEmitter } from '../src/export/report-emitter.js';
 import { createTestEngine } from './helpers.js';
 
 /**
@@ -96,6 +96,18 @@ describe('report emitter (#81)', () => {
     );
     expect(res.headers['content-type']).toBe('text/csv; charset=utf-8');
     expect(res.headers['content-disposition']).toBe('attachment; filename="devices.csv"');
+  });
+
+  it('sanitizes hostile filenames at the header choke-point (#110 C4)', () => {
+    // header injection: CR/LF, quotes and backslashes never reach the value
+    const hostile = contentDispositionValue('ev"il\r\nX-Injected: 1\\.csv');
+    expect(hostile).toBe('attachment; filename="evilX-Injected: 1.csv"');
+    // non-ASCII: plain fallback plus the RFC 5987 extended form
+    expect(contentDispositionValue('résumé.pdf')).toBe(
+      'attachment; filename="r_sum_.pdf"; filename*=UTF-8\'\'r%C3%A9sum%C3%A9.pdf',
+    );
+    // pathological input still yields a usable name
+    expect(contentDispositionValue('"\r\n')).toBe('attachment; filename="download"');
   });
 
   it('emitStream passes chunks through verbatim and records the streamed hash', async () => {

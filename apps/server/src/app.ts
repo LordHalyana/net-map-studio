@@ -89,7 +89,7 @@ export async function buildApp(options: AppOptions = {}) {
     // Runs before routing; injected/test requests use bare paths and pass through.
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
-  const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
+  const { db, sqlite } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
@@ -109,6 +109,31 @@ export async function buildApp(options: AppOptions = {}) {
   // beside where importStore is wired, so every close path — signal handlers,
   // tests — drains, not just the graceful-shutdown caller.
   app.addHook('onClose', () => importStore.whenIdle());
+
+  // Close the SQLite handle on teardown (#110 C3): drain in-flight imports
+  // first (whenIdle is idempotent, so this holds under any hook ordering),
+  // then release the connection — checkpointing WAL and removing -wal/-shm.
+  // Without this, graceful exits left stale WAL files and every buildApp in
+  // tests leaked a handle.
+  app.addHook('onClose', async () => {
+    await importStore.whenIdle();
+    sqlite.close();
+  });
+
+  const requireProject = (id: string): void => {
+    if (!engine.getProject(id)) throw new OperationError('NOT_FOUND', `Project ${id} not found`);
+  };
+
+  // The one mutation-response shape (#110 C4): /operations, /undo and /redo
+  // all carry the version watermark; ?slim=1 swaps the full state for it.
+  const mutationResponse = (
+    id: string,
+    result: { appliedOperations: unknown; availability: unknown },
+    slim: boolean,
+  ) =>
+    slim
+      ? { ...result, watermark: engine.getWatermark(id) }
+      : { ...result, state: engine.getState(id), watermark: engine.getWatermark(id) };
 
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
@@ -189,9 +214,7 @@ export async function buildApp(options: AppOptions = {}) {
     const body = request.body;
     const isChangeSet = typeof body === 'object' && body !== null && 'operations' in body;
     const respond = (result: { appliedOperations: unknown; availability: unknown }) =>
-      query.slim
-        ? { ...result, watermark: engine.getWatermark(id) }
-        : { ...result, state: engine.getState(id), watermark: engine.getWatermark(id) };
+      mutationResponse(id, result, query.slim);
 
     if (isChangeSet) {
       const parsed = changeSetSchema.safeParse(body);
@@ -230,18 +253,23 @@ export async function buildApp(options: AppOptions = {}) {
     return engine.listChangeSets(id);
   });
 
+  // Undo/redo respond exactly like /operations (#110 C4): same watermark for
+  // the client's reconcile model, same ?slim=1 contract — no full-state
+  // transfer when the caller doesn't want one.
   app.post('/projects/:id/undo', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
+    const query = z.object({ slim: z.coerce.boolean().default(false) }).parse(request.query ?? {});
     const result = engine.undo(id);
     if (!result) throw new OperationError('CONFLICT', 'Nothing to undo');
-    return { ...result, state: engine.getState(id) };
+    return mutationResponse(id, result, query.slim);
   });
 
   app.post('/projects/:id/redo', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
+    const query = z.object({ slim: z.coerce.boolean().default(false) }).parse(request.query ?? {});
     const result = engine.redo(id);
     if (!result) throw new OperationError('CONFLICT', 'Nothing to redo');
-    return { ...result, state: engine.getState(id) };
+    return mutationResponse(id, result, query.slim);
   });
 
   // ---------- Export / import (ADR-0016, design §3.12) ----------
@@ -277,9 +305,8 @@ export async function buildApp(options: AppOptions = {}) {
     if (!parsed.success) {
       throw new OperationError('INVALID', `Invalid .netplan bundle: ${parsed.error.message}`);
     }
-    importStore.verifyEvidenceHashes(parsed.data);
-    const project = engine.importState(parsed.data.project);
-    importStore.restoreAttachments(parsed.data);
+    // state + attachments restore in ONE transaction (#110 C3)
+    const project = importStore.importBundle(parsed.data);
     return reply.status(201).send(project);
   });
 
@@ -330,7 +357,8 @@ export async function buildApp(options: AppOptions = {}) {
     const params = jobParamsSchema.parse(request.params);
     const detail = importStore.commit(params.id, params.jobId);
     // secrets masking (§3.13, M13 #70): scan the newly committed evidence
-    importStore.scanEvidenceSecrets(params.id);
+    // — scoped to this job's evidence, one ChangeSet (#110 C2)
+    importStore.scanEvidenceSecrets(params.id, params.jobId);
     return { ...detail, state: engine.getState(params.id) };
   });
 
@@ -384,7 +412,7 @@ export async function buildApp(options: AppOptions = {}) {
     const { id } = projectParamsSchema.parse(request.params);
     const body = overrideFieldBodySchema.parse(request.body ?? {});
     const result = provenanceStore.overrideField(id, body);
-    return { ...result, state: engine.getState(id) };
+    return mutationResponse(id, result, false);
   });
 
   // Security findings (ADR-0023, Phase 3): a pure recomputation over the
@@ -468,6 +496,7 @@ export async function buildApp(options: AppOptions = {}) {
   // triggers this — re-fetching is always an explicit operator action.
   app.post('/projects/:id/enrichments', async (request, reply) => {
     const { id } = projectParamsSchema.parse(request.params);
+    requireProject(id);
     const body = fetchEnrichmentBodySchema.parse(request.body ?? {});
     const view = await enrichmentService.fetch(id, body);
     return reply.status(201).send(view);
@@ -475,6 +504,8 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.get('/projects/:id/enrichments', async (request) => {
     const { id } = projectParamsSchema.parse(request.params);
+    // 404 like every sibling route (#110 C4) — "empty" and "nonexistent" differ
+    requireProject(id);
     return enrichmentService.list(id);
   });
 
