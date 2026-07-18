@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, or, sql, type AnyColumn } from 'drizzle-orm';
 import {
   addressSchema,
   baselineSchema,
@@ -667,24 +667,57 @@ export function createEngine(db: Db) {
         `Cannot delete ${entityType} ${id}: ${what} still references it`,
       );
     };
-    const projectLinks = () => tx.select().from(links).where(eq(links.projectId, projectId)).all();
-    const projectRules = () =>
-      tx.select().from(policyRules).where(eq(policyRules.projectId, projectId)).all();
-    const ruleTouches = (kinds: Endpoint['kind'][]) =>
-      projectRules().some((r) =>
-        [r.source, r.destination].some((e) => kinds.includes(e.kind) && e.id === id),
+    // EXISTS-style probes (#110 C1): the endpoint match runs as the same
+    // json_extract predicates queryFlows uses, inside this transaction — a
+    // delete never loads the project's Flow/Rule collections into JS. A kind
+    // match implies a non-external endpoint, so no separate external check.
+    const endpointTouches = (column: AnyColumn, kinds: Endpoint['kind'][]) =>
+      and(
+        inArray(sql`json_extract(${column}, '$.kind')`, kinds),
+        sql`json_extract(${column}, '$.id') = ${id}`,
       );
+    const ruleTouches = (kinds: Endpoint['kind'][]) =>
+      tx
+        .select({ id: policyRules.id })
+        .from(policyRules)
+        .where(
+          and(
+            eq(policyRules.projectId, projectId),
+            or(
+              endpointTouches(policyRules.source, kinds),
+              endpointTouches(policyRules.destination, kinds),
+            ),
+          ),
+        )
+        .limit(1)
+        .get() !== undefined;
     const flowTouches = (kinds: Endpoint['kind'][]) =>
       tx
-        .select()
+        .select({ id: flows.id })
         .from(flows)
-        .where(eq(flows.projectId, projectId))
-        .all()
-        .some((f) =>
-          [f.source, f.destination].some(
-            (e) => e.kind !== 'external' && kinds.includes(e.kind) && e.id === id,
+        .where(
+          and(
+            eq(flows.projectId, projectId),
+            or(endpointTouches(flows.source, kinds), endpointTouches(flows.destination, kinds)),
           ),
-        );
+        )
+        .limit(1)
+        .get() !== undefined;
+    const linkTouchesInterface = () =>
+      tx
+        .select({ id: links.id })
+        .from(links)
+        .where(
+          and(
+            eq(links.projectId, projectId),
+            or(
+              sql`json_extract(${links.source}, '$.id') = ${id}`,
+              sql`json_extract(${links.target}, '$.id') = ${id}`,
+            ),
+          ),
+        )
+        .limit(1)
+        .get() !== undefined;
 
     switch (entityType) {
       case 'site':
@@ -732,7 +765,7 @@ export function createEngine(db: Db) {
           tx.select({ id: addresses.id }).from(addresses).where(eq(addresses.interfaceId, id)).get()
         )
           fail('an Address');
-        if (projectLinks().some((l) => l.source.id === id || l.target.id === id)) fail('a Link');
+        if (linkTouchesInterface()) fail('a Link');
         if (ruleTouches(['interface'])) fail('a PolicyRule');
         if (flowTouches(['interface'])) fail('a Flow');
         return;
