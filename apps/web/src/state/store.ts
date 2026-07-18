@@ -221,6 +221,10 @@ interface AppState {
 /** Serializes syncs so operations reach the server in dispatch order. */
 let syncQueue: Promise<void> = Promise.resolve();
 
+// Import-poll generation counter (#110 D6): bumped by every uploadImport so
+// a superseded poll loop stops writing state.
+let importPollGeneration = 0;
+
 // One log fetch per graph version (#110 D2): the synced marker is the graph
 // object identity (every adoption produces a new object), the in-flight
 // promise dedupes simultaneous panel mounts.
@@ -508,12 +512,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadImport: async (input) => {
     const project = get().project;
     if (!project) return;
+    // Generation guard (#110 D6): starting another import supersedes this
+    // poll — a stale loop must never overwrite the newer job's view state.
+    const generation = ++importPollGeneration;
     try {
       const job = await createImport(project.id, input);
+      if (generation !== importPollGeneration) return;
       set({ importJobs: [...get().importJobs, job] });
       // poll the background worker until it leaves pending/parsing
       for (let attempt = 0; attempt < 100; attempt++) {
         const detail = await getImportDetail(project.id, job.id);
+        if (generation !== importPollGeneration) return;
         if (detail.job.status !== 'pending' && detail.job.status !== 'parsing') {
           set({
             selectedImport: detail,
@@ -528,8 +537,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      get().pushToast('Import is still parsing — check the job list.', 'info');
+      if (generation === importPollGeneration) {
+        get().pushToast('Import is still parsing — check the job list.', 'info');
+      }
     } catch (error) {
+      if (generation !== importPollGeneration) return;
       get().pushToast(error instanceof Error ? error.message : 'Import failed');
     }
   },
