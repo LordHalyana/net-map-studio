@@ -89,7 +89,7 @@ export async function buildApp(options: AppOptions = {}) {
     // Runs before routing; injected/test requests use bare paths and pass through.
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
-  const { db } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
+  const { db, sqlite } = createDb(options.dbFile ?? process.env.NETPLAN_DB ?? 'netplan.db');
   const engine = createEngine(db);
   const importStore = createImportStore(db, engine);
   const provenanceStore = createProvenanceStore(db, engine);
@@ -109,6 +109,16 @@ export async function buildApp(options: AppOptions = {}) {
   // beside where importStore is wired, so every close path — signal handlers,
   // tests — drains, not just the graceful-shutdown caller.
   app.addHook('onClose', () => importStore.whenIdle());
+
+  // Close the SQLite handle on teardown (#110 C3): drain in-flight imports
+  // first (whenIdle is idempotent, so this holds under any hook ordering),
+  // then release the connection — checkpointing WAL and removing -wal/-shm.
+  // Without this, graceful exits left stale WAL files and every buildApp in
+  // tests leaked a handle.
+  app.addHook('onClose', async () => {
+    await importStore.whenIdle();
+    sqlite.close();
+  });
 
   const registeredRoutes: string[] = [];
   app.decorate('registeredRoutes', registeredRoutes);
@@ -277,9 +287,8 @@ export async function buildApp(options: AppOptions = {}) {
     if (!parsed.success) {
       throw new OperationError('INVALID', `Invalid .netplan bundle: ${parsed.error.message}`);
     }
-    importStore.verifyEvidenceHashes(parsed.data);
-    const project = engine.importState(parsed.data.project);
-    importStore.restoreAttachments(parsed.data);
+    // state + attachments restore in ONE transaction (#110 C3)
+    const project = importStore.importBundle(parsed.data);
     return reply.status(201).send(project);
   });
 

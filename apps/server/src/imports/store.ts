@@ -39,6 +39,7 @@ import {
   type NetplanBundle,
   type Observation,
   type Operation,
+  type Project,
   type ProjectState,
   type ReportType,
 } from '@netplan/domain';
@@ -769,15 +770,34 @@ export function createImportStore(
     }
   }
 
-  /** Restore the evidence subtree of an imported bundle. */
-  function restoreAttachments(bundle: NetplanBundle): void {
+  /**
+   * Restore the evidence subtree of an imported bundle. Every restored
+   * ImportJob/Evidence row must belong to the imported project (#110 C3) —
+   * each row's own projectId is untrusted input, and a crafted bundle must
+   * not be able to inject rows into a different existing project.
+   */
+  function restoreAttachments(bundle: NetplanBundle, outerTx?: EngineTx): void {
     verifyEvidenceHashes(bundle);
-    db.transaction((tx) => {
+    const projectId = bundle.project.project.id;
+    const insertAll = (tx: EngineTx) => {
       for (const job of bundle.importJobs) {
-        tx.insert(importJobs).values(importJobSchema.parse(job)).run();
+        const record = importJobSchema.parse(job);
+        if (record.projectId !== projectId) {
+          throw new OperationError(
+            'INVALID',
+            `Bundle ImportJob ${record.id} belongs to a different project`,
+          );
+        }
+        tx.insert(importJobs).values(record).run();
       }
       for (const file of bundle.evidence) {
         const record = evidenceSchema.parse(file.record);
+        if (record.projectId !== projectId) {
+          throw new OperationError(
+            'INVALID',
+            `Bundle Evidence ${record.id} belongs to a different project`,
+          );
+        }
         tx.insert(evidenceTable).values(record).run();
         if (file.content !== null) {
           tx.insert(evidenceBlobs)
@@ -785,6 +805,22 @@ export function createImportStore(
             .run();
         }
       }
+    };
+    if (outerTx) insertAll(outerTx);
+    else db.transaction(insertAll);
+  }
+
+  /**
+   * Import a .netplan bundle atomically (#110 C3): state insert and
+   * attachment restore share ONE transaction, so a failure partway leaves no
+   * project at all — never a Project whose Evidence is missing.
+   */
+  function importBundle(bundle: NetplanBundle): Project {
+    verifyEvidenceHashes(bundle);
+    return db.transaction((tx) => {
+      const project = engine.importState(bundle.project, tx);
+      restoreAttachments(bundle, tx);
+      return project;
     });
   }
 
@@ -992,5 +1028,6 @@ export function createImportStore(
     streamBundle,
     verifyEvidenceHashes,
     restoreAttachments,
+    importBundle,
   };
 }

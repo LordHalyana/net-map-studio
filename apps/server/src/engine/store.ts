@@ -1512,12 +1512,13 @@ export function createEngine(db: Db) {
    * not a model mutation — the restored project starts with an empty
    * operation log, exactly as the original did after its own creation.
    */
-  function importState(state: ProjectState): Project {
+  /** `outerTx` lets bundle import share one transaction with attachment restore (#110 C3). */
+  function importState(state: ProjectState, outerTx?: Tx): Project {
     const parsed = projectStateSchema.parse(state);
     if (getProject(parsed.project.id)) {
       throw new OperationError('CONFLICT', `Project ${parsed.project.id} already exists`);
     }
-    db.transaction((tx) => {
+    const insertAll = (tx: Tx) => {
       tx.insert(projects).values(parsed.project).run();
       for (const site of parsed.sites) tx.insert(sites).values(site).run();
       for (const zone of parsed.zones) tx.insert(zones).values(zone).run();
@@ -1540,7 +1541,9 @@ export function createEngine(db: Db) {
       for (const disposition of parsed.findingDispositions)
         tx.insert(findingDispositions).values(disposition).run();
       for (const baseline of parsed.baselines) tx.insert(baselines).values(baseline).run();
-    });
+    };
+    if (outerTx) insertAll(outerTx);
+    else db.transaction(insertAll);
     return parsed.project;
   }
 
