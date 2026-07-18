@@ -45,7 +45,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r test
+      # One merged run across all workspace projects, coverage report-only —
+      # no threshold gate until the state-layer tests give the baseline meaning.
+      - run: pnpm test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-lcov
+          path: coverage/
+          retention-days: 7
 
   e2e:
     runs-on: ubuntu-latest
