@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deviceStateFormatFields } from '../src/format-fields.js';
+import { deviceStateFormatFields, formatFieldsFromSchema } from '../src/format-fields.js';
+import { deviceStateJsonSchema } from '../src/device-state.js';
 
 /**
  * #90 A0: the device-state field table is generated from the contract's
@@ -51,5 +52,58 @@ describe('deviceStateFormatFields', () => {
 
   it('emits no duplicate paths', () => {
     expect(byName.size).toBe(fields.length);
+  });
+
+  it('only contains JSON-Schema constructs the walker handles (#110 B4)', () => {
+    // $ref/$defs ARE handled (resolved below); combinators are not — if the
+    // generator ever emits one, fail loudly here instead of truncating the
+    // operator-facing field table.
+    const raw = JSON.stringify(deviceStateJsonSchema());
+    expect(raw).not.toContain('"anyOf"');
+    expect(raw).not.toContain('"oneOf"');
+    expect(raw).not.toContain('"allOf"');
+    expect(raw).not.toContain('"not"');
+  });
+});
+
+describe('formatFieldsFromSchema $ref resolution (#110 B4)', () => {
+  const entry = {
+    type: 'object',
+    properties: { name: { type: 'string' } },
+    required: ['name'],
+  };
+
+  it('resolves $defs-deduped branches instead of dropping them', () => {
+    const fields = formatFieldsFromSchema({
+      $defs: { entry },
+      type: 'object',
+      properties: {
+        packages: { type: 'array', items: { $ref: '#/$defs/entry' } },
+        remoteAccess: { type: 'array', items: { $ref: '#/$defs/entry' } },
+      },
+    });
+    const names = fields.map((f) => f.name);
+    expect(names).toContain('packages[].name');
+    expect(names).toContain('remoteAccess[].name');
+  });
+
+  it('lets a local description override the referenced definition', () => {
+    const fields = formatFieldsFromSchema({
+      $defs: { entry },
+      type: 'object',
+      properties: {
+        a: { $ref: '#/$defs/entry', description: 'local wins' },
+      },
+    });
+    expect(fields.find((f) => f.name === 'a')?.description).toBe('local wins');
+  });
+
+  it('throws loudly on an unresolvable $ref instead of truncating', () => {
+    expect(() =>
+      formatFieldsFromSchema({
+        type: 'object',
+        properties: { a: { $ref: '#/$defs/missing' } },
+      }),
+    ).toThrow(/Unresolvable \$ref/);
   });
 });

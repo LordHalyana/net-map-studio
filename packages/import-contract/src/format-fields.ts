@@ -27,6 +27,33 @@ interface SchemaNode {
   properties?: Record<string, SchemaNode>;
   required?: string[];
   items?: SchemaNode;
+  /** Zod's toJSONSchema may dedupe structurally-identical schemas into refs. */
+  $ref?: string;
+  $defs?: Record<string, SchemaNode>;
+}
+
+const DEFS_PREFIX = '#/$defs/';
+
+/**
+ * Resolve `$ref` nodes against the root's `$defs` (#110 B4). Zod's
+ * `toJSONSchema` may dedupe structurally-identical schemas (the package /
+ * remote-access twins are exactly the trigger shape) — without this the field
+ * table would silently drop every deduped branch. Local siblings (e.g. a
+ * `description` next to the `$ref`) override the referenced definition, and an
+ * unresolvable ref throws rather than truncating the table.
+ */
+function makeResolve(root: SchemaNode): (node: SchemaNode) => SchemaNode {
+  const defs = root.$defs ?? {};
+  return function resolve(node: SchemaNode): SchemaNode {
+    if (node.$ref === undefined) return node;
+    const target = node.$ref.startsWith(DEFS_PREFIX)
+      ? defs[node.$ref.slice(DEFS_PREFIX.length)]
+      : undefined;
+    if (!target) throw new Error(`Unresolvable $ref in device-state schema: ${node.$ref}`);
+    const overrides = { ...node };
+    delete overrides.$ref;
+    return { ...resolve(target), ...overrides };
+  };
 }
 
 /** Bounds this wide are Zod's safe-integer sentinels, not real constraints. */
@@ -60,30 +87,45 @@ function hasProperties(node: SchemaNode): boolean {
   return node.properties !== undefined && Object.keys(node.properties).length > 0;
 }
 
-function walk(node: SchemaNode, path: string, required: boolean, out: ImportFormatField[]): void {
+type Resolve = (node: SchemaNode) => SchemaNode;
+
+function walk(
+  raw: SchemaNode,
+  path: string,
+  required: boolean,
+  out: ImportFormatField[],
+  resolve: Resolve,
+): void {
+  const node = resolve(raw);
   if (node.type === 'array' && node.items) {
+    const items = resolve(node.items);
     const name = `${path}[]`;
-    const description = node.description ?? node.items.description ?? '';
-    if (hasProperties(node.items)) {
+    const description = node.description ?? items.description ?? '';
+    if (hasProperties(items)) {
       out.push({ name, type: 'object', required, description });
-      walkProperties(node.items, name, out);
+      walkProperties(items, name, out, resolve);
     } else {
-      out.push({ name, type: typeLabel(node.items), required, description });
+      out.push({ name, type: typeLabel(items), required, description });
     }
     return;
   }
   if (hasProperties(node)) {
     out.push({ name: path, type: 'object', required, description: node.description ?? '' });
-    walkProperties(node, path, out);
+    walkProperties(node, path, out, resolve);
     return;
   }
   out.push({ name: path, type: typeLabel(node), required, description: node.description ?? '' });
 }
 
-function walkProperties(node: SchemaNode, prefix: string, out: ImportFormatField[]): void {
+function walkProperties(
+  node: SchemaNode,
+  prefix: string,
+  out: ImportFormatField[],
+  resolve: Resolve,
+): void {
   const requiredKeys = new Set(node.required ?? []);
   for (const [key, child] of Object.entries(node.properties ?? {})) {
-    walk(child, prefix === '' ? key : `${prefix}.${key}`, requiredKeys.has(key), out);
+    walk(child, prefix === '' ? key : `${prefix}.${key}`, requiredKeys.has(key), out, resolve);
   }
 }
 
@@ -91,11 +133,15 @@ function isSchemaNode(value: unknown): value is SchemaNode {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Walk any generated JSON-Schema object into the field table (exported for tests). */
+export function formatFieldsFromSchema(schema: unknown): ImportFormatField[] {
+  if (!isSchemaNode(schema)) throw new Error('JSON schema root is not an object');
+  const out: ImportFormatField[] = [];
+  walkProperties(schema, '', out, makeResolve(schema));
+  return out;
+}
+
 /** The device-state contract as a field table — generated, never hand-written. */
 export function deviceStateFormatFields(): ImportFormatField[] {
-  const out: ImportFormatField[] = [];
-  const root: unknown = deviceStateJsonSchema();
-  if (!isSchemaNode(root)) throw new Error('device-state JSON schema root is not an object');
-  walkProperties(root, '', out);
-  return out;
+  return formatFieldsFromSchema(deviceStateJsonSchema());
 }
