@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { newId, operationIdSchema, type Operation, type ProjectState } from '@netplan/domain';
+import {
+  changeSetIdSchema,
+  newId,
+  operationIdSchema,
+  type Operation,
+  type ProjectState,
+} from '@netplan/domain';
 import {
   makeDevice,
   makeInterface,
@@ -167,6 +173,32 @@ const cases: {
       fingerprint: 'fp',
       status: 'acknowledged',
       previousStatus: 'new',
+    },
+    assert: (next, before) => expect(next).toBe(before),
+  },
+  {
+    name: 'SetFindingNote is not canvas state — untouched mirror',
+    op: {
+      id: opId(),
+      projectId: project.id,
+      kind: 'SetFindingNote',
+      fingerprint: 'fp',
+      note: 'a note',
+      previousNote: '',
+    },
+    assert: (next, before) => expect(next).toBe(before),
+  },
+  {
+    name: 'SetChangeSetReviewStatus is not canvas state — untouched mirror',
+    op: {
+      id: opId(),
+      projectId: project.id,
+      kind: 'SetChangeSetReviewStatus',
+      changeSetId: newId(changeSetIdSchema),
+      status: 'proposed',
+      note: '',
+      previousStatus: 'draft',
+      previousNote: '',
     },
     assert: (next, before) => expect(next).toBe(before),
   },

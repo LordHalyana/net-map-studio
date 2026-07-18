@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectState } from '@netplan/domain';
 import { makeProject } from '@netplan/domain/fixtures';
+import { emptyState } from './test-helpers';
 
 const getLogMock = vi.fn();
 vi.mock('../api/client', async (importOriginal) => ({
@@ -10,30 +10,6 @@ vi.mock('../api/client', async (importOriginal) => ({
 
 import { useAppStore } from './store';
 
-function stateFor(projectId: ProjectState['project']['id']): ProjectState {
-  return {
-    project: { ...makeProject(), id: projectId },
-    sites: [],
-    zones: [],
-    devices: [],
-    interfaces: [],
-    addresses: [],
-    networks: [],
-    links: [],
-    services: [],
-    policyRules: [],
-    flows: [],
-    hostArtifacts: [],
-    reports: [],
-    importProfiles: [],
-    secretMatches: [],
-    identities: [],
-    roleAssignments: [],
-    findingDispositions: [],
-    baselines: [],
-  };
-}
-
 /** #110 D2: the log is fetched once per graph version, shared by all panels. */
 describe('refreshOperationLog', () => {
   beforeEach(() => {
@@ -42,7 +18,7 @@ describe('refreshOperationLog', () => {
     const project = makeProject();
     useAppStore.setState({
       project,
-      graph: stateFor(project.id),
+      graph: { ...emptyState(), project },
       operationLog: [],
       operationLogError: null,
       toasts: [],

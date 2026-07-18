@@ -443,6 +443,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   /** Restore a .netplan bundle (ADR-0016) and switch to the imported project. */
   importBundle: async (bundleText) => {
     const bundle = netplanBundleSchema.parse(JSON.parse(bundleText));
+    // switching projects supersedes any in-flight import poll (#110 D6)
+    importPollGeneration += 1;
     const project = await apiFetch('/projects/import', projectSchema, {
       method: 'POST',
       body: JSON.stringify(bundle),

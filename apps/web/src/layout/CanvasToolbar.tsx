@@ -51,6 +51,7 @@ export function CanvasToolbar() {
   const toggles = [
     {
       testid: 'toggle-logical-layer',
+      label: 'Logical layer',
       on: layers.logical,
       onClick: toggleLogicalLayer,
       title: 'Logical layer: networks, membership edges and tints',
@@ -58,6 +59,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-physical-layer',
+      label: 'Physical layer',
       on: layers.physical,
       onClick: togglePhysicalLayer,
       title: 'Physical layer: Link edges',
@@ -65,6 +67,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-observed-layer',
+      label: 'Observed traffic',
       on: layers.observed,
       onClick: toggleObservedLayer,
       title: 'Observed traffic: aggregated Flow bundles',
@@ -72,6 +75,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-identity-overlay',
+      label: 'Identity overlay',
       on: layers.identities,
       onClick: toggleIdentityOverlay,
       title: 'Identity overlay (§3.9): modelled principals on their hosts',
@@ -79,6 +83,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-rules-layer',
+      label: 'Planned-rule callouts',
       on: layers.rules,
       onClick: toggleRulesLayer,
       title: 'Planned-rule callout cards (design §3.2C)',
@@ -86,6 +91,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-findings-layer',
+      label: 'Findings layer',
       on: layers.findings,
       onClick: toggleFindingsLayer,
       title: 'Findings layer: severity tint on affected devices (§3.2C)',
@@ -124,10 +130,11 @@ export function CanvasToolbar() {
         data-testid="toggle-connect-mode"
         pressed={connectMode}
         onClick={toggleConnectMode}
-        label="Connect mode: pick a source interface, then a destination (§3.3)"
+        label="Connect mode"
+        title="Connect mode: pick a source interface, then a destination (§3.3)"
       />
       <span className="canvas-toolbar__sep" />
-      {toggles.map(({ testid, on, onClick, title, icon }) => (
+      {toggles.map(({ testid, label, on, onClick, title, icon }) => (
         <IconButton
           key={testid}
           icon={icon}
@@ -137,7 +144,8 @@ export function CanvasToolbar() {
           data-testid={testid}
           pressed={on}
           onClick={onClick}
-          label={title}
+          label={label}
+          title={title}
         />
       ))}
       <span className="canvas-toolbar__sep" />
@@ -178,7 +186,8 @@ export function CanvasToolbar() {
           const cs = autoArrangeChangeSet(graph);
           if (cs) dispatch(cs);
         }}
-        label="Auto-arrange unpinned devices (pinned nodes stay put, §3.2C)"
+        label="Auto-arrange"
+        title="Auto-arrange unpinned devices (pinned nodes stay put, §3.2C)"
       />
       <IconButton
         icon={Magnet}
@@ -188,7 +197,8 @@ export function CanvasToolbar() {
         data-testid="toggle-grid"
         pressed={gridEnabled}
         onClick={toggleGrid}
-        label="Grid & snap-to-grid (§3.2A)"
+        label="Grid & snap-to-grid"
+        title="Grid & snap-to-grid (§3.2A)"
       />
       <span className="canvas-toolbar__sep" />
       <span className="canvas-toolbar__zoom">

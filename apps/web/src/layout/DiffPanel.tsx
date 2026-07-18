@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react';
 import type { ProjectState } from '@netplan/domain';
 import { ProposalSignOff } from './ProposalSignOff';
 import { useAppStore } from '../state/store';
@@ -14,7 +15,13 @@ export function DiffPanel() {
   const { entries: log, error: logError } = useOperationLog();
 
   if (!graph) return null;
-  if (logError) return <p className="panel-empty">Couldn’t load the change log — {logError}</p>;
+  if (logError)
+    return (
+      <p className="panel-empty">
+        <TriangleAlert size={12} className="inline-icon" aria-hidden /> Couldn’t load the change log
+        — {logError}
+      </p>
+    );
 
   const named = (state: ProjectState) => [
     ...state.devices.map((d) => ({ id: d.id, name: d.name, type: 'device', lc: d.lifecycleState })),

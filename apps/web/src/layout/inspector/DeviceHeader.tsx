@@ -37,6 +37,9 @@ export function DeviceHeader({ device, graph, setField }: DeviceHeaderProps) {
   async function restoreFromProposal() {
     let previous: unknown = 'observed';
     try {
+      // deliberately a direct on-demand read, not the shared useOperationLog
+      // cache (#110 D2): this click needs the log as of *now*, and it renders
+      // nothing — freshness beats sharing here.
       const log = await getLog(projectId);
       for (const entry of log) {
         if (

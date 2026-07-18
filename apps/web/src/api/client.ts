@@ -59,45 +59,43 @@ export async function apiFetch<T>(
   return schema.parse(await response.json());
 }
 
-const api = apiFetch;
-
-export const listProjects = (): Promise<Project[]> => api('/projects', z.array(projectSchema));
+export const listProjects = (): Promise<Project[]> => apiFetch('/projects', z.array(projectSchema));
 
 export const createProject = (name: string): Promise<Project> =>
-  api('/projects', projectSchema, { method: 'POST', body: JSON.stringify({ name }) });
+  apiFetch('/projects', projectSchema, { method: 'POST', body: JSON.stringify({ name }) });
 
 export const getGraph = (projectId: string): Promise<ProjectState> =>
-  api(`/projects/${projectId}/graph`, projectStateSchema);
+  apiFetch(`/projects/${projectId}/graph`, projectStateSchema);
 
 export const postOperation = (
   projectId: string,
   payload: Operation | ChangeSet,
 ): Promise<MutationResponse> =>
-  api(`/projects/${projectId}/operations`, mutationResponseSchema, {
+  apiFetch(`/projects/${projectId}/operations`, mutationResponseSchema, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 
 export const getLog = (projectId: string): Promise<OperationLogEntry[]> =>
-  api(`/projects/${projectId}/log`, z.array(operationLogEntrySchema));
+  apiFetch(`/projects/${projectId}/log`, z.array(operationLogEntrySchema));
 
 export const getAvailability = (projectId: string): Promise<UndoRedoAvailability> =>
-  api(`/projects/${projectId}/availability`, undoRedoAvailabilitySchema);
+  apiFetch(`/projects/${projectId}/availability`, undoRedoAvailabilitySchema);
 
 // note: body must be present — a bare POST with a JSON content-type is rejected
 export const postUndo = (projectId: string): Promise<MutationResponse> =>
-  api(`/projects/${projectId}/undo`, mutationResponseSchema, { method: 'POST', body: '{}' });
+  apiFetch(`/projects/${projectId}/undo`, mutationResponseSchema, { method: 'POST', body: '{}' });
 
 export const postRedo = (projectId: string): Promise<MutationResponse> =>
-  api(`/projects/${projectId}/redo`, mutationResponseSchema, { method: 'POST', body: '{}' });
+  apiFetch(`/projects/${projectId}/redo`, mutationResponseSchema, { method: 'POST', body: '{}' });
 
 // Proposal ChangeSets (P4-M6): register a draft shell, list review states.
 // Status transitions travel as SetChangeSetReviewStatus via postOperation.
 export const listChangeSets = (projectId: string): Promise<ChangeSetRecord[]> =>
-  api(`/projects/${projectId}/changesets`, z.array(changeSetRecordSchema));
+  apiFetch(`/projects/${projectId}/changesets`, z.array(changeSetRecordSchema));
 
 export const registerChangeSet = (projectId: string, label: string): Promise<ChangeSetRecord> =>
-  api(`/projects/${projectId}/changesets`, changeSetRecordSchema, {
+  apiFetch(`/projects/${projectId}/changesets`, changeSetRecordSchema, {
     method: 'POST',
     body: JSON.stringify({ label }),
   });
