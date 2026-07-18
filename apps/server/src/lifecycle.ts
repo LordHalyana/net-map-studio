@@ -20,7 +20,7 @@ import type { FastifyInstance } from 'fastify';
  */
 export function installShutdownHandlers(
   app: FastifyInstance,
-  exit: (code: number) => void = process.exit,
+  exit: (code: number) => void = (code) => process.exit(code),
 ): void {
   let shuttingDown = false;
   const handle = (signal: NodeJS.Signals): void => {

@@ -9,4 +9,4 @@ The canvas — the heart of the product — is built on React Flow. Its nodes ar
 ## Consequences
 
 - The design deliberately never renders raw observations on the canvas (Flows are bundled/aggregated/filtered), so React Flow's DOM-rendering ceiling is not hit by the core editor.
-- If a future analytic view genuinely needs graph-scale rendering, it becomes a *separate, specialized, read-only view* — it does not change the editor's foundation.
+- If a future analytic view genuinely needs graph-scale rendering, it becomes a _separate, specialized, read-only view_ — it does not change the editor's foundation.

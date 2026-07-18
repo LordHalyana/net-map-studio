@@ -332,8 +332,8 @@ function CanvasInner() {
 
   useEffect(() => {
     function onFocusNode(event: Event) {
-      const detail = event instanceof CustomEvent ? event.detail : null;
-      const id = detail && typeof detail === 'object' ? detail.id : null;
+      const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+      const id = detail !== null && typeof detail === 'object' && 'id' in detail ? detail.id : null;
       if (typeof id !== 'string') return;
       const state = useAppStore.getState().graph;
       if (!state) return;
@@ -343,8 +343,9 @@ function CanvasInner() {
       if (position) void setCenter(position.x + 80, position.y + 30, { zoom: 1.2, duration: 350 });
     }
     function onZoomPreset(event: Event) {
-      const detail = event instanceof CustomEvent ? event.detail : null;
-      const level = detail && typeof detail === 'object' ? detail.level : null;
+      const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+      const level =
+        detail !== null && typeof detail === 'object' && 'level' in detail ? detail.level : null;
       if (typeof level === 'number') void zoomTo(level, { duration: 250 });
     }
     window.addEventListener('netplan:focus-node', onFocusNode);
@@ -358,8 +359,9 @@ function CanvasInner() {
   // PNG/SVG topology export (design §3.12) — listens for command-bar requests.
   useEffect(() => {
     async function onExportImage(event: Event) {
-      const detail = event instanceof CustomEvent ? event.detail : null;
-      const format = detail && typeof detail === 'object' ? detail.format : null;
+      const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+      const format =
+        detail !== null && typeof detail === 'object' && 'format' in detail ? detail.format : null;
       const element = document.querySelector('.react-flow');
       if (!(element instanceof HTMLElement)) return;
       const { toPng, toSvg } = await import('html-to-image');
@@ -377,8 +379,9 @@ function CanvasInner() {
         node.classList?.contains('react-flow__controls')
       );
     }
-    window.addEventListener('netplan:export-image', onExportImage);
-    return () => window.removeEventListener('netplan:export-image', onExportImage);
+    const listener = (event: Event): void => void onExportImage(event);
+    window.addEventListener('netplan:export-image', listener);
+    return () => window.removeEventListener('netplan:export-image', listener);
   }, []);
 
   const onDragOver = useCallback((event: DragEvent) => {

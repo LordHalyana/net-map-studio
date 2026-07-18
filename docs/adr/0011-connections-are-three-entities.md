@@ -1,6 +1,6 @@
 # A connection is three entities, unified only at render
 
-`Link`, `Flow` and `PolicyRule` are three distinct entities with different physics, not one polymorphic connection table. They are unified *only* at the canvas rendering layer as "an edge." Links are structural and low-cardinality; Flows are observed, high-cardinality and time-windowed; PolicyRules are intended and carry action/logging/owner/justification and get validated for conflicts. Collapsing them would bloat every row with the others' concerns and muddy both the rule-validation and flow-aggregation engines.
+`Link`, `Flow` and `PolicyRule` are three distinct entities with different physics, not one polymorphic connection table. They are unified _only_ at the canvas rendering layer as "an edge." Links are structural and low-cardinality; Flows are observed, high-cardinality and time-windowed; PolicyRules are intended and carry action/logging/owner/justification and get validated for conflicts. Collapsing them would bloat every row with the others' concerns and muddy both the rule-validation and flow-aggregation engines.
 
 ## Considered Options
 

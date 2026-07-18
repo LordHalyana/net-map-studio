@@ -30,7 +30,12 @@ export function Menu({ triggerLabel, triggerTestId, items, listTestId }: MenuPro
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      if (
+        rootRef.current &&
+        event.target instanceof Node &&
+        !rootRef.current.contains(event.target)
+      )
+        setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -51,7 +56,7 @@ export function Menu({ triggerLabel, triggerTestId, items, listTestId }: MenuPro
       listRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [],
     );
     if (buttons.length === 0) return;
-    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const index = buttons.findIndex((button) => button === document.activeElement);
     buttons[(index + delta + buttons.length) % buttons.length]?.focus();
   }
 

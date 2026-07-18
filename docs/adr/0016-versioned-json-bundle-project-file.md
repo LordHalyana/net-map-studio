@@ -1,6 +1,6 @@
 # Portable project file is a versioned JSON bundle, not the DB file
 
-The portable project file is a versioned `.netplan` JSON bundle (a `project.json` carrying every entity with its UUIDv7 ID, packaged with evidence blobs and a hash manifest) — fully decoupled from the storage engine. SQLite is only the local working store. This is the one option that satisfies all export requirements at once: schema-versioned (imports can migrate old bundles), JSON-native (it *is* the machine-readable export), redaction-friendly (filter fields at serialize time), evidence-manifest-ready, and storage-agnostic so the SQLite→Postgres move never touches the file format.
+The portable project file is a versioned `.netplan` JSON bundle (a `project.json` carrying every entity with its UUIDv7 ID, packaged with evidence blobs and a hash manifest) — fully decoupled from the storage engine. SQLite is only the local working store. This is the one option that satisfies all export requirements at once: schema-versioned (imports can migrate old bundles), JSON-native (it _is_ the machine-readable export), redaction-friendly (filter fields at serialize time), evidence-manifest-ready, and storage-agnostic so the SQLite→Postgres move never touches the file format.
 
 ## Considered Options
 

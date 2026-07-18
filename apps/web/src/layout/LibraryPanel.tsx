@@ -28,14 +28,21 @@ import {
   opCreateEntity,
 } from '../state/ops';
 import type { DeviceType } from '@netplan/domain';
+import { z } from 'zod';
 
 export const DND_MIME = 'application/x-netplan-device-type';
 
 const COLLAPSED_KEY = 'netplan.libraryCollapsed';
 
+// Persisted UI state is operator-editable input — validate, never cast (#110 D6).
+const collapsedSchema = z.record(z.string(), z.boolean());
+
 function loadCollapsed(): Record<string, boolean> {
   try {
-    return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}') as Record<string, boolean>;
+    const parsed = collapsedSchema.safeParse(
+      JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}'),
+    );
+    return parsed.success ? parsed.data : {};
   } catch {
     return {};
   }

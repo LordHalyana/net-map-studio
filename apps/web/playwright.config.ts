@@ -24,7 +24,7 @@ export default defineConfig({
       env: { NETPLAN_DB: e2eDbFile },
     },
     {
-      command: 'pnpm dev',
+      command: 'pnpm --filter @netplan/web dev',
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: false,
       timeout: 60_000,

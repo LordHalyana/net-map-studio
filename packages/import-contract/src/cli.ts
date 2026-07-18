@@ -20,6 +20,10 @@ export interface CliResult {
   lines: string[];
 }
 
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : (JSON.stringify(error) ?? 'unknown error');
+}
+
 export function runValidator(argv: string[]): CliResult {
   const [file] = argv;
   if (!file || argv.length !== 1) {
@@ -38,7 +42,7 @@ export function runValidator(argv: string[]): CliResult {
   } catch (error) {
     return {
       exitCode: 2,
-      lines: [`error: cannot read ${file}: ${error instanceof Error ? error.message : error}`],
+      lines: [`error: cannot read ${file}: ${describeError(error)}`],
     };
   }
 
@@ -48,7 +52,7 @@ export function runValidator(argv: string[]): CliResult {
   } catch (error) {
     return {
       exitCode: 1,
-      lines: [`invalid: not JSON — ${error instanceof Error ? error.message : error}`],
+      lines: [`invalid: not JSON — ${describeError(error)}`],
     };
   }
 

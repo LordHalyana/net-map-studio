@@ -4,7 +4,7 @@ Every mutation to the model is expressed as a serializable, invertible **Operati
 
 ## Considered Options
 
-- **Direct mutation + in-memory snapshot undo** — simplest for Phase 1, but discards the *intent* of each change, so ChangeSet, rollback and audit are all rebuilt from scratch later. Rejected.
+- **Direct mutation + in-memory snapshot undo** — simplest for Phase 1, but discards the _intent_ of each change, so ChangeSet, rollback and audit are all rebuilt from scratch later. Rejected.
 - **Full event sourcing** (current state = fold over events) — maximum purity, but the replay/versioning/migration burden is exactly the kind of decision teams reopen. Rejected in favor of keeping authoritative state in tables.
 
 ## Consequences

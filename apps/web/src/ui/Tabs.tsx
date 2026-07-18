@@ -1,12 +1,12 @@
 import { useRef } from 'react';
 
-type Tab = { id: string; label: string };
+type Tab<Id extends string> = { id: Id; label: string };
 
-type TabsProps = {
-  tabs: Tab[];
+type TabsProps<Id extends string> = {
+  tabs: Tab<Id>[];
   /** Active tab id; null renders no tab highlighted (e.g. a mode overrides). */
-  active: string | null;
-  onSelect: (id: string) => void;
+  active: Id | null;
+  onSelect: (id: Id) => void;
   /** Container class — callers keep their existing tab-strip styling. */
   className?: string;
   /** data-testid per tab: `${testIdPrefix}${tab.id}`. */
@@ -14,7 +14,13 @@ type TabsProps = {
 };
 
 /** Tab strip (ui-polish M4): role=tablist semantics with arrow-key focus. */
-export function Tabs({ tabs, active, onSelect, className, testIdPrefix }: TabsProps) {
+export function Tabs<Id extends string>({
+  tabs,
+  active,
+  onSelect,
+  className,
+  testIdPrefix,
+}: TabsProps<Id>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   function onKeyDown(event: React.KeyboardEvent, index: number) {
