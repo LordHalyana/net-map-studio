@@ -18,6 +18,7 @@ import {
   opSetMembership,
 } from '../../state/ops';
 import { useAppStore } from '../../state/store';
+import { IconButton } from '../../ui';
 import { SelectField, TextField } from '../fields';
 
 export function InterfaceEditor({ iface, graph }: { iface: Interface; graph: ProjectState }) {
@@ -80,15 +81,14 @@ export function InterfaceEditor({ iface, graph }: { iface: Interface; graph: Pro
             dispatch(opSetField(projectId, 'interface', iface.id, 'name', v.trim(), iface.name))
           }
         />
-        <button
-          type="button"
+        <IconButton
+          icon={X}
+          iconSize={12}
+          bare
           className="interface-editor__remove"
-          title="Remove interface"
-          aria-label="Remove interface"
+          label="Remove interface"
           onClick={removeInterface}
-        >
-          <X size={12} aria-hidden />
-        </button>
+        />
       </div>
       <SelectField
         label="Kind"
@@ -116,16 +116,15 @@ export function InterfaceEditor({ iface, graph }: { iface: Interface; graph: Pro
           <li key={address.id} data-testid={`address-${address.value}`}>
             <span className="address-list__kind">{address.kind}</span>
             <span className="address-list__value">{address.value}</span>
-            <button
-              type="button"
-              title="Remove address"
-              aria-label="Remove address"
+            <IconButton
+              icon={X}
+              iconSize={12}
+              bare
+              label="Remove address"
               onClick={() =>
                 dispatch(opDeleteEntity(projectId, { entityType: 'address', entity: address }))
               }
-            >
-              <X size={12} aria-hidden />
-            </button>
+            />
           </li>
         ))}
       </ul>

@@ -66,6 +66,16 @@ describe('refreshOperationLog', () => {
     expect(getLogMock).toHaveBeenCalledTimes(2);
   });
 
+  it('invalidateOperationLog refetches even when the graph version did not change', async () => {
+    await useAppStore.getState().refreshOperationLog();
+    expect(getLogMock).toHaveBeenCalledTimes(1);
+    // mutations that bypass dispatch (proposal sign-off, finding
+    // dispositions) append log rows without a new graph object
+    useAppStore.getState().invalidateOperationLog();
+    await Promise.resolve();
+    expect(getLogMock).toHaveBeenCalledTimes(2);
+  });
+
   it('routes a failure to the toast queue and the error field — never a blank panel', async () => {
     getLogMock.mockRejectedValueOnce(new Error('server unreachable'));
     await useAppStore.getState().refreshOperationLog();

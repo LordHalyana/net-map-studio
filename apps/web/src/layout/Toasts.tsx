@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAppStore, type Toast } from '../state/store';
+import { IconButton } from '../ui';
 
 const AUTO_DISMISS_MS = 6000;
 
@@ -34,15 +35,15 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       role="status"
     >
       <span className="toast__message">{toast.message}</span>
-      <button
-        type="button"
+      <IconButton
+        icon={X}
+        iconSize={13}
+        bare
         className="toast__dismiss"
+        label="Dismiss"
         data-testid="toast-dismiss"
-        aria-label="Dismiss"
         onClick={onDismiss}
-      >
-        <X size={13} aria-hidden />
-      </button>
+      />
     </div>
   );
 }

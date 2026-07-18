@@ -24,7 +24,7 @@ import {
   opDeletePolicyRule,
   opSetField,
 } from '../state/ops';
-import { Toggle } from '../ui';
+import { IconButton, Toggle } from '../ui';
 import { SelectField } from './fields';
 
 /** endpoint selects encode values as `${kind}:${id}` */
@@ -319,15 +319,14 @@ function RuleRow({
           />
           log
         </span>
-        <button
-          type="button"
-          title="Delete rule"
-          aria-label="Delete rule"
+        <IconButton
+          icon={X}
+          iconSize={12}
+          bare
+          label="Delete rule"
           data-testid={`rule-delete-${rule.id}`}
           onClick={() => dispatch(opDeletePolicyRule(projectId, rule))}
-        >
-          <X size={12} aria-hidden />
-        </button>
+        />
       </div>
       {hardWarnings.length > 0 && (
         <ul className="rule-row__warnings" data-testid={`rule-warnings-${rule.id}`}>
@@ -452,17 +451,17 @@ export function RulesPanel({ page = false }: { page?: boolean } = {}) {
           {graph.services.map((service) => (
             <li key={service.id}>
               {serviceLabel(service)}
-              <button
-                type="button"
+              <IconButton
+                icon={X}
+                iconSize={12}
+                bare
+                label="Delete service"
                 title={serviceInUse(service) ? 'In use by a rule' : 'Delete service'}
-                aria-label="Delete service"
                 disabled={serviceInUse(service)}
                 onClick={() =>
                   dispatch(opDeleteEntity(projectId, { entityType: 'service', entity: service }))
                 }
-              >
-                <X size={12} aria-hidden />
-              </button>
+              />
             </li>
           ))}
         </ul>

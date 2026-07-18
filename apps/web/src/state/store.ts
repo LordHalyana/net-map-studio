@@ -136,6 +136,12 @@ interface AppState {
   operationLogLoading: boolean;
   operationLogError: string | null;
   refreshOperationLog: () => Promise<void>;
+  /**
+   * Mark the cached log stale and refetch. For mutations that bypass the
+   * store's dispatch path (proposal sign-off, finding dispositions) — they
+   * append log rows without producing a new graph version.
+   */
+  invalidateOperationLog: () => void;
   /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
   toasts: Toast[];
   pushToast: (message: string, severity?: Toast['severity']) => void;
@@ -264,6 +270,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     return logInflight;
   },
+
+  invalidateOperationLog: () => {
+    logSynced = null;
+    void get().refreshOperationLog();
+  },
   toasts: [],
   layers: {
     logical: true,
@@ -313,7 +324,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     if (!project) return;
     const response = await apiSetFindingStatus(project.id, fingerprint, status, previousStatus);
-    set({ availability: response.availability });
+    set({ availability: response.availability, watermark: response.watermark });
+    get().invalidateOperationLog();
     await get().refreshFindings();
   },
 
