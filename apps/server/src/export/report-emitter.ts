@@ -48,6 +48,27 @@ export interface StreamedDeliverable extends DeliverableBase {
   chunks: Iterable<string | Buffer>;
 }
 
+/**
+ * RFC 6266 content-disposition value (#110 C4): control characters, quotes
+ * and backslashes never reach the header — the emitter is the choke-point a
+ * future export carrying an operator-derived name "cannot forget". Non-ASCII
+ * names keep a plain-ASCII fallback plus the RFC 5987 `filename*` form.
+ */
+export function contentDispositionValue(filename: string): string {
+  const cleaned = [...filename]
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f && ch !== '"' && ch !== '\\';
+    })
+    .join('')
+    .trim();
+  const name = cleaned === '' ? 'download' : cleaned;
+  const isAscii = [...name].every((ch) => ch.charCodeAt(0) <= 0x7e);
+  if (isAscii) return `attachment; filename="${name}"`;
+  const fallback = [...name].map((ch) => (ch.charCodeAt(0) <= 0x7e ? ch : '_')).join('');
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
 export interface ReportEmitter {
   /** Build → mask → hash → record → respond, in that order, always. */
   emit(reply: FastifyReply, projectId: string, deliverable: Deliverable): FastifyReply;
@@ -82,7 +103,7 @@ export function createReportEmitter(engine: Pick<Engine, 'applyOperation'>): Rep
   function setHeaders(reply: FastifyReply, deliverable: DeliverableBase): FastifyReply {
     reply.header('content-type', deliverable.contentType);
     if (deliverable.filename) {
-      reply.header('content-disposition', `attachment; filename="${deliverable.filename}"`);
+      reply.header('content-disposition', contentDispositionValue(deliverable.filename));
     }
     return reply;
   }

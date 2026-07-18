@@ -125,6 +125,8 @@ interface AppState {
   pendingOps: number;
   /** Epoch ms of the last acknowledged save (M6, #63 relative timestamp). */
   lastSavedAt: number | null;
+  /** The server's operation-log seq after the last acknowledged mutation (#110 C4). */
+  watermark: number | null;
   /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
   toasts: Toast[];
   pushToast: (message: string, severity?: Toast['severity']) => void;
@@ -215,6 +217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   syncError: null,
   pendingOps: 0,
   lastSavedAt: null,
+  watermark: null,
   toasts: [],
   layers: {
     logical: true,
@@ -339,6 +342,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           pendingOps: pending,
           availability: response.availability,
+          watermark: response.watermark,
           ...(pending === 0 ? { graph: response.state, lastSavedAt: Date.now() } : {}),
         });
       })
@@ -358,14 +362,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     if (!project || !get().availability.canUndo) return;
     const response = await postUndo(project.id);
-    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
+    set({
+      graph: response.state,
+      availability: response.availability,
+      watermark: response.watermark,
+      lastSavedAt: Date.now(),
+    });
   },
 
   redo: async () => {
     const project = get().project;
     if (!project || !get().availability.canRedo) return;
     const response = await postRedo(project.id);
-    set({ graph: response.state, availability: response.availability, lastSavedAt: Date.now() });
+    set({
+      graph: response.state,
+      availability: response.availability,
+      watermark: response.watermark,
+      lastSavedAt: Date.now(),
+    });
   },
 
   select: (selection) => set({ selection }),

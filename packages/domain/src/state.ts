@@ -63,11 +63,13 @@ export const undoRedoAvailabilitySchema = z.object({
 });
 export type UndoRedoAvailability = z.infer<typeof undoRedoAvailabilitySchema>;
 
-/** Response of the single mutation surface (and undo/redo). */
+/** Response of the single mutation surface (and undo/redo, #110 C4). */
 export const mutationResponseSchema = z.object({
   appliedOperations: z.array(operationSchema),
   availability: undoRedoAvailabilitySchema,
   state: projectStateSchema,
+  /** The operation-log seq after this mutation — the reconcile watermark (M14 #71). */
+  watermark: z.number().int(),
 });
 export type MutationResponse = z.infer<typeof mutationResponseSchema>;
 
