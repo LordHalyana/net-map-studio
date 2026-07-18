@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../state/store';
 import { autoArrangeChangeSet } from '../canvas/autoArrange';
+import { IconButton } from '../ui';
 
 /**
  * Canvas toolbar (visual-parity M5, gap G6): the concept's second strip —
@@ -50,6 +51,7 @@ export function CanvasToolbar() {
   const toggles = [
     {
       testid: 'toggle-logical-layer',
+      label: 'Logical layer',
       on: layers.logical,
       onClick: toggleLogicalLayer,
       title: 'Logical layer: networks, membership edges and tints',
@@ -57,6 +59,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-physical-layer',
+      label: 'Physical layer',
       on: layers.physical,
       onClick: togglePhysicalLayer,
       title: 'Physical layer: Link edges',
@@ -64,6 +67,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-observed-layer',
+      label: 'Observed traffic',
       on: layers.observed,
       onClick: toggleObservedLayer,
       title: 'Observed traffic: aggregated Flow bundles',
@@ -71,6 +75,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-identity-overlay',
+      label: 'Identity overlay',
       on: layers.identities,
       onClick: toggleIdentityOverlay,
       title: 'Identity overlay (§3.9): modelled principals on their hosts',
@@ -78,6 +83,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-rules-layer',
+      label: 'Planned-rule callouts',
       on: layers.rules,
       onClick: toggleRulesLayer,
       title: 'Planned-rule callout cards (design §3.2C)',
@@ -85,6 +91,7 @@ export function CanvasToolbar() {
     },
     {
       testid: 'toggle-findings-layer',
+      label: 'Findings layer',
       on: layers.findings,
       onClick: toggleFindingsLayer,
       title: 'Findings layer: severity tint on affected devices (§3.2C)',
@@ -94,53 +101,60 @@ export function CanvasToolbar() {
 
   return (
     <div className="canvas-toolbar" data-testid="canvas-toolbar">
-      <button
-        type="button"
+      <IconButton
+        icon={Undo2}
+        iconSize={15}
+        bare
         className="canvas-toolbar__btn"
         data-testid="undo-button"
         disabled={!availability.canUndo}
         onClick={() => void undo()}
-        title="Undo"
-      >
-        <Undo2 size={15} aria-hidden />
-      </button>
-      <button
-        type="button"
+        label="Undo"
+      />
+      <IconButton
+        icon={Redo2}
+        iconSize={15}
+        bare
         className="canvas-toolbar__btn"
         data-testid="redo-button"
         disabled={!availability.canRedo}
         onClick={() => void redo()}
-        title="Redo"
-      >
-        <Redo2 size={15} aria-hidden />
-      </button>
+        label="Redo"
+      />
       <span className="canvas-toolbar__sep" />
-      <button
-        type="button"
+      <IconButton
+        icon={Link2}
+        iconSize={15}
+        bare
         className={`canvas-toolbar__btn${connectMode ? ' canvas-toolbar__btn--on' : ''}`}
         data-testid="toggle-connect-mode"
-        aria-pressed={connectMode}
+        pressed={connectMode}
         onClick={toggleConnectMode}
+        label="Connect mode"
         title="Connect mode: pick a source interface, then a destination (§3.3)"
-      >
-        <Link2 size={15} aria-hidden />
-      </button>
+      />
       <span className="canvas-toolbar__sep" />
-      {toggles.map(({ testid, on, onClick, title, icon: Icon }) => (
-        <button
+      {toggles.map(({ testid, label, on, onClick, title, icon }) => (
+        <IconButton
           key={testid}
-          type="button"
+          icon={icon}
+          iconSize={15}
+          bare
           className={`canvas-toolbar__btn${on ? ' canvas-toolbar__btn--on' : ''}`}
           data-testid={testid}
-          aria-pressed={on}
+          pressed={on}
           onClick={onClick}
+          label={label}
           title={title}
-        >
-          <Icon size={15} aria-hidden />
-        </button>
+        />
       ))}
       <span className="canvas-toolbar__sep" />
-      <span className="canvas-toolbar__modes" title="AS-IS / TO-BE / Diff (ADR-0009)">
+      <span
+        className="canvas-toolbar__modes"
+        title="AS-IS / TO-BE / Diff (ADR-0009)"
+        role="group"
+        aria-label="Canvas mode"
+      >
         {(
           [
             ['asIs', 'AS-IS'],
@@ -153,6 +167,7 @@ export function CanvasToolbar() {
             type="button"
             data-testid={`mode-${mode}`}
             className={canvasMode === mode ? 'canvas-toolbar__mode--on' : ''}
+            aria-pressed={canvasMode === mode}
             onClick={() => setCanvasMode(mode)}
           >
             {label}
@@ -160,8 +175,10 @@ export function CanvasToolbar() {
         ))}
       </span>
       <span className="canvas-toolbar__sep" />
-      <button
-        type="button"
+      <IconButton
+        icon={Grid3x3}
+        iconSize={15}
+        bare
         className="canvas-toolbar__btn"
         data-testid="auto-arrange"
         onClick={() => {
@@ -169,40 +186,40 @@ export function CanvasToolbar() {
           const cs = autoArrangeChangeSet(graph);
           if (cs) dispatch(cs);
         }}
+        label="Auto-arrange"
         title="Auto-arrange unpinned devices (pinned nodes stay put, §3.2C)"
-      >
-        <Grid3x3 size={15} aria-hidden />
-      </button>
-      <button
-        type="button"
+      />
+      <IconButton
+        icon={Magnet}
+        iconSize={15}
+        bare
         className={`canvas-toolbar__btn${gridEnabled ? ' canvas-toolbar__btn--on' : ''}`}
         data-testid="toggle-grid"
-        aria-pressed={gridEnabled}
+        pressed={gridEnabled}
         onClick={toggleGrid}
+        label="Grid & snap-to-grid"
         title="Grid & snap-to-grid (§3.2A)"
-      >
-        <Magnet size={15} aria-hidden />
-      </button>
+      />
       <span className="canvas-toolbar__sep" />
       <span className="canvas-toolbar__zoom">
-        <button
-          type="button"
+        <IconButton
+          icon={Scan}
+          iconSize={15}
+          bare
           className="canvas-toolbar__btn"
           data-testid="fit-view"
           onClick={() => window.dispatchEvent(new CustomEvent('netplan:fit'))}
-          title="Fit to screen"
-        >
-          <Scan size={15} aria-hidden />
-        </button>
-        <button
-          type="button"
+          label="Fit to screen"
+        />
+        <IconButton
+          icon={ZoomOut}
+          iconSize={15}
+          bare
           className="canvas-toolbar__btn"
           data-testid="zoom-50"
           onClick={() => zoom(0.5)}
-          title="Zoom to 50%"
-        >
-          <ZoomOut size={15} aria-hidden />
-        </button>
+          label="Zoom to 50%"
+        />
         <button
           type="button"
           className="canvas-toolbar__btn canvas-toolbar__btn--text"
@@ -212,28 +229,28 @@ export function CanvasToolbar() {
         >
           100%
         </button>
-        <button
-          type="button"
+        <IconButton
+          icon={ZoomIn}
+          iconSize={15}
+          bare
           className="canvas-toolbar__btn"
           data-testid="zoom-200"
           onClick={() => zoom(2)}
-          title="Zoom to 200%"
-        >
-          <ZoomIn size={15} aria-hidden />
-        </button>
+          label="Zoom to 200%"
+        />
       </span>
-      <button
-        type="button"
+      <IconButton
+        icon={Maximize}
+        iconSize={15}
+        bare
         className="canvas-toolbar__btn"
         data-testid="toggle-fullscreen"
         onClick={() => {
           if (document.fullscreenElement) void document.exitFullscreen();
           else void document.documentElement.requestFullscreen();
         }}
-        title="Toggle fullscreen"
-      >
-        <Maximize size={15} aria-hidden />
-      </button>
+        label="Toggle fullscreen"
+      />
     </div>
   );
 }

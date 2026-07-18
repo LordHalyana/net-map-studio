@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { OperationLogEntry, Severity } from '@netplan/domain';
-import { getLog } from '../api/client';
+import { useEffect } from 'react';
+import type { Severity } from '@netplan/domain';
 import { useAppStore } from '../state/store';
+import { useOperationLog } from '../state/useOperationLog';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -18,7 +18,8 @@ export function OverviewPanel() {
   const importJobs = useAppStore((s) => s.importJobs);
   const refreshImports = useAppStore((s) => s.refreshImports);
   const setView = useAppStore((s) => s.setView);
-  const [recent, setRecent] = useState<OperationLogEntry[]>([]);
+  const { entries: logEntries, error: logError } = useOperationLog();
+  const recent = logEntries.slice(-8).reverse();
 
   useEffect(() => {
     if (project && !findings) void refreshFindings();
@@ -26,10 +27,6 @@ export function OverviewPanel() {
   useEffect(() => {
     void refreshImports();
   }, [refreshImports]);
-  useEffect(() => {
-    if (!project) return;
-    void getLog(project.id).then((log) => setRecent(log.slice(-8).reverse()));
-  }, [project, graph]);
 
   if (!graph) return null;
 
@@ -137,7 +134,11 @@ export function OverviewPanel() {
               </li>
             ))}
             {recent.length === 0 && (
-              <li className="panel-empty">No operations yet — your edits will appear here.</li>
+              <li className="panel-empty">
+                {logError
+                  ? `Couldn’t load activity — ${logError}`
+                  : 'No operations yet — your edits will appear here.'}
+              </li>
             )}
           </ul>
         </div>

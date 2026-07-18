@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import type { Operation, OperationLogEntry } from '@netplan/domain';
-import { getLog } from '../api/client';
-import { useAppStore } from '../state/store';
+import type { Operation } from '@netplan/domain';
+import { useOperationLog } from '../state/useOperationLog';
 
 function describeOperation(op: Operation): string {
   switch (op.kind) {
@@ -37,27 +35,7 @@ const roleGlyph = { do: '●', undo: '⤺', redo: '⤻' };
 
 /** The audit trail rendered from the append-only operation log (ADR-0010). */
 export function ActivityLog() {
-  const project = useAppStore((s) => s.project);
-  const graph = useAppStore((s) => s.graph);
-  const availability = useAppStore((s) => s.availability);
-  const [entries, setEntries] = useState<OperationLogEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  // graph/availability change whenever an operation lands — refetch then.
-  useEffect(() => {
-    if (!project) return;
-    let cancelled = false;
-    getLog(project.id)
-      .then((log) => {
-        if (!cancelled) setEntries(log);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load log');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [project, graph, availability]);
+  const { entries, loading, error } = useOperationLog();
 
   if (error)
     return (
@@ -66,7 +44,11 @@ export function ActivityLog() {
       </p>
     );
   if (entries.length === 0)
-    return <p className="panel-empty">No operations yet — your edits will appear here.</p>;
+    return (
+      <p className="panel-empty">
+        {loading ? 'Loading activity…' : 'No operations yet — your edits will appear here.'}
+      </p>
+    );
 
   return (
     <ol className="activity-log" data-testid="activity-log">

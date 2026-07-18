@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import {
   netplanBundleSchema,
   projectSchema,
@@ -7,14 +8,17 @@ import {
   type ImportJob,
   type ImportResolutionAction,
   type Operation,
+  type OperationLogEntry,
   type Project,
   type ProjectState,
   type UndoRedoAvailability,
 } from '@netplan/domain';
 import {
+  apiFetch,
   createProject,
   getAvailability,
   getGraph,
+  getLog,
   listProjects,
   postOperation,
   postRedo,
@@ -127,6 +131,17 @@ interface AppState {
   lastSavedAt: number | null;
   /** The server's operation-log seq after the last acknowledged mutation (#110 C4). */
   watermark: number | null;
+  /** The one shared operation-log read (#110 D2) — panels consume via useOperationLog(). */
+  operationLog: OperationLogEntry[];
+  operationLogLoading: boolean;
+  operationLogError: string | null;
+  refreshOperationLog: () => Promise<void>;
+  /**
+   * Mark the cached log stale and refetch. For mutations that bypass the
+   * store's dispatch path (proposal sign-off, finding dispositions) — they
+   * append log rows without producing a new graph version.
+   */
+  invalidateOperationLog: () => void;
   /** Notification queue (M6, #63) - rendered by <Toasts/>, auto-dismissed. */
   toasts: Toast[];
   pushToast: (message: string, severity?: Toast['severity']) => void;
@@ -206,6 +221,16 @@ interface AppState {
 /** Serializes syncs so operations reach the server in dispatch order. */
 let syncQueue: Promise<void> = Promise.resolve();
 
+// Import-poll generation counter (#110 D6): bumped by every uploadImport so
+// a superseded poll loop stops writing state.
+let importPollGeneration = 0;
+
+// One log fetch per graph version (#110 D2): the synced marker is the graph
+// object identity (every adoption produces a new object), the in-flight
+// promise dedupes simultaneous panel mounts.
+let logSynced: { projectId: string; graph: ProjectState | null } | null = null;
+let logInflight: Promise<void> | null = null;
+
 /** Single-flight guard: StrictMode re-runs effects, and a double bootstrap would create two projects. */
 let bootstrapPromise: Promise<void> | null = null;
 
@@ -218,6 +243,42 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingOps: 0,
   lastSavedAt: null,
   watermark: null,
+  operationLog: [],
+  operationLogLoading: false,
+  operationLogError: null,
+
+  refreshOperationLog: async () => {
+    const { project, graph } = get();
+    if (!project) return;
+    if (logSynced && logSynced.projectId === project.id && logSynced.graph === graph) return;
+    if (logInflight) {
+      // a fetch for an older graph version is running — let it land, then
+      // re-check whether this version still needs one
+      await logInflight;
+      return get().refreshOperationLog();
+    }
+    const target = { projectId: project.id, graph };
+    set({ operationLogLoading: true });
+    logInflight = getLog(project.id)
+      .then((entries) => {
+        logSynced = target;
+        set({ operationLog: entries, operationLogError: null, operationLogLoading: false });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Failed to load the activity log';
+        set({ operationLogError: message, operationLogLoading: false });
+        get().pushToast(message);
+      })
+      .finally(() => {
+        logInflight = null;
+      });
+    return logInflight;
+  },
+
+  invalidateOperationLog: () => {
+    logSynced = null;
+    void get().refreshOperationLog();
+  },
   toasts: [],
   layers: {
     logical: true,
@@ -267,7 +328,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = get().project;
     if (!project) return;
     const response = await apiSetFindingStatus(project.id, fingerprint, status, previousStatus);
-    set({ availability: response.availability });
+    set({ availability: response.availability, watermark: response.watermark });
+    get().invalidateOperationLog();
     await get().refreshFindings();
   },
 
@@ -301,23 +363,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   revealSecret: async (secretId) => {
     const project = get().project;
     if (!project) throw new Error('no project');
-    const response = await fetch(`/api/projects/${project.id}/secrets/${secretId}/reveal`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const body: unknown = await response.json().catch(() => null);
-      const message =
-        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-          ? body.error
-          : `Reveal failed: ${response.status}`;
-      get().pushToast(message);
-      throw new Error(message);
+    let value: string;
+    try {
+      ({ value } = await apiFetch(
+        `/projects/${project.id}/secrets/${secretId}/reveal`,
+        z.object({ value: z.string() }),
+        { method: 'POST', body: '{}' },
+      ));
+    } catch (error) {
+      get().pushToast(error instanceof Error ? error.message : 'Reveal failed');
+      throw error;
     }
-    const body: unknown = await response.json();
-    const value =
-      body && typeof body === 'object' && 'value' in body && typeof body.value === 'string'
-        ? body.value
-        : '';
     // the reveal flag moved server-side; refresh so the audit + state reflect it
     await get().reload();
     return value;
@@ -387,20 +443,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   /** Restore a .netplan bundle (ADR-0016) and switch to the imported project. */
   importBundle: async (bundleText) => {
     const bundle = netplanBundleSchema.parse(JSON.parse(bundleText));
-    const response = await fetch('/api/projects/import', {
+    // switching projects supersedes any in-flight import poll (#110 D6)
+    importPollGeneration += 1;
+    const project = await apiFetch('/projects/import', projectSchema, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(bundle),
     });
-    if (!response.ok) {
-      const body: unknown = await response.json().catch(() => null);
-      const message =
-        body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-          ? body.error
-          : `Import failed: ${response.status}`;
-      throw new Error(message);
-    }
-    const project = projectSchema.parse(await response.json());
     const [graph, availability] = await Promise.all([
       getGraph(project.id),
       getAvailability(project.id),
@@ -466,12 +514,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadImport: async (input) => {
     const project = get().project;
     if (!project) return;
+    // Generation guard (#110 D6): starting another import supersedes this
+    // poll — a stale loop must never overwrite the newer job's view state.
+    const generation = ++importPollGeneration;
     try {
       const job = await createImport(project.id, input);
+      if (generation !== importPollGeneration) return;
       set({ importJobs: [...get().importJobs, job] });
       // poll the background worker until it leaves pending/parsing
       for (let attempt = 0; attempt < 100; attempt++) {
         const detail = await getImportDetail(project.id, job.id);
+        if (generation !== importPollGeneration) return;
         if (detail.job.status !== 'pending' && detail.job.status !== 'parsing') {
           set({
             selectedImport: detail,
@@ -486,8 +539,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      get().pushToast('Import is still parsing — check the job list.', 'info');
+      if (generation === importPollGeneration) {
+        get().pushToast('Import is still parsing — check the job list.', 'info');
+      }
     } catch (error) {
+      if (generation !== importPollGeneration) return;
       get().pushToast(error instanceof Error ? error.message : 'Import failed');
     }
   },

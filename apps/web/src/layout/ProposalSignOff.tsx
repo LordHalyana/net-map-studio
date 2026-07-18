@@ -18,6 +18,7 @@ import { Button, Spinner } from '../ui';
 export function ProposalSignOff() {
   const project = useAppStore((s) => s.project);
   const pushToast = useAppStore((s) => s.pushToast);
+  const invalidateOperationLog = useAppStore((s) => s.invalidateOperationLog);
   const [proposals, setProposals] = useState<ChangeSetRecord[]>([]);
   const [label, setLabel] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -39,7 +40,12 @@ export function ProposalSignOff() {
   // Register/transition failures are operation results → toast (#99).
   const run = (action: () => Promise<unknown>) => {
     void action()
-      .then(refresh)
+      .then(() => {
+        // review transitions are logged Operations that bypass dispatch —
+        // tell the shared log cache its version is stale (#110 D2)
+        invalidateOperationLog();
+        return refresh();
+      })
       .catch((e: unknown) => pushToast(e instanceof Error ? e.message : 'Proposal update failed'));
   };
 
