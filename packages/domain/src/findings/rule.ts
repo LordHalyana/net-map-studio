@@ -9,6 +9,7 @@ import type { ProjectState } from '../state.js';
 import type { IndicatorLists, RuleSettings } from './config.js';
 import type { EnrichmentInput } from './enrichment.js';
 import type { HostSecurityInventory } from './inputs.js';
+import type { ResolutionIndex } from '../resolution.js';
 
 /**
  * A Finding's *derived* half (ADR-0023): the output of a Rule over the
@@ -82,6 +83,11 @@ export interface DetectionDraft {
 /** Everything a Rule may read while detecting. Read-only — detection is pure. */
 export interface RuleContext {
   state: ProjectState;
+  /**
+   * Per-run `(kind, id)` resolution (#110 B1) — rules resolve endpoints
+   * through this, never by scanning `state` collections directly.
+   */
+  index: ResolutionIndex;
   provenance: readonly FieldProvenance[];
   evidence: readonly Evidence[];
   /** Per-Device security telemetry (M5/M6): files, processes, persistence, software. */

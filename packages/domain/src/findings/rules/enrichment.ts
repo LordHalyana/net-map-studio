@@ -1,7 +1,7 @@
 import type { DetectionDraft, Rule } from '../rule.js';
 import type { EnrichmentInput } from '../enrichment.js';
 import { enrichmentProvenanceLine } from '../enrichment.js';
-import { flowEndpointDevice, inventoryEvidence, pathCandidates } from './helpers.js';
+import { inventoryEvidence, pathCandidates } from './helpers.js';
 
 /**
  * P4-M2 (ADR-0028): rules that consume stored enrichment Evidence — the P3
@@ -94,7 +94,7 @@ export const enrichmentDestinationRule: Rule = {
       if (flow.destination.kind !== 'external') continue;
       const enrichment = byIndicator.get(flow.destination.value.toLowerCase());
       if (!enrichment) continue;
-      const source = flowEndpointDevice(ctx.state, flow.source);
+      const source = ctx.index.flowEndpointDevice(flow.source);
       if (!source) continue;
       const { payload } = enrichment;
       drafts.push({

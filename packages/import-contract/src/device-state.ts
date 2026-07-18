@@ -139,6 +139,11 @@ export const persistenceEntrySchema = z.object({
   path: z.string().optional(),
 });
 
+// The package / remote-access entry schemas are byte-identical today but
+// intentionally separate: they are distinct contract concepts free to diverge
+// (e.g. remote-access gaining a listening-port field). Being structurally
+// identical makes them exactly the shape Zod's toJSONSchema may dedupe into a
+// $ref — which the format-fields walker resolves (#110 B4).
 export const packageEntrySchema = z.object({
   name: nonEmpty,
   version: z.string().optional(),

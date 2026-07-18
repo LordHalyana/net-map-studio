@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { deviceIdSchema } from '../ids.js';
+import type { HostArtifactKind } from '../entities.js';
 import type { ProjectState } from '../state.js';
 
 /**
@@ -23,6 +24,20 @@ export const inputClassSchema = z.enum([
 export type InputClass = z.infer<typeof inputClassSchema>;
 
 export const ALL_INPUT_CLASSES: readonly InputClass[] = inputClassSchema.options;
+
+/**
+ * The one artifact-kind → InputClass classifier (#110 B3), shared by graph
+ * coverage (committed hostArtifacts) and inventory coverage
+ * (`inventoryCoverage` in inputs.ts) so a new class cannot be added to one
+ * side only. `remoteAccess` is a flag on software/artifacts, not a kind —
+ * both consumers add it from their own flag.
+ */
+export const HOST_ARTIFACT_INPUT_CLASS: Record<HostArtifactKind, InputClass> = {
+  process: 'processes',
+  persistence: 'persistence',
+  software: 'installedSoftware',
+  file: 'fileInventory',
+};
 
 export const deviceCoverageSchema = z.object({
   deviceId: deviceIdSchema,
@@ -62,10 +77,7 @@ export function computeDeviceCoverage(state: ProjectState): DeviceCoverage[] {
   const artifactClasses = new Map<string, Set<InputClass>>();
   for (const artifact of state.hostArtifacts) {
     const classes = artifactClasses.get(artifact.deviceId) ?? new Set<InputClass>();
-    if (artifact.kind === 'process') classes.add('processes');
-    if (artifact.kind === 'persistence') classes.add('persistence');
-    if (artifact.kind === 'software') classes.add('installedSoftware');
-    if (artifact.kind === 'file') classes.add('fileInventory');
+    classes.add(HOST_ARTIFACT_INPUT_CLASS[artifact.kind]);
     if (artifact.remoteAccess) classes.add('remoteAccess');
     artifactClasses.set(artifact.deviceId, classes);
   }
