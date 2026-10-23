@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { observationDraftSchema, type ObservationDraft } from '@netplan/domain';
 import type { Adapter, AdapterContext } from './adapters/types.js';
@@ -60,18 +60,23 @@ const WORKER_MAX_OLD_MB = 512;
 
 /**
  * How to launch the worker: under tsx/vitest this module is `.ts`, so the
- * worker runs through the tsx CLI (which resolves the workspace TS exactly
- * like the dev server); the tsup build emits `dist/parse-worker.js` beside
- * `dist/index.js`, so production spawns plain node.
+ * worker runs with tsx loaded into node (which resolves the workspace TS
+ * exactly like the dev server); the tsup build emits `dist/parse-worker.js`
+ * beside `dist/index.js`, so production spawns plain node.
+ *
+ * Either way the spawned process *is* the worker. Not the tsx CLI: it runs
+ * the script in a second node process, so the hard kill (SIGKILL, which it
+ * can't relay) only ended the launcher and orphaned a worker still spinning
+ * on the runaway parse — without the heap cap, which sat on the launcher (#117).
  */
 function workerCommand(): { command: string; args: string[] } {
   const isTs = import.meta.url.endsWith('.ts');
   const heapFlag = `--max-old-space-size=${WORKER_MAX_OLD_MB}`;
   if (isTs) {
-    // dev/test: run the .ts worker through the tsx CLI (workspace TS resolves)
+    // dev/test: one node process with tsx as its loader (workspace TS resolves)
     const workerFile = fileURLToPath(new URL('./parse-worker.ts', import.meta.url));
-    const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
-    return { command: process.execPath, args: [heapFlag, tsxCli, workerFile] };
+    const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
+    return { command: process.execPath, args: [heapFlag, '--import', tsxLoader, workerFile] };
   }
   // prod: the tsup build emits the worker somewhere under dist/; the bundled
   // runner chunk may not sit beside it, so probe the known layouts
@@ -85,12 +90,18 @@ function workerCommand(): { command: string; args: string[] } {
   return { command: process.execPath, args: [heapFlag, workerFile] };
 }
 
+export interface WorkerRunnerOptions {
+  /** Test seam: observe each spawned worker process (e.g. to check it is gone after a kill). */
+  onSpawn?: (child: ChildProcess) => void;
+}
+
 /** Run an adapter in an isolated worker process (the M12 default). */
-export function createWorkerAdapterRunner(): AdapterRunner {
+export function createWorkerAdapterRunner(options: WorkerRunnerOptions = {}): AdapterRunner {
   return (input) =>
     new Promise<ObservationDraft[]>((resolve, reject) => {
       const { command, args } = workerCommand();
       const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      options.onSpawn?.(child);
       let settled = false;
       const settle = (fn: () => void) => {
         if (settled) return;

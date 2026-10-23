@@ -1,3 +1,5 @@
+import type { ChildProcess } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -22,6 +24,42 @@ import { DEFAULT_PARSE_LIMITS, ParseLimitError } from '../src/imports/guards.js'
  * an operator ImportProfile to corroborate an existing device without
  * fabricating topology (§3.6).
  */
+
+/** /proc/<pid>/stat fields after the parenthesised comm: [state, ppid, …]. */
+function statFields(pid: number): string[] | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+  } catch {
+    return null;
+  }
+}
+
+/** Live and not a zombie awaiting reaping. */
+function isRunning(pid: number): boolean {
+  const fields = statFields(pid);
+  return fields !== null && fields[0] !== 'Z';
+}
+
+/** All current descendants of `root`, from the ppid links in /proc. */
+function descendantsOf(root: number): number[] {
+  const children = new Map<number, number[]>();
+  for (const entry of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    const ppid = Number(statFields(Number(entry))?.[1]);
+    if (!Number.isFinite(ppid)) continue;
+    children.set(ppid, [...(children.get(ppid) ?? []), Number(entry)]);
+  }
+  const found: number[] = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    for (const child of children.get(queue.shift()!) ?? []) {
+      found.push(child);
+      queue.push(child);
+    }
+  }
+  return found;
+}
 
 async function createApp(): Promise<FastifyInstance> {
   return buildApp({ dbFile: ':memory:', logger: false });
@@ -73,6 +111,65 @@ describe('M12 worker isolation & netcat profiles (#69)', () => {
     // killed near the wall clock, not left running for minutes
     expect(Date.now() - started).toBeLessThan(6000);
   }, 15_000);
+
+  // #117: the hard kill must end the process that is actually parsing, not
+  // just a launcher in front of it — a surviving grandchild spins on the
+  // catastrophic regex forever. Reads /proc, so Linux only.
+  it.skipIf(process.platform !== 'linux')(
+    'the hard kill leaves no worker process behind (#117)',
+    async () => {
+      let spawned: ChildProcess | undefined;
+      const runner = createWorkerAdapterRunner({
+        onSpawn: (child) => {
+          spawned = child;
+        },
+      });
+      const evil = importProfileSchema.parse({
+        id: newId(importProfileIdSchema),
+        projectId: newId(projectIdSchema),
+        name: 'evil',
+        adapter: 'netcat-text',
+        pattern: '(?<host>(a+)+$)',
+      });
+      let settled = false;
+      // capture the outcome now: the rejection lands while we are sampling
+      const outcome = runner({
+        adapterName: 'netcat-text',
+        content: `${'a'.repeat(40)}b`,
+        profile: evil,
+        limits: { ...DEFAULT_PARSE_LIMITS, maxParseMillis: 1500 },
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      void outcome.finally(() => {
+        settled = true;
+      });
+
+      // every process the worker launch produced, sampled until the kill
+      const seen = new Set<number>();
+      while (!settled) {
+        if (spawned?.pid) {
+          seen.add(spawned.pid);
+          for (const pid of descendantsOf(spawned.pid)) seen.add(pid);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(await outcome).toBeInstanceOf(ParseLimitError);
+      expect(seen.size).toBeGreaterThan(0);
+
+      // give the OS a moment to reap, then nothing may still be running
+      const deadline = Date.now() + 2000;
+      let survivors = [...seen].filter(isRunning);
+      while (survivors.length > 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        survivors = survivors.filter(isRunning);
+      }
+      for (const pid of survivors) process.kill(pid, 'SIGKILL'); // don't leak into later tests
+      expect(survivors).toEqual([]);
+    },
+    15_000,
+  );
 
   it('a huge single line fails the job without crashing the server', async () => {
     const app = await createApp();
