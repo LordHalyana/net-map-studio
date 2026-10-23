@@ -25,10 +25,13 @@ const webRoot = resolveWebRoot();
 const app = await buildApp({ serveWebRoot: webRoot });
 
 const port = Number(process.env.PORT ?? 3001);
-await app.listen({ port, host: '127.0.0.1' });
+// Loopback by default (local-first); a container sets HOST=0.0.0.0 and keeps
+// the published port bound to the host's loopback instead.
+const host = process.env.HOST ?? '127.0.0.1';
+await app.listen({ port, host });
 // Release the listener on SIGTERM/SIGINT so the port never outlives the
 // process — otherwise the next e2e `webServer` start fails on :3001 (#93).
 installShutdownHandlers(app);
 app.log.info(
-  `NetPlan Studio ${webRoot ? 'app (SPA + API)' : 'API'} listening on http://127.0.0.1:${port}`,
+  `NetPlan Studio ${webRoot ? 'app (SPA + API)' : 'API'} listening on http://${host}:${port}`,
 );

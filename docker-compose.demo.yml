@@ -1,0 +1,17 @@
+# Public demo (reallywire.dev/netplan-studio/app/). The reverse proxy strips
+# the /netplan-studio/app prefix and forwards to 127.0.0.1:3001.
+#
+#   docker compose -f docker-compose.demo.yml up -d --build
+services:
+  netplan-demo:
+    build: .
+    image: netplan-studio-demo:latest
+    restart: unless-stopped
+    environment:
+      NETPLAN_RESET_HOURS: '24'
+    # The sandbox is disposable: the database lives in the container's /tmp
+    # and is recreated on every reset and restart.
+    ports:
+      - '127.0.0.1:3001:3001'
+    # Shares a 1 GB droplet with reallywire.dev; Caddy caps uploads at 5 MB.
+    mem_limit: 384m
