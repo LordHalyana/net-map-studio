@@ -1,4 +1,5 @@
 import { netplanBundleSchema, type NetplanBundle } from '@netplan/domain';
+import { API_BASE } from '../api/client';
 
 export function downloadBlob(filename: string, blob: Blob): void {
   const anchor = document.createElement('a');
@@ -9,7 +10,7 @@ export function downloadBlob(filename: string, blob: Blob): void {
 }
 
 export async function fetchBundle(projectId: string): Promise<NetplanBundle> {
-  const response = await fetch(`/api/projects/${projectId}/export`);
+  const response = await fetch(`${API_BASE}/projects/${projectId}/export`);
   if (!response.ok) throw new Error(`Export failed: ${response.status}`);
   return netplanBundleSchema.parse(await response.json());
 }
@@ -24,7 +25,7 @@ export async function downloadNetplanBundle(projectId: string, projectName: stri
 }
 
 export async function downloadCsv(projectId: string, entityType: string): Promise<void> {
-  const response = await fetch(`/api/projects/${projectId}/export/csv/${entityType}`);
+  const response = await fetch(`${API_BASE}/projects/${projectId}/export/csv/${entityType}`);
   if (!response.ok) throw new Error(`CSV export failed: ${response.status}`);
   downloadBlob(`${entityType}.csv`, new Blob([await response.text()], { type: 'text/csv' }));
 }

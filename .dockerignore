@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/*.db
+**/*.db-*
+.git
+.claude
+.e2e-data
+.visual
+.visual-data
+coverage
+test-results
+playwright-report
+blob-report

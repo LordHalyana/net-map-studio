@@ -16,7 +16,13 @@ import {
   type UndoRedoAvailability,
 } from '@netplan/domain';
 
-const BASE = '/api';
+/**
+ * API root, relative to wherever the SPA is served. `BASE_URL` is Vite's
+ * `base` (`/` by default, a subpath such as `/netplan-studio/app/` when the
+ * app is hosted under one), so this stays `/api` for the normal setups.
+ */
+export const API_BASE = `${import.meta.env.BASE_URL}api`;
+const BASE = API_BASE;
 
 export class ApiError extends Error {
   constructor(

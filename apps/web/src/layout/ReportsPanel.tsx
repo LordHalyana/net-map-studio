@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { newId, operationIdSchema, projectIdSchema, reportIdSchema } from '@netplan/domain';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
+import { API_BASE } from '../api/client';
 import { useAppStore } from '../state/store';
 import { Button, Spinner } from '../ui';
 
@@ -38,7 +39,7 @@ export function ReportsPanel() {
 
   const openReport = (path: string) => {
     const redact = profile ? `?redact=${encodeURIComponent(profile)}` : '';
-    window.open(`/api/projects/${project.id}${path}${redact}`, '_blank');
+    window.open(`${API_BASE}/projects/${project.id}${path}${redact}`, '_blank');
     refreshSoon();
   };
 

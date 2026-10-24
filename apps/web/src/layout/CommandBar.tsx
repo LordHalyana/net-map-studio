@@ -9,6 +9,7 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react';
+import { API_BASE } from '../api/client';
 import { useAppStore } from '../state/store';
 import { downloadCsv, downloadNetplanBundle, requestImageExport } from '../export/exports';
 import { Menu, type MenuItem } from '../ui';
@@ -151,7 +152,7 @@ function ExportMenu() {
       icon: Table,
       'data-testid': 'export-csv-findings',
       onSelect: run(() => {
-        window.open(`/api/projects/${project.id}/export/csv/findings`, '_blank');
+        window.open(`${API_BASE}/projects/${project.id}/export/csv/findings`, '_blank');
       }),
     },
     'separator',
@@ -160,7 +161,7 @@ function ExportMenu() {
       icon: FileText,
       'data-testid': 'export-report',
       onSelect: run(() => {
-        window.open(`/api/projects/${project.id}/report`, '_blank');
+        window.open(`${API_BASE}/projects/${project.id}/report`, '_blank');
       }),
     },
     {
@@ -168,7 +169,7 @@ function ExportMenu() {
       icon: FileText,
       'data-testid': 'export-findings-report',
       onSelect: run(() => {
-        window.open(`/api/projects/${project.id}/report/findings`, '_blank');
+        window.open(`${API_BASE}/projects/${project.id}/report/findings`, '_blank');
       }),
     },
     {
@@ -176,7 +177,10 @@ function ExportMenu() {
       icon: FileText,
       'data-testid': 'export-findings-report-safe',
       onSelect: run(() => {
-        window.open(`/api/projects/${project.id}/report/findings?redact=client-safe`, '_blank');
+        window.open(
+          `${API_BASE}/projects/${project.id}/report/findings?redact=client-safe`,
+          '_blank',
+        );
       }),
     },
     'separator',
